@@ -1,0 +1,35 @@
+# TODO: configure domain and TLS
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: aaa-ingress
+  namespace: aaa
+  annotations:
+    # TODO: configure ingress controller annotations (e.g., nginx, ALB)
+    kubernetes.io/ingress.class: nginx
+spec:
+  rules:
+    - host: app.example.com
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: aaa-api
+                port:
+                  number: 80
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: aaa-api
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: aaa-web
+                port:
+                  number: 80

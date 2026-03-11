@@ -1,0 +1,6 @@
+aws_region        = "us-east-1"
+environment       = "dev"
+project           = "aaa"
+db_instance_class = "db.t4g.micro"
+redis_node_type   = "cache.t4g.micro"
+# db_password     = "CHANGE_ME"  # Use AWS Secrets Manager or environment variable

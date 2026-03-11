@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aaa-worker
+  namespace: aaa
+  labels:
+    app: aaa-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aaa-worker
+  template:
+    metadata:
+      labels:
+        app: aaa-worker
+    spec:
+      containers:
+        - name: worker
+          image: aaa-worker:latest
+          envFrom:
+            - secretRef:
+                name: aaa-secrets
+            - configMapRef:
+                name: aaa-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
