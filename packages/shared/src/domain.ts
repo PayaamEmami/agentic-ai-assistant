@@ -81,6 +81,7 @@ export interface Attachment {
 
 export interface Source {
   id: string;
+  userId: string | null;
   kind: SourceKind;
   connectorKind: ConnectorKind | null;
   externalId: string | null;
@@ -132,7 +133,8 @@ export interface Approval {
 
 export interface Document {
   id: string;
-  sourceId: string;
+  userId: string | null;
+  sourceId: string | null;
   title: string;
   content: string | null;
   mimeType: string;

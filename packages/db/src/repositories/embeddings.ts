@@ -23,7 +23,7 @@ export interface EmbeddingRepository {
   findByChunkId(chunkId: string): Promise<Embedding | null>;
   create(chunkId: string, vector: number[], model: string): Promise<Embedding>;
   deleteByChunkIds(chunkIds: string[]): Promise<void>;
-  searchByVector(vector: number[], limit: number): Promise<Embedding[]>;
+  searchByVector(vector: number[], limit: number, userId?: string): Promise<Embedding[]>;
 }
 
 function serializeVector(vector: number[]): string {
@@ -89,16 +89,29 @@ export const embeddingRepository: EmbeddingRepository = {
     await pool.query('DELETE FROM embeddings WHERE chunk_id = ANY($1::uuid[])', [chunkIds]);
   },
 
-  async searchByVector(vector: number[], limit: number): Promise<Embedding[]> {
+  async searchByVector(vector: number[], limit: number, userId?: string): Promise<Embedding[]> {
     const pool = getPool();
-    const result = await pool.query<EmbeddingQueryRow>(
-      `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
-       FROM embeddings
-       WHERE vector IS NOT NULL
-       ORDER BY vector <=> $1::vector
-       LIMIT $2`,
-      [serializeVector(vector), limit],
-    );
+
+    const query = userId
+      ? `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
+         FROM embeddings AS e
+         JOIN chunks AS c ON c.id = e.chunk_id
+         JOIN documents AS d ON d.id = c.document_id
+         WHERE e.vector IS NOT NULL
+           AND d.user_id = $3
+         ORDER BY e.vector <=> $1::vector
+         LIMIT $2`
+      : `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
+         FROM embeddings
+         WHERE vector IS NOT NULL
+         ORDER BY vector <=> $1::vector
+         LIMIT $2`;
+
+    const params = userId
+      ? [serializeVector(vector), limit, userId]
+      : [serializeVector(vector), limit];
+
+    const result = await pool.query<EmbeddingQueryRow>(query, params);
     return result.rows.map(mapEmbedding);
   },
 };

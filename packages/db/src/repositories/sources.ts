@@ -3,6 +3,7 @@ import { getPool } from '../client.js';
 
 interface SourceRow {
   id: string;
+  userId: string | null;
   kind: string;
   connectorKind: string | null;
   externalId: string | null;
@@ -15,22 +16,24 @@ export interface Source extends SourceRow {}
 
 export interface SourceRepository {
   findById(id: string): Promise<Source | null>;
-  findByExternalId(kind: string, externalId: string): Promise<Source | null>;
+  findByExternalId(userId: string, kind: string, externalId: string): Promise<Source | null>;
   create(
+    userId: string,
     kind: string,
     connectorKind: string | null,
     externalId: string | null,
     title: string,
     uri: string | null,
   ): Promise<Source>;
-  list(limit?: number, offset?: number): Promise<Source[]>;
+  listByUser(userId: string, limit?: number, offset?: number): Promise<Source[]>;
 }
 
 export const sourceRepository: SourceRepository = {
   async findById(id: string): Promise<Source | null> {
     const pool = getPool();
     const result = await pool.query<SourceRow>(
-      `SELECT id, kind, connector_kind AS "connectorKind", external_id AS "externalId", title, uri,
+      `SELECT id, user_id AS "userId", kind, connector_kind AS "connectorKind",
+              external_id AS "externalId", title, uri,
               created_at AS "createdAt"
        FROM sources
        WHERE id = $1`,
@@ -39,21 +42,23 @@ export const sourceRepository: SourceRepository = {
     return result.rows[0] ?? null;
   },
 
-  async findByExternalId(kind: string, externalId: string): Promise<Source | null> {
+  async findByExternalId(userId: string, kind: string, externalId: string): Promise<Source | null> {
     const pool = getPool();
     const result = await pool.query<SourceRow>(
-      `SELECT id, kind, connector_kind AS "connectorKind", external_id AS "externalId", title, uri,
+      `SELECT id, user_id AS "userId", kind, connector_kind AS "connectorKind",
+              external_id AS "externalId", title, uri,
               created_at AS "createdAt"
        FROM sources
-       WHERE kind = $1 AND external_id = $2
+       WHERE user_id = $1 AND kind = $2 AND external_id = $3
        ORDER BY created_at DESC
        LIMIT 1`,
-      [kind, externalId],
+      [userId, kind, externalId],
     );
     return result.rows[0] ?? null;
   },
 
   async create(
+    userId: string,
     kind: string,
     connectorKind: string | null,
     externalId: string | null,
@@ -63,24 +68,27 @@ export const sourceRepository: SourceRepository = {
     const pool = getPool();
     const id = crypto.randomUUID();
     const result = await pool.query<SourceRow>(
-      `INSERT INTO sources (id, kind, connector_kind, external_id, title, uri)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id, kind, connector_kind AS "connectorKind", external_id AS "externalId", title, uri,
+      `INSERT INTO sources (id, user_id, kind, connector_kind, external_id, title, uri)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, user_id AS "userId", kind, connector_kind AS "connectorKind",
+                 external_id AS "externalId", title, uri,
                  created_at AS "createdAt"`,
-      [id, kind, connectorKind, externalId, title, uri],
+      [id, userId, kind, connectorKind, externalId, title, uri],
     );
     return result.rows[0]!;
   },
 
-  async list(limit = 50, offset = 0): Promise<Source[]> {
+  async listByUser(userId: string, limit = 50, offset = 0): Promise<Source[]> {
     const pool = getPool();
     const result = await pool.query<SourceRow>(
-      `SELECT id, kind, connector_kind AS "connectorKind", external_id AS "externalId", title, uri,
+      `SELECT id, user_id AS "userId", kind, connector_kind AS "connectorKind",
+              external_id AS "externalId", title, uri,
               created_at AS "createdAt"
        FROM sources
+       WHERE user_id = $1
        ORDER BY created_at DESC
-       LIMIT $1 OFFSET $2`,
-      [limit, offset],
+       LIMIT $2 OFFSET $3`,
+      [userId, limit, offset],
     );
     return result.rows;
   },

@@ -94,7 +94,7 @@ export class RetrievalBridge {
       modelProvider ?? (apiKey ? new OpenAIProvider(apiKey, process.env['OPENAI_MODEL']) : null);
   }
 
-  async search(query: string, _userId: string, limit?: number): Promise<RetrievalResponse> {
+  async search(query: string, userId: string, limit?: number): Promise<RetrievalResponse> {
     const trimmedQuery = query.trim();
     if (!trimmedQuery || !this.modelProvider) {
       return { results: [], citations: [] };
@@ -114,7 +114,11 @@ export class RetrievalBridge {
       }
 
       const candidateLimit = normalizedLimit * CANDIDATE_MULTIPLIER;
-      const vectorMatches = await embeddingRepository.searchByVector(queryVector, candidateLimit);
+      const vectorMatches = await embeddingRepository.searchByVector(
+        queryVector,
+        candidateLimit,
+        userId,
+      );
 
       if (vectorMatches.length === 0) {
         return { results: [], citations: [] };
@@ -122,7 +126,13 @@ export class RetrievalBridge {
 
       const hydratedResults = await Promise.all(
         vectorMatches.map(async (match, index) =>
-          this.buildResultFromMatch(match.chunkId, index, vectorMatches.length, trimmedQuery),
+          this.buildResultFromMatch(
+            match.chunkId,
+            index,
+            vectorMatches.length,
+            trimmedQuery,
+            userId,
+          ),
         ),
       );
 
@@ -152,6 +162,7 @@ export class RetrievalBridge {
     index: number,
     totalCandidates: number,
     query: string,
+    userId: string,
   ): Promise<RetrievalSearchResult | null> {
     const chunk = await chunkRepository.findById(chunkId);
     if (!chunk) {
@@ -164,6 +175,12 @@ export class RetrievalBridge {
     }
 
     const source = document.sourceId ? await sourceRepository.findById(document.sourceId) : null;
+    const belongsToUser =
+      document.userId === userId || (document.userId === null && source?.userId === userId);
+    if (!belongsToUser) {
+      return null;
+    }
+
     const sourceId = source?.id ?? document.sourceId ?? document.id;
     const baseScore = totalCandidates <= 1 ? 1 : 1 - index / (totalCandidates - 1);
 

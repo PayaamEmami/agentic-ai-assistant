@@ -38,6 +38,7 @@ CREATE TABLE attachments (
 
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id),
   source_id UUID,
   title TEXT NOT NULL,
   content TEXT,
@@ -67,6 +68,7 @@ CREATE INDEX idx_embeddings_vector ON embeddings USING ivfflat (vector vector_co
 
 CREATE TABLE sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID REFERENCES users(id),
   kind TEXT NOT NULL,
   connector_kind TEXT,
   external_id TEXT,
@@ -126,3 +128,5 @@ CREATE INDEX idx_embeddings_chunk ON embeddings(chunk_id);
 CREATE INDEX idx_approvals_user_status ON approvals(user_id, status);
 CREATE INDEX idx_memories_user ON memories(user_id);
 CREATE INDEX idx_tool_executions_conversation ON tool_executions(conversation_id);
+CREATE INDEX idx_sources_user ON sources(user_id);
+CREATE INDEX idx_documents_user ON documents(user_id);
