@@ -11,6 +11,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aaa/ai": "workspace:*",
+    "@aaa/db": "workspace:*",
+    "@aaa/mcp": "workspace:*",
+    "@aaa/shared": "workspace:*",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",
     "@fastify/websocket": "^11.0.0",

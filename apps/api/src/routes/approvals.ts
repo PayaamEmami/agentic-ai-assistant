@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { ApprovalDecisionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { ApprovalService } from '../services/approval-service.js';
 
@@ -15,14 +16,16 @@ export async function approvalRoutes(app: FastifyInstance) {
 
   app.post<{
     Params: { id: string };
-    Body: { status: 'approved' | 'rejected' };
   }>('/approvals/:id/decide', async (request, reply) => {
+    const parsed = ApprovalDecisionRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
+
     const userId = request.user!.id;
-    await approvalService.decide(
-      request.params.id,
-      userId,
-      request.body.status,
-    );
+    await approvalService.decide(request.params.id, userId, parsed.data.status);
     return reply.status(200).send({ ok: true });
   });
 }

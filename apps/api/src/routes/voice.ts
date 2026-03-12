@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { VoiceSessionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { VoiceService } from '../services/voice-service.js';
 
@@ -7,15 +8,19 @@ export async function voiceRoutes(app: FastifyInstance) {
 
   app.addHook('preHandler', authenticate);
 
-  app.post<{ Body: { conversationId?: string } }>(
-    '/voice/session',
-    async (request, reply) => {
-      const userId = request.user!.id;
-      const session = await voiceService.createSession(
-        userId,
-        request.body.conversationId,
-      );
-      return reply.status(200).send(session);
-    },
-  );
+  app.post('/voice/session', async (request, reply) => {
+    const parsed = VoiceSessionRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
+
+    const userId = request.user!.id;
+    const session = await voiceService.createSession(
+      userId,
+      parsed.data.conversationId,
+    );
+    return reply.status(200).send(session);
+  });
 }

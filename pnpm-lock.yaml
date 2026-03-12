@@ -29,6 +29,18 @@ importers:
 
   apps/api:
     dependencies:
+      '@aaa/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@aaa/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@aaa/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@aaa/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
       '@fastify/cors':
         specifier: ^10.0.0
         version: 10.1.0
