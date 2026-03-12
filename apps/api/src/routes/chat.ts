@@ -37,6 +37,7 @@ export async function chatRoutes(app: FastifyInstance) {
     '/conversations/:id',
     async (request, reply) => {
       const conversation = await chatService.getConversation(
+        request.user!.id,
         request.params.id,
       );
       return reply.status(200).send(conversation);

@@ -1,4 +1,5 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? 'local-dev-user';
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
@@ -6,6 +7,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      'x-user-id': DEV_USER_ID,
       ...options?.headers,
     },
   });
@@ -49,7 +51,13 @@ export const api = {
       const formData = new FormData();
       formData.append('file', file);
       const url = `${API_BASE}/api/upload`;
-      const res = await fetch(url, { method: 'POST', body: formData });
+      const res = await fetch(url, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'x-user-id': DEV_USER_ID,
+        },
+      });
       if (!res.ok) throw new ApiError(res.status, 'Upload failed');
       return res.json() as Promise<{ attachmentId: string; fileName: string; mimeType: string; sizeBytes: number }>;
     },

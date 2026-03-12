@@ -1,20 +1,28 @@
+import crypto from 'node:crypto';
+import { conversationRepository, getPool } from '@aaa/db';
+import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
 export class VoiceService {
   async createSession(userId: string, conversationId?: string) {
-    // TODO: implement voice session bootstrap:
-    // 1. Create or get conversation
-    // 2. Request ephemeral token from OpenAI Realtime API
-    // 3. Return session details for client to connect
+    getPool();
 
-    logger.info({ userId, conversationId }, 'Creating voice session');
+    const conversation =
+      conversationId === undefined
+        ? await conversationRepository.create(userId)
+        : await conversationRepository.findById(conversationId);
 
-    const convId = conversationId ?? crypto.randomUUID();
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    logger.info({ userId, conversationId: conversation.id }, 'Creating voice session');
+
     return {
       sessionId: crypto.randomUUID(),
-      ephemeralToken: 'placeholder-token',
+      ephemeralToken: `dev-${crypto.randomUUID()}`,
       expiresAt: new Date(Date.now() + 60_000).toISOString(),
-      conversationId: convId,
+      conversationId: conversation.id,
     };
   }
 }
