@@ -1,11 +1,12 @@
 'use client';
 
+import { useChatContext } from '@/lib/chat-context';
 import { CitationCard } from './citation-card';
 import { ToolActivity } from './tool-activity';
 import { ApprovalCard } from './approval-card';
 
 export function RightPanel() {
-  // TODO: populate from conversation state
+  const { pendingApprovals, toolActivities, citations, loading } = useChatContext();
 
   return (
     <aside className="flex w-80 flex-col border-l border-gray-200 bg-white">
@@ -14,16 +15,42 @@ export function RightPanel() {
       </div>
       <div className="flex-1 overflow-y-auto">
         <Section title="Approvals">
-          {/* TODO: render pending approvals */}
-          <ApprovalCard id="example" description="Example approval" onDecide={() => {}} />
+          {loading.isLoadingApprovals && pendingApprovals.length === 0 ? (
+            <p className="text-xs text-gray-400">Loading approvals...</p>
+          ) : pendingApprovals.length === 0 ? (
+            <p className="text-xs text-gray-400">No pending approvals</p>
+          ) : (
+            pendingApprovals.map((approval) => (
+              <ApprovalCard
+                key={approval.id}
+                id={approval.id}
+                description={approval.description}
+              />
+            ))
+          )}
         </Section>
         <Section title="Tool Activity">
-          {/* TODO: render tool executions */}
-          <ToolActivity name="Example Tool" status="completed" />
+          {toolActivities.length === 0 ? (
+            <p className="text-xs text-gray-400">No tool activity yet</p>
+          ) : (
+            toolActivities.map((activity) => (
+              <ToolActivity key={activity.id} name={activity.name} status={activity.status} />
+            ))
+          )}
         </Section>
         <Section title="Sources">
-          {/* TODO: render citations */}
-          <CitationCard title="Example Source" excerpt="Example excerpt text..." />
+          {citations.length === 0 ? (
+            <p className="text-xs text-gray-400">No sources yet</p>
+          ) : (
+            citations.map((citation) => (
+              <CitationCard
+                key={citation.id}
+                title={citation.title}
+                excerpt={citation.excerpt}
+                uri={citation.uri}
+              />
+            ))
+          )}
         </Section>
       </div>
     </aside>

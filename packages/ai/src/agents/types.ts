@@ -1,11 +1,28 @@
 export type AgentRole = 'orchestrator' | 'research' | 'action' | 'verifier';
 
+export interface AgentHistoryMessage {
+  role: string;
+  content: string;
+  name?: string;
+  toolCallId?: string;
+}
+
+export interface AgentToolContext {
+  name: string;
+  description?: string;
+  parameters?: Record<string, unknown>;
+  requiresApproval?: boolean;
+}
+
 export interface AgentContext {
   conversationId: string;
   userId: string;
-  messageHistory: Array<{ role: string; content: string }>;
-  availableTools: string[];
+  messageHistory: AgentHistoryMessage[];
+  availableTools: Array<string | AgentToolContext>;
   retrievedContext: string[];
+  personalContext?: string;
+  activeConnectors?: string[];
+  previousResult?: AgentResult;
 }
 
 export interface AgentResult {

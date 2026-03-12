@@ -13,14 +13,14 @@ export { SimpleChunkingService } from './chunking.js';
 
 export type { EmbeddingService } from './embedding.js';
 
-export type { IndexingService } from './indexing.js';
+export type { IndexingService, StoreChunks, StoreEmbeddings, RemoveByDocument } from './indexing.js';
 export { IndexingServiceImpl } from './indexing.js';
 
 export type { SearchService } from './search.js';
 export { VectorSearchService } from './search.js';
 
 export type { RerankingService } from './reranking.js';
-export { PassthroughReranker } from './reranking.js';
+export { PassthroughReranker, KeywordReranker } from './reranking.js';
 
-export type { CitationService } from './citations.js';
+export type { CitationService, DocumentMetadataResolver } from './citations.js';
 export { CitationServiceImpl } from './citations.js';

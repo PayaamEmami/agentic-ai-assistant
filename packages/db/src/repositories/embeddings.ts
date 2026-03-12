@@ -1,0 +1,104 @@
+import crypto from 'node:crypto';
+import { getPool } from '../client.js';
+
+interface EmbeddingRow {
+  id: string;
+  chunkId: string;
+  vector: number[] | null;
+  model: string;
+  createdAt: Date;
+}
+
+interface EmbeddingQueryRow {
+  id: string;
+  chunkId: string;
+  vector: string | null;
+  model: string;
+  createdAt: Date;
+}
+
+export interface Embedding extends EmbeddingRow {}
+
+export interface EmbeddingRepository {
+  findByChunkId(chunkId: string): Promise<Embedding | null>;
+  create(chunkId: string, vector: number[], model: string): Promise<Embedding>;
+  deleteByChunkIds(chunkIds: string[]): Promise<void>;
+  searchByVector(vector: number[], limit: number): Promise<Embedding[]>;
+}
+
+function serializeVector(vector: number[]): string {
+  return `[${vector.join(',')}]`;
+}
+
+function parseVector(raw: string | null): number[] | null {
+  if (raw === null) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length <= 2) {
+    return [];
+  }
+  return trimmed
+    .slice(1, -1)
+    .split(',')
+    .map((value) => Number(value));
+}
+
+function mapEmbedding(row: EmbeddingQueryRow): Embedding {
+  return {
+    id: row.id,
+    chunkId: row.chunkId,
+    vector: parseVector(row.vector),
+    model: row.model,
+    createdAt: row.createdAt,
+  };
+}
+
+export const embeddingRepository: EmbeddingRepository = {
+  async findByChunkId(chunkId: string): Promise<Embedding | null> {
+    const pool = getPool();
+    const result = await pool.query<EmbeddingQueryRow>(
+      `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
+       FROM embeddings
+       WHERE chunk_id = $1
+       ORDER BY created_at DESC
+       LIMIT 1`,
+      [chunkId],
+    );
+    const row = result.rows[0];
+    return row ? mapEmbedding(row) : null;
+  },
+
+  async create(chunkId: string, vector: number[], model: string): Promise<Embedding> {
+    const pool = getPool();
+    const id = crypto.randomUUID();
+    const result = await pool.query<EmbeddingQueryRow>(
+      `INSERT INTO embeddings (id, chunk_id, vector, model)
+       VALUES ($1, $2, $3::vector, $4)
+       RETURNING id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"`,
+      [id, chunkId, serializeVector(vector), model],
+    );
+    return mapEmbedding(result.rows[0]!);
+  },
+
+  async deleteByChunkIds(chunkIds: string[]): Promise<void> {
+    if (chunkIds.length === 0) {
+      return;
+    }
+    const pool = getPool();
+    await pool.query('DELETE FROM embeddings WHERE chunk_id = ANY($1::uuid[])', [chunkIds]);
+  },
+
+  async searchByVector(vector: number[], limit: number): Promise<Embedding[]> {
+    const pool = getPool();
+    const result = await pool.query<EmbeddingQueryRow>(
+      `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
+       FROM embeddings
+       WHERE vector IS NOT NULL
+       ORDER BY vector <=> $1::vector
+       LIMIT $2`,
+      [serializeVector(vector), limit],
+    );
+    return result.rows.map(mapEmbedding);
+  },
+};

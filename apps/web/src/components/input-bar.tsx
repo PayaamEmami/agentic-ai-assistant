@@ -1,31 +1,97 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useChatContext } from '@/lib/chat-context';
+
+interface ImageAttachment {
+  id: string;
+  name: string;
+}
 
 export function InputBar() {
+  const { sendMessage, uploadImage, startVoiceSession, loading } = useChatContext();
   const [message, setMessage] = useState('');
+  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!message.trim()) return;
-    // TODO: send message via API client
+    const trimmedMessage = message.trim();
+    if (!trimmedMessage && attachments.length === 0) return;
+
+    await sendMessage(
+      trimmedMessage || 'Attached image',
+      attachments.map((attachment) => attachment.id),
+    );
+
     setMessage('');
+    setAttachments([]);
   };
 
   const handleImageUpload = () => {
-    // TODO: open file picker, upload image, attach to message
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    for (const file of files) {
+      try {
+        const attachmentId = await uploadImage(file);
+        setAttachments((previous) => [...previous, { id: attachmentId, name: file.name }]);
+      } catch (error) {
+        console.error('Image upload failed', error);
+      }
+    }
+
+    e.target.value = '';
   };
 
   const handleVoiceMode = () => {
-    // TODO: bootstrap voice session and switch to voice mode
+    void startVoiceSession();
+  };
+
+  const removeAttachment = (attachmentId: string) => {
+    setAttachments((previous) => previous.filter((attachment) => attachment.id !== attachmentId));
   };
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4">
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        onChange={handleFileChange}
+        className="hidden"
+      />
+      {attachments.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {attachments.map((attachment) => (
+            <span
+              key={attachment.id}
+              className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+            >
+              {attachment.name}
+              <button
+                type="button"
+                onClick={() => removeAttachment(attachment.id)}
+                className="text-gray-400 hover:text-gray-700"
+                aria-label={`Remove ${attachment.name}`}
+              >
+                x
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={handleImageUpload}
+          disabled={loading.isUploadingImage}
           className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
           title="Upload image"
         >
@@ -34,6 +100,7 @@ export function InputBar() {
         <button
           type="button"
           onClick={handleVoiceMode}
+          disabled={loading.isSendingMessage}
           className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
           title="Voice mode"
         >
@@ -48,10 +115,10 @@ export function InputBar() {
         />
         <button
           type="submit"
-          disabled={!message.trim()}
+          disabled={loading.isSendingMessage || (!message.trim() && attachments.length === 0)}
           className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
-          Send
+          {loading.isSendingMessage ? 'Sending...' : 'Send'}
         </button>
       </div>
     </form>

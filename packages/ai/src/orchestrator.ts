@@ -12,15 +12,18 @@ export class AgentOrchestrator {
     if (!orchestrator) throw new Error('Orchestrator agent not registered');
 
     let currentAgent: Agent = orchestrator;
+    let currentContext: AgentContext = context;
     let result!: AgentResult;
     const maxDelegations = 5;
 
     for (let i = 0; i < maxDelegations; i++) {
-      result = await currentAgent.execute(context);
+      result = await currentAgent.execute(currentContext);
       if (!result.delegateTo) return result;
 
       const next = this.agents.get(result.delegateTo);
       if (!next) throw new Error(`Agent not found: ${result.delegateTo}`);
+
+      currentContext = { ...currentContext, previousResult: result };
       currentAgent = next;
     }
 
