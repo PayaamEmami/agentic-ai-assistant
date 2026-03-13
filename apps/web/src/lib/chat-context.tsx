@@ -28,7 +28,7 @@ export interface ToolResultContentBlock {
   type: 'tool_result';
   toolExecutionId?: string;
   toolName?: string;
-  status?: 'pending' | 'running' | 'completed' | 'failed';
+  status?: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
   output?: unknown;
 }
 
@@ -77,7 +77,7 @@ export interface PendingApproval {
 export interface ToolActivityItem {
   id: string;
   name: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
+  status: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
   output?: unknown;
 }
 
@@ -144,8 +144,14 @@ function parseRole(role: string): ChatRole {
   return 'assistant';
 }
 
-function parseToolStatus(value: unknown): 'pending' | 'running' | 'completed' | 'failed' {
-  if (value === 'pending' || value === 'running' || value === 'completed' || value === 'failed') {
+function parseToolStatus(value: unknown): 'planned' | 'pending' | 'running' | 'completed' | 'failed' {
+  if (
+    value === 'planned' ||
+    value === 'pending' ||
+    value === 'running' ||
+    value === 'completed' ||
+    value === 'failed'
+  ) {
     return value;
   }
   return 'completed';
@@ -266,7 +272,7 @@ function mergeConversations(
 }
 
 function extractToolActivities(messages: ChatMessage[]): ToolActivityItem[] {
-  const activities: ToolActivityItem[] = [];
+  const byId = new Map<string, ToolActivityItem>();
 
   for (const message of messages) {
     message.content.forEach((block, index) => {
@@ -274,8 +280,9 @@ function extractToolActivities(messages: ChatMessage[]): ToolActivityItem[] {
         return;
       }
 
-      activities.push({
-        id: block.toolExecutionId ?? `${message.id}-${index}`,
+      const id = block.toolExecutionId ?? `${message.id}-${index}`;
+      byId.set(id, {
+        id,
         name: block.toolName ?? 'Tool',
         status: parseToolStatus(block.status),
         output: block.output,
@@ -283,7 +290,7 @@ function extractToolActivities(messages: ChatMessage[]): ToolActivityItem[] {
     });
   }
 
-  return activities;
+  return Array.from(byId.values());
 }
 
 function extractCitations(messages: ChatMessage[]): CitationItem[] {

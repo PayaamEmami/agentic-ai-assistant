@@ -42,8 +42,6 @@ export class ApprovalService {
     }
 
     if (status === 'approved') {
-      await toolExecutionRepository.updateStatus(approval.toolExecutionId, 'running');
-
       await enqueueToolExecutionJob({
         toolExecutionId: toolExecution.id,
         toolName: toolExecution.toolName,

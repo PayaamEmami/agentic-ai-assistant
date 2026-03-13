@@ -254,7 +254,7 @@ export class ChatService {
           type: 'tool_result',
           toolExecutionId: toolExecution.id,
           toolName: toolCall.name,
-          status: 'pending',
+          status: 'planned',
         });
 
         approvalEvents.push({
@@ -265,7 +265,6 @@ export class ChatService {
           description: approval.description,
         });
       } else {
-        await toolExecutionRepository.updateStatus(toolExecution.id, 'running');
         await enqueueToolExecutionJob({
           toolExecutionId: toolExecution.id,
           toolName: toolCall.name,
@@ -277,7 +276,7 @@ export class ChatService {
           type: 'tool_result',
           toolExecutionId: toolExecution.id,
           toolName: toolCall.name,
-          status: 'running',
+          status: 'planned',
         });
       }
     }
