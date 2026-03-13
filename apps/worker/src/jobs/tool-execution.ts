@@ -48,6 +48,17 @@ async function executeNativeTool(
     case 'time.now': {
       return { success: true, result: { iso: new Date().toISOString() } };
     }
+    case 'external.action': {
+      return {
+        success: true,
+        result: {
+          accepted: true,
+          action: input['action'] ?? null,
+          payload: input['payload'] ?? null,
+          note: 'Simulated external action execution completed.',
+        },
+      };
+    }
     default:
       return { success: false, result: null, error: `Unknown tool: ${toolName}` };
   }

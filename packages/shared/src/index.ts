@@ -71,3 +71,6 @@ export type {
   VoiceSessionEndedEvent,
   ErrorEvent,
 } from './events.js';
+
+export type { NativeToolDefinition } from './tools.js';
+export { NATIVE_TOOL_DEFINITIONS } from './tools.js';

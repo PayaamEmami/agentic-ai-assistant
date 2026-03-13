@@ -1,5 +1,5 @@
 import { approvalRepository, messageRepository, toolExecutionRepository } from '@aaa/db';
-import type { ApprovalResolvedEvent, ToolDoneEvent, ToolStartEvent } from '@aaa/shared';
+import type { ApprovalResolvedEvent, ToolDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
@@ -43,23 +43,6 @@ export class ApprovalService {
 
     if (status === 'approved') {
       await toolExecutionRepository.updateStatus(approval.toolExecutionId, 'running');
-      await messageRepository.create(approval.conversationId, 'tool', [
-        {
-          type: 'tool_result',
-          toolExecutionId: toolExecution.id,
-          toolName: toolExecution.toolName,
-          status: 'running',
-        },
-      ]);
-
-      const startEvent: ToolStartEvent = {
-        type: 'tool.start',
-        conversationId: approval.conversationId,
-        toolExecutionId: toolExecution.id,
-        toolName: toolExecution.toolName,
-        input: toolExecution.input,
-      };
-      broadcast(approval.conversationId, startEvent);
 
       await enqueueToolExecutionJob({
         toolExecutionId: toolExecution.id,

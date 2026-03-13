@@ -6,11 +6,16 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import type { ApprovalRequestedEvent, AssistantTextDoneEvent } from '@aaa/shared';
+import {
+  NATIVE_TOOL_DEFINITIONS,
+  type ApprovalRequestedEvent,
+  type AssistantTextDoneEvent,
+} from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { RetrievalCitation } from './retrieval-bridge.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
+import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
@@ -18,7 +23,8 @@ const DEFAULT_FALLBACK_RESPONSE =
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
 const MAX_CITATIONS = 4;
-const TOOL_COMMAND_PREFIX = '/tool';
+const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
+const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for protected actions.';
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 
@@ -105,43 +111,29 @@ function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<s
   }));
 }
 
-interface ParsedToolRequest {
-  toolName: string;
-  input: Record<string, unknown>;
-}
-
-function parseToolRequest(content: string): ParsedToolRequest | null {
-  const trimmed = content.trim();
-  if (!trimmed.toLowerCase().startsWith(TOOL_COMMAND_PREFIX)) {
-    return null;
-  }
-
-  const commandBody = trimmed.slice(TOOL_COMMAND_PREFIX.length).trim();
-  if (!commandBody) {
-    return null;
-  }
-
-  const firstSpace = commandBody.indexOf(' ');
-  const toolName = (firstSpace === -1 ? commandBody : commandBody.slice(0, firstSpace)).trim();
-  if (!toolName) {
-    return null;
-  }
-
-  const argsText = firstSpace === -1 ? '' : commandBody.slice(firstSpace + 1).trim();
-  if (!argsText) {
-    return { toolName, input: {} };
+function parseToolArguments(argumentsJson: string): Record<string, unknown> {
+  if (!argumentsJson.trim()) {
+    return {};
   }
 
   try {
-    const parsed = JSON.parse(argsText) as unknown;
+    const parsed = JSON.parse(argumentsJson) as unknown;
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return { toolName, input: parsed as Record<string, unknown> };
+      return parsed as Record<string, unknown>;
     }
 
-    return { toolName, input: { value: parsed } };
+    return { value: parsed };
   } catch {
-    return { toolName, input: { raw: argsText } };
+    return { rawArguments: argumentsJson };
   }
+}
+
+function toToolDefinitions(): Array<{ name: string; description: string; parameters: Record<string, unknown> }> {
+  return NATIVE_TOOL_DEFINITIONS.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+  }));
 }
 
 export class ChatService {
@@ -186,63 +178,6 @@ export class ChatService {
 
     await messageRepository.create(conversation.id, 'user', userMessageContent);
 
-    const toolRequest = parseToolRequest(content);
-    if (toolRequest) {
-      const toolExecution = await toolExecutionRepository.create(
-        conversation.id,
-        null,
-        toolRequest.toolName,
-        toolRequest.input,
-        'native',
-      );
-      await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
-
-      const approval = await approvalRepository.create(
-        userId,
-        conversation.id,
-        toolExecution.id,
-        `Approve execution of tool "${toolRequest.toolName}"`,
-      );
-      await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
-
-      const assistantMessage = await messageRepository.create(conversation.id, 'assistant', [
-        {
-          type: 'text',
-          text: `Approval requested for tool "${toolRequest.toolName}".`,
-        },
-        {
-          type: 'tool_result',
-          toolExecutionId: toolExecution.id,
-          toolName: toolRequest.toolName,
-          status: 'pending',
-        },
-      ]);
-
-      const approvalEvent: ApprovalRequestedEvent = {
-        type: 'approval.requested',
-        conversationId: conversation.id,
-        approvalId: approval.id,
-        toolExecutionId: toolExecution.id,
-        description: approval.description,
-      };
-      broadcast(conversation.id, approvalEvent);
-
-      logger.info(
-        {
-          userId,
-          conversationId: conversation.id,
-          toolExecutionId: toolExecution.id,
-          toolName: toolRequest.toolName,
-        },
-        'Tool request created and awaiting approval',
-      );
-
-      return {
-        conversationId: conversation.id,
-        messageId: assistantMessage.id,
-      };
-    }
-
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,
       HISTORY_LIMIT,
@@ -253,15 +188,24 @@ export class ChatService {
     const modelMessages = toModelMessages(recentMessages, retrievalContext);
 
     let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
+    let toolCalls: Array<{ name: string; arguments: string }> = [];
     try {
       const completion = await this.modelProvider.complete({
         messages: modelMessages,
         model: process.env['OPENAI_MODEL'],
         temperature: 0.2,
+        tools: toToolDefinitions(),
       });
-      const generated = completion.content?.trim();
+      toolCalls = completion.toolCalls.map((toolCall) => ({
+        name: toolCall.name,
+        arguments: toolCall.arguments,
+      }));
+
+      const generated = completion.content?.trim() ?? '';
       if (generated) {
         assistantResponse = generated;
+      } else if (toolCalls.length > 0) {
+        assistantResponse = TOOL_ACTION_RESPONSE;
       }
     } catch (error) {
       logger.error(
@@ -273,10 +217,81 @@ export class ChatService {
       );
     }
 
-    const assistantContent: Array<Record<string, unknown>> = [
-      { type: 'text', text: assistantResponse },
-      ...toCitationContentBlocks(retrieval.citations),
-    ];
+    const nativeToolsByName = new Map(
+      NATIVE_TOOL_DEFINITIONS.map((tool) => [tool.name, tool] as const),
+    );
+    const toolResultBlocks: Array<Record<string, unknown>> = [];
+    const approvalEvents: ApprovalRequestedEvent[] = [];
+    let hasApprovalRequest = false;
+
+    for (const toolCall of toolCalls) {
+      const nativeTool = nativeToolsByName.get(toolCall.name);
+      if (!nativeTool) {
+        continue;
+      }
+
+      const toolInput = parseToolArguments(toolCall.arguments);
+      const toolExecution = await toolExecutionRepository.create(
+        conversation.id,
+        null,
+        toolCall.name,
+        toolInput,
+        'native',
+      );
+
+      if (nativeTool.requiresApproval) {
+        hasApprovalRequest = true;
+        await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
+        const approval = await approvalRepository.create(
+          userId,
+          conversation.id,
+          toolExecution.id,
+          `Approve execution of tool "${toolCall.name}"`,
+        );
+        await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
+
+        toolResultBlocks.push({
+          type: 'tool_result',
+          toolExecutionId: toolExecution.id,
+          toolName: toolCall.name,
+          status: 'pending',
+        });
+
+        approvalEvents.push({
+          type: 'approval.requested',
+          conversationId: conversation.id,
+          approvalId: approval.id,
+          toolExecutionId: toolExecution.id,
+          description: approval.description,
+        });
+      } else {
+        await toolExecutionRepository.updateStatus(toolExecution.id, 'running');
+        await enqueueToolExecutionJob({
+          toolExecutionId: toolExecution.id,
+          toolName: toolCall.name,
+          input: toolInput,
+          conversationId: conversation.id,
+        });
+
+        toolResultBlocks.push({
+          type: 'tool_result',
+          toolExecutionId: toolExecution.id,
+          toolName: toolCall.name,
+          status: 'running',
+        });
+      }
+    }
+
+    if (hasApprovalRequest && toolCalls.length > 0 && assistantResponse === TOOL_ACTION_RESPONSE) {
+      assistantResponse = TOOL_APPROVAL_RESPONSE;
+    }
+
+    const assistantContent: Array<Record<string, unknown>> = [{ type: 'text', text: assistantResponse }];
+    if (toolResultBlocks.length > 0) {
+      assistantContent.push(...toolResultBlocks);
+    } else {
+      assistantContent.push(...toCitationContentBlocks(retrieval.citations));
+    }
 
     const assistantMessage = await messageRepository.create(
       conversation.id,
@@ -292,6 +307,9 @@ export class ChatService {
     };
 
     broadcast(conversation.id, event);
+    for (const approvalEvent of approvalEvents) {
+      broadcast(conversation.id, approvalEvent);
+    }
 
     logger.info({ userId, conversationId: conversation.id }, 'Processing chat message');
     logger.debug(
@@ -301,6 +319,8 @@ export class ChatService {
         attachmentCount: attachmentIds?.length ?? 0,
         retrievalResultCount: retrieval.results.length,
         citationCount: retrieval.citations.length,
+        toolCallCount: toolCalls.length,
+        approvalRequestCount: approvalEvents.length,
       },
       'Chat message processed',
     );
