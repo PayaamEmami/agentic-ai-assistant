@@ -135,8 +135,11 @@ Services:
 | `S3_BUCKET` | No | S3 bucket name (default: `aaa-uploads`) |
 | `S3_REGION` | No | AWS region (default: `us-east-1`) |
 | `S3_ENDPOINT` | No | S3 endpoint override (for local MinIO) |
-| `OPENAI_MODEL` | No | Chat model (default: `gpt-4o`) |
+| `OPENAI_MODEL` | No | Chat model (default: `gpt-5-mini`) |
 | `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-small`) |
+| `OPENAI_TRANSCRIPTION_MODEL` | No | Speech-to-text model for voice input (default: `gpt-4o-mini-transcribe`) |
+| `OPENAI_TTS_MODEL` | No | Text-to-speech model for assistant playback (default: `gpt-4o-mini-tts`) |
+| `OPENAI_TTS_VOICE` | No | Voice preset for assistant playback (default: `marin`) |
 | `MCP_SERVERS_CONFIG_PATH` | No | Path to MCP server config JSON |
 | `GITHUB_TOKEN` | No | GitHub personal access token |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
@@ -213,12 +216,12 @@ Tools requiring user confirmation go through an approval flow before execution.
 
 ### Voice Support
 
-Voice is architected into the system from the start:
+Voice mode supports a push-to-talk flow on top of the existing agent pipeline:
 
-1. Client requests a voice session from the API
-2. API bootstraps an ephemeral OpenAI Realtime session token
-3. Client connects directly to OpenAI Realtime
-4. Transcript events flow back into the conversation timeline
+1. Client records microphone audio in the browser
+2. API transcribes that audio with OpenAI speech-to-text
+3. The transcript is sent through the existing chat and tool orchestration path
+4. API synthesizes the assistant's final text reply into audio for playback
 
 ## License
 

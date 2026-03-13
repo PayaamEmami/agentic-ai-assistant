@@ -59,6 +59,10 @@ export {
   PendingApprovalsResponse,
   VoiceSessionRequest,
   VoiceSessionResponse,
+  VoiceTranscriptionResponse,
+  VoiceMessageRequest,
+  VoiceMessageResponse,
+  VoiceSpeechRequest,
   HealthResponse,
 } from './dto.js';
 

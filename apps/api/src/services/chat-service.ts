@@ -249,6 +249,18 @@ function toToolDefinitions(): Array<{ name: string; description: string; paramet
   }));
 }
 
+interface SendMessageOptions {
+  conversationId?: string;
+  attachmentIds?: string[];
+  inputType?: 'text' | 'transcript';
+}
+
+interface SendMessageResult {
+  conversationId: string;
+  messageId: string;
+  assistantText: string;
+}
+
 export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly modelProvider: OpenAIProvider;
@@ -270,21 +282,49 @@ export class ChatService {
     conversationId?: string,
     attachmentIds?: string[],
   ) {
+    const result = await this.processMessage(userId, content, {
+      conversationId,
+      attachmentIds,
+      inputType: 'text',
+    });
+
+    return {
+      conversationId: result.conversationId,
+      messageId: result.messageId,
+    };
+  }
+
+  async sendVoiceMessage(
+    userId: string,
+    transcript: string,
+    conversationId?: string,
+  ): Promise<SendMessageResult> {
+    return this.processMessage(userId, transcript, {
+      conversationId,
+      inputType: 'transcript',
+    });
+  }
+
+  private async processMessage(
+    userId: string,
+    content: string,
+    options: SendMessageOptions,
+  ): Promise<SendMessageResult> {
     getPool();
 
     const conversation =
-      conversationId === undefined
+      options.conversationId === undefined
         ? await conversationRepository.create(userId)
-        : await conversationRepository.findById(conversationId);
+        : await conversationRepository.findById(options.conversationId);
 
     if (!conversation || conversation.userId !== userId) {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
     }
 
-    const attachments = attachmentIds?.length
-      ? await attachmentRepository.findByIdsForUser(attachmentIds, userId)
+    const attachments = options.attachmentIds?.length
+      ? await attachmentRepository.findByIdsForUser(options.attachmentIds, userId)
       : [];
-    if ((attachmentIds?.length ?? 0) !== attachments.length) {
+    if ((options.attachmentIds?.length ?? 0) !== attachments.length) {
       throw new AppError(404, 'One or more attachments were not found', 'ATTACHMENT_NOT_FOUND');
     }
 
@@ -293,7 +333,11 @@ export class ChatService {
       throw new AppError(409, 'An attachment has already been sent in another message', 'ATTACHMENT_ALREADY_USED');
     }
 
-    const userMessageContent: Array<Record<string, unknown>> = [{ type: 'text', text: content }];
+    const userMessageContent: Array<Record<string, unknown>> = [
+      options.inputType === 'transcript'
+        ? { type: 'transcript', text: content, durationMs: 0 }
+        : { type: 'text', text: content },
+    ];
     for (const attachment of attachments) {
       userMessageContent.push({
         type: 'attachment_ref',
@@ -469,6 +513,7 @@ export class ChatService {
     return {
       conversationId: conversation.id,
       messageId: assistantMessage.id,
+      assistantText: assistantResponse,
     };
   }
 

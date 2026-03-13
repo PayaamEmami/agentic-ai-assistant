@@ -66,3 +66,26 @@ export interface EmbeddingResponse {
   model: string;
   usage: { promptTokens: number; totalTokens: number };
 }
+
+export interface TranscriptionRequest {
+  audio: Buffer;
+  fileName: string;
+  mimeType: string;
+  model?: string;
+}
+
+export interface TranscriptionResponse {
+  text: string;
+}
+
+export interface SpeechRequest {
+  input: string;
+  model?: string;
+  voice?: string;
+  format?: 'mp3' | 'wav';
+}
+
+export interface SpeechResponse {
+  audio: Buffer;
+  contentType: string;
+}

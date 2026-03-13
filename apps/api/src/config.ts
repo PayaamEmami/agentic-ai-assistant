@@ -7,6 +7,10 @@ export interface AppConfig {
   redisUrl: string;
   openaiApiKey: string;
   openaiModel: string;
+  openaiEmbeddingModel: string;
+  openaiTranscriptionModel: string;
+  openaiTtsModel: string;
+  openaiTtsVoice: string;
   jwtSecret: string;
   s3Bucket: string;
   s3Region: string;
@@ -33,7 +37,11 @@ export function loadConfig(): AppConfig {
     databaseUrl: required('DATABASE_URL'),
     redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
     openaiApiKey: required('OPENAI_API_KEY'),
-    openaiModel: process.env.OPENAI_MODEL ?? 'gpt-4o',
+    openaiModel: process.env.OPENAI_MODEL ?? 'gpt-5-mini',
+    openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
+    openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe',
+    openaiTtsModel: process.env.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
+    openaiTtsVoice: process.env.OPENAI_TTS_VOICE ?? 'marin',
     jwtSecret,
     s3Bucket: process.env.S3_BUCKET ?? 'aaa-uploads',
     s3Region: process.env.S3_REGION ?? 'us-east-1',

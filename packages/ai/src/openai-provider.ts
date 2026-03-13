@@ -10,6 +10,10 @@ import type {
   StreamDelta,
   ToolCall,
   ToolDefinition,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  SpeechRequest,
+  SpeechResponse,
 } from './types.js';
 
 export class OpenAIProvider implements ModelProvider {
@@ -19,7 +23,7 @@ export class OpenAIProvider implements ModelProvider {
 
   constructor(apiKey: string, model?: string, embeddingModel?: string) {
     this.client = new OpenAI({ apiKey });
-    this.defaultModel = model ?? 'gpt-4o';
+    this.defaultModel = model ?? 'gpt-5-mini';
     this.defaultEmbeddingModel = embeddingModel ?? 'text-embedding-3-small';
   }
 
@@ -114,6 +118,35 @@ export class OpenAIProvider implements ModelProvider {
         promptTokens: result.usage.prompt_tokens,
         totalTokens: result.usage.total_tokens,
       },
+    };
+  }
+
+  async transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse> {
+    const file = new File([request.audio], request.fileName, {
+      type: request.mimeType,
+    });
+    const transcription = await this.client.audio.transcriptions.create({
+      file,
+      model: request.model ?? 'gpt-4o-mini-transcribe',
+    });
+
+    return {
+      text: transcription.text.trim(),
+    };
+  }
+
+  async synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse> {
+    const format = request.format ?? 'mp3';
+    const response = await this.client.audio.speech.create({
+      model: request.model ?? 'gpt-4o-mini-tts',
+      voice: request.voice ?? 'marin',
+      input: request.input,
+      response_format: format,
+    });
+
+    return {
+      audio: Buffer.from(await response.arrayBuffer()),
+      contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
     };
   }
 

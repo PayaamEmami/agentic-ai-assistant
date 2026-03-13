@@ -195,5 +195,49 @@ export const api = {
         body: JSON.stringify({ conversationId }),
       });
     },
+    async transcribe(file: File) {
+      const token = await getAuthToken();
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch(`${API_BASE}/api/voice/transcribe`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, body?.error?.message ?? 'Voice transcription failed', body?.error?.code);
+      }
+
+      return res.json() as Promise<{ transcript: string }>;
+    },
+    sendMessage(transcript: string, conversationId?: string) {
+      return request<{ conversationId: string; messageId: string; assistantText: string; transcript: string }>('/api/voice/message', {
+        method: 'POST',
+        body: JSON.stringify({ transcript, conversationId }),
+      });
+    },
+    async synthesize(text: string) {
+      const token = await getAuthToken();
+      const res = await fetch(`${API_BASE}/api/voice/speech`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ text }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new ApiError(res.status, body?.error?.message ?? 'Voice synthesis failed', body?.error?.code);
+      }
+
+      return res.blob();
+    },
   },
 };

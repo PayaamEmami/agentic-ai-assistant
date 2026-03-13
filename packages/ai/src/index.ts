@@ -10,6 +10,10 @@ export type {
   ToolDefinition,
   EmbeddingRequest,
   EmbeddingResponse,
+  TranscriptionRequest,
+  TranscriptionResponse,
+  SpeechRequest,
+  SpeechResponse,
 } from './types.js';
 
 export type { ModelProvider } from './model-provider.js';

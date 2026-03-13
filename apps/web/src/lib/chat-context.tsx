@@ -126,7 +126,7 @@ interface ChatContextValue {
   uploadAttachment: (file: File, options?: { indexForRag?: boolean }) => Promise<UploadedAttachment>;
   approveAction: (approvalId: string) => Promise<void>;
   rejectAction: (approvalId: string) => Promise<void>;
-  startVoiceSession: () => Promise<void>;
+  sendVoiceMessage: (file: File) => Promise<{ assistantText: string }>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -366,6 +366,21 @@ function createOptimisticUserMessage(
   };
 }
 
+function createOptimisticTranscriptMessage(content: string): ChatMessage {
+  return {
+    id: `local-user-${crypto.randomUUID()}`,
+    role: 'user',
+    content: [
+      {
+        type: 'transcript',
+        text: content,
+        durationMs: 0,
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 function createFallbackAssistantMessage(messageId: string): ChatMessage {
   return {
     id: `local-assistant-${messageId}`,
@@ -574,14 +589,57 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [decideApproval],
   );
 
-  const startVoiceSession = useCallback(async () => {
+  const sendVoiceMessage = useCallback(async (file: File) => {
     setError(null);
+    setIsSendingMessage(true);
     try {
-      await api.voice.createSession(currentConversationId);
+      const transcription = await api.voice.transcribe(file);
+      const transcript = transcription.transcript.trim();
+      if (!transcript) {
+        throw new Error('No speech was detected in that recording.');
+      }
+
+      const optimisticUserMessage = createOptimisticTranscriptMessage(transcript);
+      setMessages((previous) => [...previous, optimisticUserMessage]);
+
+      const response = await api.voice.sendMessage(transcript, currentConversationId);
+      const timestamp = new Date().toISOString();
+
+      setCurrentConversationId(response.conversationId);
+      setConversations((previous) =>
+        upsertConversation(previous, {
+          id: response.conversationId,
+          title: transcript.slice(0, 80),
+          createdAt: timestamp,
+          updatedAt: timestamp,
+        }),
+      );
+
+      try {
+        await refreshConversation(response.conversationId);
+      } catch (detailError) {
+        console.error('Failed to refresh conversation after voice message', detailError);
+      }
+
+      await Promise.all([loadConversations(), loadPendingApprovals()]);
+      return { assistantText: response.assistantText };
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to start voice session');
+      const message = requestError instanceof Error ? requestError.message : 'Failed to send voice message';
+      setError(message);
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `local-error-${crypto.randomUUID()}`,
+          role: 'assistant',
+          content: [{ type: 'text', text: `Error: ${message}` }],
+          createdAt: new Date().toISOString(),
+        },
+      ]);
+      throw requestError;
+    } finally {
+      setIsSendingMessage(false);
     }
-  }, [currentConversationId]);
+  }, [currentConversationId, loadConversations, loadPendingApprovals, refreshConversation]);
 
   useEffect(() => {
     void loadConversations();
@@ -686,7 +744,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       uploadAttachment,
       approveAction,
       rejectAction,
-      startVoiceSession,
+      sendVoiceMessage,
     }),
     [
       approveAction,
@@ -701,7 +759,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       rejectAction,
       selectConversation,
       sendMessage,
-      startVoiceSession,
+      sendVoiceMessage,
       toolActivities,
       uploadAttachment,
     ],
