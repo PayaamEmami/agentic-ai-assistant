@@ -19,11 +19,14 @@ export interface TextContentBlock {
   text: string;
 }
 
-export interface ImageRefContentBlock {
-  type: 'image_ref';
+export interface AttachmentRefContentBlock {
+  type: 'attachment_ref';
   attachmentId?: string;
+  attachmentKind?: 'image' | 'document' | 'audio' | 'file';
   mimeType?: string;
   fileName?: string;
+  indexedForRag?: boolean;
+  documentId?: string | null;
 }
 
 export interface ToolResultContentBlock {
@@ -50,7 +53,7 @@ export interface TranscriptContentBlock {
 
 export type MessageContentBlock =
   | TextContentBlock
-  | ImageRefContentBlock
+  | AttachmentRefContentBlock
   | ToolResultContentBlock
   | CitationContentBlock
   | TranscriptContentBlock;
@@ -91,11 +94,20 @@ export interface CitationItem {
   sourceId?: string;
 }
 
+export interface UploadedAttachment {
+  id: string;
+  name: string;
+  mimeType: string;
+  kind: 'image' | 'document' | 'audio' | 'file';
+  indexedForRag: boolean;
+  documentId?: string | null;
+}
+
 export interface ChatLoadingState {
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isSendingMessage: boolean;
-  isUploadingImage: boolean;
+  isUploadingAttachment: boolean;
   isLoadingApprovals: boolean;
 }
 
@@ -108,10 +120,10 @@ interface ChatContextValue {
   citations: CitationItem[];
   loading: ChatLoadingState;
   error: string | null;
-  sendMessage: (content: string, attachmentIds?: string[]) => Promise<void>;
+  sendMessage: (content: string, attachments?: UploadedAttachment[]) => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;
-  uploadImage: (file: File) => Promise<string>;
+  uploadAttachment: (file: File, options?: { indexForRag?: boolean }) => Promise<UploadedAttachment>;
   approveAction: (approvalId: string) => Promise<void>;
   rejectAction: (approvalId: string) => Promise<void>;
   startVoiceSession: () => Promise<void>;
@@ -183,12 +195,21 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
     return { type, text: asString(raw.text) ?? '' };
   }
 
-  if (type === 'image_ref') {
+  if (type === 'attachment_ref') {
     return {
       type,
       attachmentId: asString(raw.attachmentId),
+      attachmentKind:
+        raw.attachmentKind === 'image' ||
+        raw.attachmentKind === 'document' ||
+        raw.attachmentKind === 'audio' ||
+        raw.attachmentKind === 'file'
+          ? raw.attachmentKind
+          : undefined,
       mimeType: asString(raw.mimeType),
       fileName: asString(raw.fileName),
+      indexedForRag: typeof raw.indexedForRag === 'boolean' ? raw.indexedForRag : undefined,
+      documentId: asString(raw.documentId) ?? null,
     };
   }
 
@@ -317,10 +338,18 @@ function extractCitations(messages: ChatMessage[]): CitationItem[] {
   return citations;
 }
 
-function createOptimisticUserMessage(content: string, attachmentIds: string[]): ChatMessage {
-  const imageBlocks: ImageRefContentBlock[] = attachmentIds.map((attachmentId) => ({
-    type: 'image_ref',
-    attachmentId,
+function createOptimisticUserMessage(
+  content: string,
+  attachments: UploadedAttachment[],
+): ChatMessage {
+  const attachmentBlocks: AttachmentRefContentBlock[] = attachments.map((attachment) => ({
+    type: 'attachment_ref',
+    attachmentId: attachment.id,
+    attachmentKind: attachment.kind,
+    mimeType: attachment.mimeType,
+    fileName: attachment.name,
+    indexedForRag: attachment.indexedForRag,
+    documentId: attachment.documentId ?? null,
   }));
 
   return {
@@ -331,7 +360,7 @@ function createOptimisticUserMessage(content: string, attachmentIds: string[]): 
         type: 'text',
         text: content,
       },
-      ...imageBlocks,
+      ...attachmentBlocks,
     ],
     createdAt: new Date().toISOString(),
   };
@@ -363,7 +392,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
-  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
@@ -432,7 +461,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [refreshConversation]);
 
   const sendMessage = useCallback(
-    async (content: string, attachmentIds: string[] = []) => {
+    async (content: string, attachments: UploadedAttachment[] = []) => {
       const trimmedContent = content.trim();
       if (!trimmedContent) {
         return;
@@ -441,10 +470,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       setIsSendingMessage(true);
 
-      const optimisticUserMessage = createOptimisticUserMessage(trimmedContent, attachmentIds);
+      const optimisticUserMessage = createOptimisticUserMessage(trimmedContent, attachments);
       setMessages((previous) => [...previous, optimisticUserMessage]);
 
       try {
+        const attachmentIds = attachments.map((attachment) => attachment.id);
         const response = await api.chat.send(
           trimmedContent,
           currentConversationId,
@@ -498,17 +528,24 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [currentConversationId, loadConversations, loadPendingApprovals],
   );
 
-  const uploadImage = useCallback(async (file: File) => {
+  const uploadAttachment = useCallback(async (file: File, options?: { indexForRag?: boolean }) => {
     setError(null);
-    setIsUploadingImage(true);
+    setIsUploadingAttachment(true);
     try {
-      const response = await api.upload.uploadFile(file);
-      return response.attachmentId;
+      const response = await api.upload.uploadFile(file, options);
+      return {
+        id: response.attachmentId,
+        name: response.fileName,
+        mimeType: response.mimeType,
+        kind: response.kind,
+        indexedForRag: response.indexedForRag,
+        documentId: response.documentId,
+      };
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to upload image');
+      setError(requestError instanceof Error ? requestError.message : 'Failed to upload attachment');
       throw requestError;
     } finally {
-      setIsUploadingImage(false);
+      setIsUploadingAttachment(false);
     }
   }, []);
 
@@ -621,7 +658,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       isLoadingConversations,
       isLoadingMessages,
       isSendingMessage,
-      isUploadingImage,
+      isUploadingAttachment,
       isLoadingApprovals,
     }),
     [
@@ -629,7 +666,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       isLoadingConversations,
       isLoadingMessages,
       isSendingMessage,
-      isUploadingImage,
+      isUploadingAttachment,
     ],
   );
 
@@ -646,7 +683,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       sendMessage,
       loadConversations,
       selectConversation,
-      uploadImage,
+      uploadAttachment,
       approveAction,
       rejectAction,
       startVoiceSession,
@@ -666,7 +703,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       sendMessage,
       startVoiceSession,
       toolActivities,
-      uploadImage,
+      uploadAttachment,
     ],
   );
 

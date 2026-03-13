@@ -1,6 +1,21 @@
+export interface ChatTextPart {
+  type: 'text';
+  text: string;
+}
+
+export interface ChatImagePart {
+  type: 'image_url';
+  imageUrl: {
+    url: string;
+    detail?: 'auto' | 'low' | 'high';
+  };
+}
+
+export type ChatContentPart = ChatTextPart | ChatImagePart;
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string;
+  content: string | ChatContentPart[];
   name?: string;
   toolCallId?: string;
 }

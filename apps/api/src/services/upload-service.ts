@@ -1,6 +1,7 @@
 import type { MultipartFile } from '@fastify/multipart';
 import { OpenAIProvider } from '@aaa/ai';
 import {
+  attachmentRepository,
   chunkRepository,
   documentRepository,
   embeddingRepository,
@@ -10,15 +11,46 @@ import {
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
-const MAX_TEXT_BYTES = 10 * 1024 * 1024;
+const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const DEFAULT_CHUNK_TOKEN_SIZE = 512;
 const DEFAULT_CHUNK_OVERLAP_TOKENS = 64;
 const TOKEN_MULTIPLIER = 1.3;
-const SUPPORTED_TEXT_MIME_TYPES = new Set([
+const EXTRACTABLE_TEXT_MIME_TYPES = new Set([
   'text/plain',
+  'text/csv',
   'text/markdown',
   'application/json',
+  'application/xml',
 ]);
+
+function determineAttachmentKind(mimeType: string): 'image' | 'document' | 'audio' | 'file' {
+  if (mimeType.startsWith('image/')) {
+    return 'image';
+  }
+
+  if (mimeType.startsWith('audio/')) {
+    return 'audio';
+  }
+
+  if (isExtractableTextMimeType(mimeType)) {
+    return 'document';
+  }
+
+  return 'file';
+}
+
+function isExtractableTextMimeType(mimeType: string): boolean {
+  return mimeType.startsWith('text/') || EXTRACTABLE_TEXT_MIME_TYPES.has(mimeType);
+}
+
+function extractTextContent(mimeType: string, buffer: Buffer): string | null {
+  if (!isExtractableTextMimeType(mimeType)) {
+    return null;
+  }
+
+  const text = buffer.toString('utf8').trim();
+  return text.length > 0 ? text : null;
+}
 
 interface ChunkCandidate {
   content: string;
@@ -127,47 +159,28 @@ export class UploadService {
       );
   }
 
-  async handleUpload(userId: string, file: MultipartFile) {
-    getPool();
-
-    logger.info(
-      { fileName: file.filename, mimeType: file.mimetype, userId },
-      'Processing upload',
-    );
-
-    const buffer = await file.toBuffer();
-    if (buffer.byteLength > MAX_TEXT_BYTES) {
-      throw new AppError(413, 'File is too large', 'FILE_TOO_LARGE');
-    }
-
-    if (!SUPPORTED_TEXT_MIME_TYPES.has(file.mimetype)) {
-      throw new AppError(
-        415,
-        `Unsupported file type: ${file.mimetype}. Supported types: ${Array.from(SUPPORTED_TEXT_MIME_TYPES).join(', ')}`,
-        'UNSUPPORTED_FILE_TYPE',
-      );
-    }
-
-    const textContent = buffer.toString('utf8').trim();
-    if (!textContent) {
-      throw new AppError(400, 'Uploaded file is empty', 'EMPTY_FILE');
-    }
-
+  private async indexAttachmentForRetrieval(
+    userId: string,
+    attachmentId: string,
+    fileName: string,
+    mimeType: string,
+    textContent: string,
+  ): Promise<string> {
     const source = await sourceRepository.create(
       userId,
       'document',
       null,
       null,
-      file.filename || 'upload',
+      fileName,
       null,
     );
 
     const document = await documentRepository.create(
       userId,
       source.id,
-      file.filename || 'upload',
+      fileName,
       textContent,
-      file.mimetype,
+      mimeType,
     );
 
     const chunks = chunkTextContent(textContent);
@@ -178,7 +191,7 @@ export class UploadService {
           chunk.content,
           chunk.index,
           chunk.tokenCount,
-          { source: 'upload', fileName: file.filename },
+          { source: 'upload', fileName, attachmentId },
         ),
       ),
     );
@@ -193,28 +206,90 @@ export class UploadService {
         storedChunks.map(async (chunk, index) => {
           const vector = embeddings.embeddings[index];
           if (!vector) {
-            throw new AppError(502, 'Embedding generation failed for one or more chunks', 'EMBEDDING_FAILED');
+            throw new AppError(
+              502,
+              'Embedding generation failed for one or more chunks',
+              'EMBEDDING_FAILED',
+            );
           }
           await embeddingRepository.create(chunk.id, vector, embeddings.model);
         }),
       );
     }
 
+    await attachmentRepository.setDocument(attachmentId, document.id, userId);
+
     logger.info(
       {
         userId,
+        attachmentId,
         documentId: document.id,
         sourceId: source.id,
         chunkCount: storedChunks.length,
       },
-      'Upload indexed for retrieval',
+      'Attachment indexed for retrieval',
     );
 
+    return document.id;
+  }
+
+  async handleUpload(userId: string, file: MultipartFile, options?: { indexForRag?: boolean }) {
+    getPool();
+
+    logger.info(
+      { fileName: file.filename, mimeType: file.mimetype, userId, indexForRag: options?.indexForRag ?? false },
+      'Processing upload',
+    );
+
+    const buffer = await file.toBuffer();
+    if (buffer.byteLength > MAX_FILE_BYTES) {
+      throw new AppError(413, 'File is too large', 'FILE_TOO_LARGE');
+    }
+    if (buffer.byteLength === 0) {
+      throw new AppError(400, 'Uploaded file is empty', 'EMPTY_FILE');
+    }
+
+    const fileName = file.filename || 'upload';
+    const mimeType = file.mimetype || 'application/octet-stream';
+    const attachmentKind = determineAttachmentKind(mimeType);
+    const textContent = extractTextContent(mimeType, buffer);
+
+    if (options?.indexForRag && !textContent) {
+      throw new AppError(
+        415,
+        `RAG indexing is currently supported for text-based files only. Received ${mimeType}.`,
+        'UNSUPPORTED_RAG_FILE_TYPE',
+      );
+    }
+    const attachment = await attachmentRepository.create(
+      userId,
+      attachmentKind,
+      fileName,
+      mimeType,
+      buffer.byteLength,
+      buffer,
+      textContent,
+    );
+
+    let documentId: string | null = null;
+    if (options?.indexForRag && textContent) {
+      documentId = await this.indexAttachmentForRetrieval(
+        userId,
+        attachment.id,
+        fileName,
+        mimeType,
+        textContent,
+      );
+    }
+
     return {
-      attachmentId: document.id,
-      fileName: file.filename,
-      mimeType: file.mimetype,
+      attachmentId: attachment.id,
+      fileName,
+      mimeType,
       sizeBytes: buffer.byteLength,
+      kind: attachment.kind,
+      indexedForRag: documentId !== null,
+      documentId,
     };
   }
 }

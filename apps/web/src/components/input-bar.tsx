@@ -1,17 +1,30 @@
 'use client';
 
 import { useRef, useState } from 'react';
-import { useChatContext } from '@/lib/chat-context';
+import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
 
-interface ImageAttachment {
-  id: string;
-  name: string;
+const INDEXABLE_MIME_TYPES = new Set([
+  'application/json',
+  'application/xml',
+]);
+
+function isIndexableDocument(file: File): boolean {
+  return file.type.startsWith('text/') || INDEXABLE_MIME_TYPES.has(file.type);
+}
+
+function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): string {
+  if (attachments.length === 1) {
+    return `Attached ${attachments[0].kind}`;
+  }
+
+  return 'Attached files';
 }
 
 export function InputBar() {
-  const { sendMessage, uploadImage, startVoiceSession, loading } = useChatContext();
+  const { sendMessage, uploadAttachment, startVoiceSession, loading } = useChatContext();
   const [message, setMessage] = useState('');
-  const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
+  const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
+  const [indexDocuments, setIndexDocuments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -19,16 +32,13 @@ export function InputBar() {
     const trimmedMessage = message.trim();
     if (!trimmedMessage && attachments.length === 0) return;
 
-    await sendMessage(
-      trimmedMessage || 'Attached image',
-      attachments.map((attachment) => attachment.id),
-    );
+    await sendMessage(trimmedMessage || buildAttachmentFallbackMessage(attachments), attachments);
 
     setMessage('');
     setAttachments([]);
   };
 
-  const handleImageUpload = () => {
+  const handleFilePicker = () => {
     fileInputRef.current?.click();
   };
 
@@ -40,10 +50,12 @@ export function InputBar() {
 
     for (const file of files) {
       try {
-        const attachmentId = await uploadImage(file);
-        setAttachments((previous) => [...previous, { id: attachmentId, name: file.name }]);
+        const attachment = await uploadAttachment(file, {
+          indexForRag: indexDocuments && isIndexableDocument(file),
+        });
+        setAttachments((previous) => [...previous, attachment]);
       } catch (error) {
-        console.error('Image upload failed', error);
+        console.error('Attachment upload failed', error);
       }
     }
 
@@ -63,7 +75,7 @@ export function InputBar() {
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        multiple
         onChange={handleFileChange}
         className="hidden"
       />
@@ -74,7 +86,12 @@ export function InputBar() {
               key={attachment.id}
               className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700"
             >
-              {attachment.name}
+              <span>{attachment.name}</span>
+              {attachment.indexedForRag ? (
+                <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-medium text-white">
+                  Indexed
+                </span>
+              ) : null}
               <button
                 type="button"
                 onClick={() => removeAttachment(attachment.id)}
@@ -90,12 +107,12 @@ export function InputBar() {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={handleImageUpload}
-          disabled={loading.isUploadingImage}
+          onClick={handleFilePicker}
+          disabled={loading.isUploadingAttachment}
           className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          title="Upload image"
+          title="Upload file"
         >
-          <ImageIcon />
+          <AttachmentIcon />
         </button>
         <button
           type="button"
@@ -110,7 +127,7 @@ export function InputBar() {
           type="text"
           value={message}
           onChange={(e) => setMessage(e.target.value)}
-          placeholder="Type a message..."
+          placeholder="Type a message or attach files..."
           className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none"
         />
         <button
@@ -121,16 +138,23 @@ export function InputBar() {
           {loading.isSendingMessage ? 'Sending...' : 'Send'}
         </button>
       </div>
+      <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+        <input
+          type="checkbox"
+          checked={indexDocuments}
+          onChange={(e) => setIndexDocuments(e.target.checked)}
+          className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+        />
+        Index text documents for RAG when possible
+      </label>
     </form>
   );
 }
 
-function ImageIcon() {
+function AttachmentIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-      <circle cx="8.5" cy="8.5" r="1.5" />
-      <polyline points="21 15 16 10 5 21" />
+      <path d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.48-8.48" />
     </svg>
   );
 }

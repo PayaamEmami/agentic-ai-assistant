@@ -29,10 +29,14 @@ export interface TextContent {
   text: string;
 }
 
-export interface ImageRefContent {
-  type: 'image_ref';
+export interface AttachmentRefContent {
+  type: 'attachment_ref';
   attachmentId: string;
+  attachmentKind: AttachmentKind;
   mimeType: string;
+  fileName: string;
+  indexedForRag?: boolean;
+  documentId?: string | null;
 }
 
 export interface TranscriptContent {
@@ -55,7 +59,7 @@ export interface CitationContent {
 
 export type MessageContent =
   | TextContent
-  | ImageRefContent
+  | AttachmentRefContent
   | TranscriptContent
   | ToolResultContent
   | CitationContent;
@@ -70,12 +74,14 @@ export interface Message {
 
 export interface Attachment {
   id: string;
-  messageId: string;
+  userId: string;
+  messageId: string | null;
+  documentId: string | null;
   kind: AttachmentKind;
   fileName: string;
   mimeType: string;
   sizeBytes: number;
-  storageKey: string;
+  textContent: string | null;
   createdAt: Date;
 }
 

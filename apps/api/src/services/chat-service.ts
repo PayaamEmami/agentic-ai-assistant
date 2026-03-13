@@ -1,6 +1,11 @@
-import { OpenAIProvider, type ChatMessage as ModelChatMessage } from '@aaa/ai';
+import {
+  OpenAIProvider,
+  type ChatContentPart,
+  type ChatMessage as ModelChatMessage,
+} from '@aaa/ai';
 import {
   approvalRepository,
+  attachmentRepository,
   conversationRepository,
   getPool,
   messageRepository,
@@ -23,10 +28,12 @@ const DEFAULT_FALLBACK_RESPONSE =
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
 const MAX_CITATIONS = 4;
+const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for protected actions.';
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
+type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -61,10 +68,46 @@ function extractTextFromContent(content: unknown[]): string {
   return parts.join('\n').trim();
 }
 
-function toModelMessages(
+function getAttachmentIdsFromContent(content: unknown[]): string[] {
+  const ids: string[] = [];
+
+  for (const block of content) {
+    if (!isRecord(block)) {
+      continue;
+    }
+
+    if (block.type === 'attachment_ref' && typeof block.attachmentId === 'string') {
+      ids.push(block.attachmentId);
+    }
+  }
+
+  return ids;
+}
+
+function truncateAttachmentText(text: string): string {
+  const normalized = text.trim();
+  if (normalized.length <= MAX_INLINE_ATTACHMENT_TEXT_CHARS) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MAX_INLINE_ATTACHMENT_TEXT_CHARS).trimEnd()}\n\n[Attachment text truncated]`;
+}
+
+function toAttachmentPromptText(attachment: NonNullable<DbAttachment>): string {
+  const header = `Attached file "${attachment.fileName}" (${attachment.mimeType}, attachmentId=${attachment.id})`;
+
+  if (attachment.textContent) {
+    return `${header}\n\nExtracted text:\n${truncateAttachmentText(attachment.textContent)}`;
+  }
+
+  return `${header}\n\nThis file is available to tools, but its contents are not inlined in the prompt.`;
+}
+
+async function toModelMessages(
   messages: DbMessage[],
   retrievalContext: string[],
-): ModelChatMessage[] {
+  userId: string,
+): Promise<ModelChatMessage[]> {
   const systemPrompt: ModelChatMessage = {
     role: 'system',
     content:
@@ -81,16 +124,86 @@ function toModelMessages(
         } as const)
       : null;
 
-  const historyMessages: ModelChatMessage[] = messages
-    .map((message) => {
-      const text = extractTextFromContent(message.content);
-      if (!text) {
+  const attachmentIds = Array.from(
+    new Set(messages.flatMap((message) => getAttachmentIdsFromContent(message.content))),
+  );
+  const attachments =
+    attachmentIds.length > 0
+      ? await attachmentRepository.findByIdsForUser(attachmentIds, userId)
+      : [];
+  const attachmentsById = new Map(
+    attachments.map((attachment) => [attachment.id, attachment] as const),
+  );
+
+  const historyMessages = messages
+    .map<ModelChatMessage | null>((message) => {
+      const role = messageRoleToModelRole(message.role);
+      if (role !== 'user') {
+        const text = extractTextFromContent(message.content);
+        if (!text) {
+          return null;
+        }
+
+        return {
+          role,
+          content: text,
+        };
+      }
+
+      const contentParts: ChatContentPart[] = [];
+
+      for (const block of message.content) {
+        if (!isRecord(block)) {
+          continue;
+        }
+
+        const type = typeof block.type === 'string' ? block.type : null;
+        if ((type === 'text' || type === 'transcript') && typeof block.text === 'string') {
+          contentParts.push({ type: 'text', text: block.text });
+          continue;
+        }
+
+        if (type !== 'attachment_ref' || typeof block.attachmentId !== 'string') {
+          continue;
+        }
+
+        const attachment = attachmentsById.get(block.attachmentId);
+        if (!attachment) {
+          contentParts.push({
+            type: 'text',
+            text: `Attached file is unavailable (attachmentId=${block.attachmentId}).`,
+          });
+          continue;
+        }
+
+        if (attachment.kind === 'image') {
+          contentParts.push({
+            type: 'text',
+            text: `Attached image "${attachment.fileName}" (attachmentId=${attachment.id})`,
+          });
+          contentParts.push({
+            type: 'image_url',
+            imageUrl: {
+              url: `data:${attachment.mimeType};base64,${attachment.data.toString('base64')}`,
+              detail: 'auto',
+            },
+          });
+          continue;
+        }
+
+        contentParts.push({
+          type: 'text',
+          text: toAttachmentPromptText(attachment),
+        });
+      }
+
+      if (contentParts.length === 0) {
         return null;
       }
 
       return {
-        role: messageRoleToModelRole(message.role),
-        content: text,
+        role,
+        content: contentParts,
       };
     })
     .filter((message): message is ModelChatMessage => message !== null);
@@ -168,15 +281,44 @@ export class ChatService {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
     }
 
+    const attachments = attachmentIds?.length
+      ? await attachmentRepository.findByIdsForUser(attachmentIds, userId)
+      : [];
+    if ((attachmentIds?.length ?? 0) !== attachments.length) {
+      throw new AppError(404, 'One or more attachments were not found', 'ATTACHMENT_NOT_FOUND');
+    }
+
+    const alreadyAttached = attachments.find((attachment) => attachment.messageId !== null);
+    if (alreadyAttached) {
+      throw new AppError(409, 'An attachment has already been sent in another message', 'ATTACHMENT_ALREADY_USED');
+    }
+
     const userMessageContent: Array<Record<string, unknown>> = [{ type: 'text', text: content }];
-    for (const attachmentId of attachmentIds ?? []) {
+    for (const attachment of attachments) {
       userMessageContent.push({
-        type: 'image_ref',
-        attachmentId,
+        type: 'attachment_ref',
+        attachmentId: attachment.id,
+        attachmentKind: attachment.kind,
+        mimeType: attachment.mimeType,
+        fileName: attachment.fileName,
+        indexedForRag: attachment.documentId !== null,
+        documentId: attachment.documentId,
       });
     }
 
-    await messageRepository.create(conversation.id, 'user', userMessageContent);
+    const userMessage = await messageRepository.create(conversation.id, 'user', userMessageContent);
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        const linked = await attachmentRepository.attachToMessage(attachment.id, userMessage.id, userId);
+        if (!linked) {
+          throw new AppError(
+            409,
+            `Attachment "${attachment.fileName}" could not be linked to the message`,
+            'ATTACHMENT_LINK_FAILED',
+          );
+        }
+      }),
+    );
 
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,
@@ -185,7 +327,7 @@ export class ChatService {
 
     const retrieval = await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT);
     const retrievalContext = retrieval.results.map((result) => result.content);
-    const modelMessages = toModelMessages(recentMessages, retrievalContext);
+    const modelMessages = await toModelMessages(recentMessages, retrievalContext, userId);
 
     let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
     let toolCalls: Array<{ name: string; arguments: string }> = [];
@@ -315,7 +457,7 @@ export class ChatService {
       {
         conversationId: conversation.id,
         historySize: recentMessages.length,
-        attachmentCount: attachmentIds?.length ?? 0,
+        attachmentCount: attachments.length,
         retrievalResultCount: retrieval.results.length,
         citationCount: retrieval.citations.length,
         toolCallCount: toolCalls.length,

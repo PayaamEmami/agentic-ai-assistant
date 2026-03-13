@@ -1,5 +1,8 @@
 export type {
   ChatMessage,
+  ChatContentPart,
+  ChatTextPart,
+  ChatImagePart,
   ToolCall,
   CompletionRequest,
   CompletionResponse,

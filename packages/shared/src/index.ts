@@ -23,7 +23,7 @@ export type {
   Message,
   MessageContent,
   TextContent,
-  ImageRefContent,
+  AttachmentRefContent,
   TranscriptContent,
   ToolResultContent,
   CitationContent,

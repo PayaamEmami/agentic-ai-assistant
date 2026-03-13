@@ -42,6 +42,9 @@ export const UploadAttachmentResponse = z.object({
   fileName: z.string(),
   mimeType: z.string(),
   sizeBytes: z.number(),
+  kind: z.enum(['image', 'document', 'audio', 'file']),
+  indexedForRag: z.boolean(),
+  documentId: z.string().uuid().nullable().optional(),
 });
 export type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponse>;
 

@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import type { ModelProvider } from './model-provider.js';
 import type {
+  ChatContentPart,
   ChatMessage,
   CompletionRequest,
   CompletionResponse,
@@ -120,18 +121,26 @@ export class OpenAIProvider implements ModelProvider {
     return messages.map((message) => {
       switch (message.role) {
         case 'system':
-          return { role: 'system', content: message.content, name: message.name };
+          return {
+            role: 'system',
+            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
+            name: message.name,
+          };
         case 'user':
-          return { role: 'user', content: message.content, name: message.name };
+          return { role: 'user', content: this.mapUserContent(message.content), name: message.name };
         case 'assistant':
-          return { role: 'assistant', content: message.content, name: message.name };
+          return {
+            role: 'assistant',
+            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
+            name: message.name,
+          };
         case 'tool':
           if (!message.toolCallId) {
             throw new Error('Tool message must include toolCallId');
           }
           return {
             role: 'tool',
-            content: message.content,
+            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
             tool_call_id: message.toolCallId,
           };
         default: {
@@ -140,6 +149,39 @@ export class OpenAIProvider implements ModelProvider {
         }
       }
     });
+  }
+
+  private mapUserContent(
+    content: string | ChatContentPart[],
+  ): string | OpenAI.ChatCompletionContentPart[] {
+    if (typeof content === 'string') {
+      return content;
+    }
+
+    return content.map<OpenAI.ChatCompletionContentPart>((part) => {
+      if (part.type === 'text') {
+        return {
+          type: 'text',
+          text: part.text,
+        };
+      }
+
+      return {
+        type: 'image_url',
+        image_url: {
+          url: part.imageUrl.url,
+          detail: part.imageUrl.detail,
+        },
+      };
+    });
+  }
+
+  private extractTextFromParts(parts: ChatContentPart[]): string {
+    return parts
+      .filter((part): part is Extract<ChatContentPart, { type: 'text' }> => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n')
+      .trim();
   }
 
   private mapTools(tools?: ToolDefinition[]): OpenAI.ChatCompletionTool[] | undefined {

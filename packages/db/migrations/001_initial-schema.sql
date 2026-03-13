@@ -26,26 +26,40 @@ CREATE TABLE messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE attachments (
+CREATE TABLE sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  message_id UUID NOT NULL REFERENCES messages(id),
+  user_id UUID REFERENCES users(id),
   kind TEXT NOT NULL,
-  file_name TEXT NOT NULL,
-  mime_type TEXT NOT NULL,
-  size_bytes BIGINT NOT NULL,
-  storage_key TEXT NOT NULL,
+  connector_kind TEXT,
+  external_id TEXT,
+  title TEXT NOT NULL,
+  uri TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
-  source_id UUID,
+  source_id UUID REFERENCES sources(id),
   title TEXT NOT NULL,
   content TEXT,
   mime_type TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE attachments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  message_id UUID REFERENCES messages(id),
+  document_id UUID REFERENCES documents(id),
+  kind TEXT NOT NULL,
+  file_name TEXT NOT NULL,
+  mime_type TEXT NOT NULL,
+  size_bytes BIGINT NOT NULL,
+  data BYTEA NOT NULL,
+  text_content TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE chunks (
@@ -66,17 +80,6 @@ CREATE TABLE embeddings (
 );
 
 CREATE INDEX idx_embeddings_vector ON embeddings USING ivfflat (vector vector_cosine_ops) WITH (lists = 100);
-
-CREATE TABLE sources (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES users(id),
-  kind TEXT NOT NULL,
-  connector_kind TEXT,
-  external_id TEXT,
-  title TEXT NOT NULL,
-  uri TEXT,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
 
 CREATE TABLE tool_executions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -124,6 +127,9 @@ CREATE TABLE memories (
 
 CREATE INDEX idx_conversations_user ON conversations(user_id);
 CREATE INDEX idx_messages_conversation ON messages(conversation_id);
+CREATE INDEX idx_attachments_user ON attachments(user_id);
+CREATE INDEX idx_attachments_message ON attachments(message_id);
+CREATE INDEX idx_attachments_document ON attachments(document_id);
 CREATE INDEX idx_chunks_document ON chunks(document_id);
 CREATE INDEX idx_embeddings_chunk ON embeddings(chunk_id);
 CREATE INDEX idx_approvals_user_status ON approvals(user_id, status);

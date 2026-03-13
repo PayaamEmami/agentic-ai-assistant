@@ -10,6 +10,7 @@ export const AttachmentKind = {
   Image: 'image',
   Document: 'document',
   Audio: 'audio',
+  File: 'file',
 } as const;
 export type AttachmentKind = (typeof AttachmentKind)[keyof typeof AttachmentKind];
 

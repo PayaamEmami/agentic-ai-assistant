@@ -150,11 +150,14 @@ export const api = {
     },
   },
   upload: {
-    async uploadFile(file: File) {
+    async uploadFile(file: File, options?: { indexForRag?: boolean }) {
       const token = await getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
-      const url = `${API_BASE}/api/upload`;
+      const url = new URL(`${API_BASE}/api/upload`);
+      if (options?.indexForRag) {
+        url.searchParams.set('indexForRag', 'true');
+      }
       const res = await fetch(url, {
         method: 'POST',
         body: formData,
@@ -163,7 +166,15 @@ export const api = {
         },
       });
       if (!res.ok) throw new ApiError(res.status, 'Upload failed');
-      return res.json() as Promise<{ attachmentId: string; fileName: string; mimeType: string; sizeBytes: number }>;
+      return res.json() as Promise<{
+        attachmentId: string;
+        fileName: string;
+        mimeType: string;
+        sizeBytes: number;
+        kind: 'image' | 'document' | 'audio' | 'file';
+        indexedForRag: boolean;
+        documentId?: string | null;
+      }>;
     },
   },
   approvals: {

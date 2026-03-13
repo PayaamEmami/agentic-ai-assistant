@@ -61,10 +61,20 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
     );
   }
 
-  if (block.type === 'image_ref') {
+  if (block.type === 'attachment_ref') {
+    const label =
+      block.attachmentKind === 'image'
+        ? 'Image'
+        : block.attachmentKind === 'document'
+          ? 'Document'
+          : block.attachmentKind === 'audio'
+            ? 'Audio'
+            : 'File';
+
     return (
       <div key={index} className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
-        [Image] {block.fileName ?? block.attachmentId ?? 'attachment'}
+        [{label}] {block.fileName ?? block.attachmentId ?? 'attachment'}
+        {block.indexedForRag ? ' • indexed for RAG' : ''}
       </div>
     );
   }

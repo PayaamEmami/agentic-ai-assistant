@@ -7,7 +7,7 @@ export async function uploadRoutes(app: FastifyInstance) {
 
   app.addHook('preHandler', authenticate);
 
-  app.post('/upload', async (request, reply) => {
+  app.post<{ Querystring: { indexForRag?: string } }>('/upload', async (request, reply) => {
     const file = await request.file();
     if (!file) {
       return reply
@@ -15,7 +15,9 @@ export async function uploadRoutes(app: FastifyInstance) {
         .send({ error: { code: 'NO_FILE', message: 'No file provided' } });
     }
 
-    const result = await uploadService.handleUpload(request.user!.id, file);
+    const result = await uploadService.handleUpload(request.user!.id, file, {
+      indexForRag: request.query.indexForRag === 'true',
+    });
     return reply.status(200).send(result);
   });
 }
