@@ -1,5 +1,29 @@
 import { z } from 'zod';
 
+export const AuthCredentialsRequest = z.object({
+  email: z.string().email(),
+  password: z.string().min(8).max(256),
+});
+export type AuthCredentialsRequest = z.infer<typeof AuthCredentialsRequest>;
+
+export const RegisterRequest = AuthCredentialsRequest.extend({
+  displayName: z.string().min(1).max(120),
+});
+export type RegisterRequest = z.infer<typeof RegisterRequest>;
+
+export const AuthUserDto = z.object({
+  id: z.string().uuid(),
+  email: z.string().email(),
+  displayName: z.string(),
+});
+export type AuthUserDto = z.infer<typeof AuthUserDto>;
+
+export const AuthResponse = z.object({
+  token: z.string(),
+  user: AuthUserDto,
+});
+export type AuthResponse = z.infer<typeof AuthResponse>;
+
 export const SendMessageRequest = z.object({
   conversationId: z.string().uuid().optional(),
   content: z.string().min(1).max(32000),

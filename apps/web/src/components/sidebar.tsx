@@ -1,21 +1,44 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useChatContext } from '@/lib/chat-context';
+import { useAuthContext } from '@/lib/auth-context';
 
 export function Sidebar() {
+  const router = useRouter();
+  const { user, logout } = useAuthContext();
   const { conversations, currentConversationId, loading, selectConversation } = useChatContext();
+
+  const handleLogout = () => {
+    logout();
+    router.replace('/');
+  };
 
   return (
     <aside className="flex w-64 flex-col border-r border-gray-200 bg-white">
-      <div className="flex items-center justify-between p-4 border-b border-gray-200">
-        <h2 className="text-sm font-semibold">Conversations</h2>
-        <button
-          onClick={() => void selectConversation(undefined)}
-          className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
-          title="New conversation"
-        >
-          <PlusIcon />
-        </button>
+      <div className="border-b border-gray-200 p-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold">Conversations</h2>
+          <button
+            onClick={() => void selectConversation(undefined)}
+            className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+            title="New conversation"
+          >
+            <PlusIcon />
+          </button>
+        </div>
+        <div className="mt-4 rounded-2xl bg-gray-100 px-3 py-3">
+          <p className="truncate text-sm font-medium text-gray-900">
+            {user?.displayName ?? 'Signed in'}
+          </p>
+          <p className="truncate text-xs text-gray-500">{user?.email}</p>
+          <button
+            onClick={handleLogout}
+            className="mt-3 text-xs font-medium text-gray-700 underline underline-offset-4"
+          >
+            Sign out
+          </button>
+        </div>
       </div>
       <nav className="flex-1 overflow-y-auto p-2">
         {loading.isLoadingConversations && conversations.length === 0 ? (

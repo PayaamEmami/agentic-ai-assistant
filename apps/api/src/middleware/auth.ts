@@ -6,6 +6,7 @@ import { verifyAuthToken } from '../lib/jwt.js';
 export interface AuthUser {
   id: string;
   email: string;
+  displayName: string;
 }
 
 declare module 'fastify' {
@@ -18,15 +19,22 @@ export async function authenticate(
   request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
-  const authHeader = request.headers.authorization;
-  const token = authHeader?.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : null;
+  const token = extractBearerToken(request.headers.authorization);
 
   if (!token) {
     throw new AppError(401, 'Missing bearer token', 'AUTH_REQUIRED');
   }
 
+  request.user = await authenticateToken(token);
+}
+
+export function extractBearerToken(authHeader: string | undefined): string | null {
+  return authHeader?.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : null;
+}
+
+export async function authenticateToken(token: string): Promise<AuthUser> {
   const claims = verifyAuthToken(token);
   if (!claims) {
     throw new AppError(401, 'Invalid or expired token', 'AUTH_INVALID');
@@ -38,5 +46,5 @@ export async function authenticate(
     throw new AppError(401, 'User not found for token subject', 'AUTH_INVALID_USER');
   }
 
-  request.user = { id: user.id, email: user.email };
+  return { id: user.id, email: user.email, displayName: user.displayName };
 }

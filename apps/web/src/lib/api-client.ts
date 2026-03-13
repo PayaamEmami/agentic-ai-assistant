@@ -1,5 +1,4 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const DEV_AUTH_EMAIL = process.env.NEXT_PUBLIC_DEV_AUTH_EMAIL ?? 'dev@localhost';
 const TOKEN_STORAGE_KEY = 'aaa_auth_token';
 
 let cachedToken: string | null = null;
@@ -8,29 +7,7 @@ function canUseBrowserStorage(): boolean {
   return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
 }
 
-async function requestDevToken(): Promise<string> {
-  const response = await fetch(`${API_BASE}/api/auth/dev-login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      email: DEV_AUTH_EMAIL,
-      displayName: 'Dev User',
-    }),
-  });
-
-  if (!response.ok) {
-    throw new ApiError(response.status, 'Failed to create development auth token');
-  }
-
-  const payload = (await response.json()) as { token?: string };
-  if (!payload.token) {
-    throw new ApiError(500, 'Auth token missing in dev-login response');
-  }
-
-  return payload.token;
-}
-
-async function getAuthToken(): Promise<string> {
+export function getStoredAuthToken(): string | null {
   if (cachedToken) {
     return cachedToken;
   }
@@ -43,14 +20,47 @@ async function getAuthToken(): Promise<string> {
     }
   }
 
-  const token = await requestDevToken();
-  cachedToken = token;
+  return null;
+}
 
+export function setStoredAuthToken(token: string): void {
+  cachedToken = token;
   if (canUseBrowserStorage()) {
     window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
   }
+}
 
+export function clearStoredAuthToken(): void {
+  cachedToken = null;
+  if (canUseBrowserStorage()) {
+    window.localStorage.removeItem(TOKEN_STORAGE_KEY);
+  }
+}
+
+async function getAuthToken(): Promise<string> {
+  const token = getStoredAuthToken();
+  if (!token) {
+    throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
+  }
   return token;
+}
+
+async function requestPublic<T>(path: string, options?: RequestInit): Promise<T> {
+  const url = `${API_BASE}${path}`;
+  const res = await fetch(url, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options?.headers,
+    },
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(res.status, body?.error?.message ?? 'Request failed', body?.error?.code);
+  }
+
+  return res.json() as Promise<T>;
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
@@ -84,7 +94,47 @@ export class ApiError extends Error {
   }
 }
 
+interface AuthPayload {
+  token: string;
+  user: {
+    id: string;
+    email: string;
+    displayName: string;
+  };
+}
+
+export function buildWebSocketUrl(token: string): string {
+  const base = new URL(API_BASE);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  base.pathname = '/ws/events';
+  base.searchParams.set('token', token);
+  return base.toString();
+}
+
 export const api = {
+  auth: {
+    register(email: string, password: string, displayName: string) {
+      return requestPublic<AuthPayload>('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, displayName }),
+      });
+    },
+    login(email: string, password: string) {
+      return requestPublic<AuthPayload>('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      });
+    },
+    me() {
+      return request<{ user: { id: string; email: string; displayName: string } }>('/api/auth/me');
+    },
+    devLogin(email: string, displayName: string) {
+      return requestPublic<AuthPayload>('/api/auth/dev-login', {
+        method: 'POST',
+        body: JSON.stringify({ email, displayName }),
+      });
+    },
+  },
   chat: {
     send(content: string, conversationId?: string, attachmentIds?: string[]) {
       return request<{ conversationId: string; messageId: string }>('/api/chat', {

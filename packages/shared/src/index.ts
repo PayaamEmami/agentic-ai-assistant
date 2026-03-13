@@ -43,6 +43,10 @@ export type {
 } from './domain.js';
 
 export {
+  AuthCredentialsRequest,
+  RegisterRequest,
+  AuthUserDto,
+  AuthResponse,
   SendMessageRequest,
   SendMessageResponse,
   UploadAttachmentResponse,

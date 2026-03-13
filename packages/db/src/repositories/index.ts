@@ -1,5 +1,5 @@
 export { userRepository } from './users.js';
-export type { User, UserRepository } from './users.js';
+export type { User, UserAuthRecord, UserRepository } from './users.js';
 
 export { conversationRepository } from './conversations.js';
 export type { Conversation, ConversationRepository } from './conversations.js';

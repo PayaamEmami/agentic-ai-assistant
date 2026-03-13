@@ -6,9 +6,11 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import { api } from './api-client';
+import { useAuthContext } from './auth-context';
+import { api, buildWebSocketUrl } from './api-client';
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -350,6 +352,7 @@ function createFallbackAssistantMessage(messageId: string): ChatMessage {
 }
 
 export function ChatProvider({ children }: { children: React.ReactNode }) {
+  const { token } = useAuthContext();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -363,6 +366,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const socketRef = useRef<WebSocket | null>(null);
 
   const loadPendingApprovals = useCallback(async () => {
     setIsLoadingApprovals(true);
@@ -402,6 +406,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshConversation = useCallback(async (conversationId: string) => {
+    const response = await api.chat.getConversation(conversationId);
+    setMessages(response.messages.map(normalizeMessage));
+  }, []);
+
   const selectConversation = useCallback(async (conversationId?: string) => {
     setError(null);
     setCurrentConversationId(conversationId);
@@ -413,16 +422,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
     setIsLoadingMessages(true);
     try {
-      const response = await api.chat.getConversation(conversationId);
-      const nextMessages = response.messages.map(normalizeMessage);
-      setMessages(nextMessages);
+      await refreshConversation(conversationId);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Failed to load conversation');
       setMessages([]);
     } finally {
       setIsLoadingMessages(false);
     }
-  }, []);
+  }, [refreshConversation]);
 
   const sendMessage = useCallback(
     async (content: string, attachmentIds: string[] = []) => {
@@ -531,13 +538,78 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   );
 
   const startVoiceSession = useCallback(async () => {
-    console.log('Starting voice session', { conversationId: currentConversationId });
+    setError(null);
+    try {
+      await api.voice.createSession(currentConversationId);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Failed to start voice session');
+    }
   }, [currentConversationId]);
 
   useEffect(() => {
     void loadConversations();
     void loadPendingApprovals();
   }, [loadConversations, loadPendingApprovals]);
+
+  useEffect(() => {
+    if (!token || !currentConversationId) {
+      socketRef.current?.close();
+      socketRef.current = null;
+      return;
+    }
+
+    const socket = new WebSocket(buildWebSocketUrl(token));
+    socketRef.current = socket;
+
+    socket.addEventListener('open', () => {
+      socket.send(
+        JSON.stringify({
+          type: 'subscribe',
+          conversationId: currentConversationId,
+        }),
+      );
+    });
+
+    socket.addEventListener('message', (event) => {
+      let parsed: { type?: string; conversationId?: string };
+      try {
+        parsed = JSON.parse(event.data as string) as { type?: string; conversationId?: string };
+      } catch {
+        return;
+      }
+
+      switch (parsed.type) {
+        case 'assistant.text.done':
+        case 'tool.start':
+        case 'tool.done':
+          void refreshConversation(currentConversationId);
+          return;
+        case 'approval.requested':
+        case 'approval.resolved':
+          void loadPendingApprovals();
+          void refreshConversation(currentConversationId);
+          return;
+        case 'error':
+          setError('Realtime connection was rejected.');
+          return;
+        default:
+          return;
+      }
+    });
+
+    socket.addEventListener('close', () => {
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    });
+
+    return () => {
+      socket.close();
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+    };
+  }, [currentConversationId, loadPendingApprovals, refreshConversation, token]);
 
   useEffect(() => {
     setToolActivities(extractToolActivities(messages));
