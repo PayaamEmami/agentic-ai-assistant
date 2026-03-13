@@ -28,6 +28,7 @@ export interface ToolExecutionRepository {
     origin: string,
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
+  setApproval(id: string, approvalId: string): Promise<void>;
   findPendingApproval(conversationId: string): Promise<ToolExecution | null>;
 }
 
@@ -104,6 +105,16 @@ export const toolExecutionRepository: ToolExecutionRepository = {
            completed_at = CASE WHEN $1 IN ('completed', 'failed') THEN NOW() ELSE NULL END
        WHERE id = $3`,
       [status, JSON.stringify(output), id],
+    );
+  },
+
+  async setApproval(id: string, approvalId: string): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE tool_executions
+       SET approval_id = $1
+       WHERE id = $2`,
+      [approvalId, id],
     );
   },
 

@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
 import { getPool, userRepository } from '@aaa/db';
 import { AppError } from '../lib/errors.js';
+import { verifyAuthToken } from '../lib/jwt.js';
 
 export interface AuthUser {
   id: string;
@@ -17,21 +18,25 @@ export async function authenticate(
   request: FastifyRequest,
   _reply: FastifyReply,
 ): Promise<void> {
-  // TODO: implement real authentication (JWT, session, etc.)
-  const principal = request.headers['x-user-id'] as string | undefined;
-  if (!principal) {
-    throw new AppError(401, 'Authentication required', 'AUTH_REQUIRED');
+  const authHeader = request.headers.authorization;
+  const token = authHeader?.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : null;
+
+  if (!token) {
+    throw new AppError(401, 'Missing bearer token', 'AUTH_REQUIRED');
+  }
+
+  const claims = verifyAuthToken(token);
+  if (!claims) {
+    throw new AppError(401, 'Invalid or expired token', 'AUTH_INVALID');
   }
 
   getPool();
-
-  const normalizedPrincipal = principal.trim().toLowerCase();
-  const safePrincipal = normalizedPrincipal.replace(/[^a-z0-9._-]/g, '-').slice(0, 64);
-  const email = `${safePrincipal || 'dev-user'}@localhost`;
-
-  const user =
-    (await userRepository.findByEmail(email)) ??
-    (await userRepository.create(email, safePrincipal || 'Dev User'));
+  const user = await userRepository.findById(claims.sub);
+  if (!user) {
+    throw new AppError(401, 'User not found for token subject', 'AUTH_INVALID_USER');
+  }
 
   request.user = { id: user.id, email: user.email };
 }

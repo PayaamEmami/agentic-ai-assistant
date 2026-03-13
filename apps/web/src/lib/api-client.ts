@@ -1,13 +1,66 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
-const DEV_USER_ID = process.env.NEXT_PUBLIC_DEV_USER_ID ?? 'local-dev-user';
+const DEV_AUTH_EMAIL = process.env.NEXT_PUBLIC_DEV_AUTH_EMAIL ?? 'dev@localhost';
+const TOKEN_STORAGE_KEY = 'aaa_auth_token';
+
+let cachedToken: string | null = null;
+
+function canUseBrowserStorage(): boolean {
+  return typeof window !== 'undefined' && typeof window.localStorage !== 'undefined';
+}
+
+async function requestDevToken(): Promise<string> {
+  const response = await fetch(`${API_BASE}/api/auth/dev-login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email: DEV_AUTH_EMAIL,
+      displayName: 'Dev User',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new ApiError(response.status, 'Failed to create development auth token');
+  }
+
+  const payload = (await response.json()) as { token?: string };
+  if (!payload.token) {
+    throw new ApiError(500, 'Auth token missing in dev-login response');
+  }
+
+  return payload.token;
+}
+
+async function getAuthToken(): Promise<string> {
+  if (cachedToken) {
+    return cachedToken;
+  }
+
+  if (canUseBrowserStorage()) {
+    const stored = window.localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (stored) {
+      cachedToken = stored;
+      return stored;
+    }
+  }
+
+  const token = await requestDevToken();
+  cachedToken = token;
+
+  if (canUseBrowserStorage()) {
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  }
+
+  return token;
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const token = await getAuthToken();
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      'x-user-id': DEV_USER_ID,
+      Authorization: `Bearer ${token}`,
       ...options?.headers,
     },
   });
@@ -48,6 +101,7 @@ export const api = {
   },
   upload: {
     async uploadFile(file: File) {
+      const token = await getAuthToken();
       const formData = new FormData();
       formData.append('file', file);
       const url = `${API_BASE}/api/upload`;
@@ -55,7 +109,7 @@ export const api = {
         method: 'POST',
         body: formData,
         headers: {
-          'x-user-id': DEV_USER_ID,
+          Authorization: `Bearer ${token}`,
         },
       });
       if (!res.ok) throw new ApiError(res.status, 'Upload failed');

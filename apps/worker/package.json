@@ -11,6 +11,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aaa/db": "workspace:*",
+    "@aaa/shared": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.4.0",
     "pino": "^9.0.0"

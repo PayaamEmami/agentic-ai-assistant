@@ -1,3 +1,4 @@
+import { closePool } from '@aaa/db';
 import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
 
@@ -11,6 +12,7 @@ async function main() {
   const shutdown = async () => {
     logger.info('Shutting down workers...');
     await Promise.all(workers.map(w => w.close()));
+    await closePool();
     logger.info('All workers stopped');
     process.exit(0);
   };

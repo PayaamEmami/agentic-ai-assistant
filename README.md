@@ -220,20 +220,6 @@ Voice is architected into the system from the start:
 3. Client connects directly to OpenAI Realtime
 4. Transcript events flow back into the conversation timeline
 
-## Deferred Implementation
-
-The following areas are scaffolded with interfaces and placeholders but not yet fully implemented:
-
-- **Authentication** — Placeholder middleware reads `x-user-id` header; no real auth flow yet
-- **OpenAI integration** — Provider interface defined; actual API calls not wired
-- **RAG pipeline** — Chunking, embedding, and search interfaces exist; implementation deferred
-- **MCP protocol** — Client adapter and registry structured; protocol handling not implemented
-- **Connector auth flows** — OAuth/token flows not implemented
-- **Voice session** — Route and types exist; ephemeral token creation not implemented
-- **Agent orchestration** — Multi-agent loop structured; prompt engineering and tool routing deferred
-- **Background jobs** — Job handlers registered; processing logic not implemented
-- **Real-time streaming** — WebSocket endpoint exists; event broadcasting not wired
-
 ## License
 
 See [LICENSE](./LICENSE).

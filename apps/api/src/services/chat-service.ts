@@ -1,6 +1,12 @@
 import { OpenAIProvider, type ChatMessage as ModelChatMessage } from '@aaa/ai';
-import { conversationRepository, getPool, messageRepository } from '@aaa/db';
-import type { AssistantTextDoneEvent } from '@aaa/shared';
+import {
+  approvalRepository,
+  conversationRepository,
+  getPool,
+  messageRepository,
+  toolExecutionRepository,
+} from '@aaa/db';
+import type { ApprovalRequestedEvent, AssistantTextDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { RetrievalCitation } from './retrieval-bridge.js';
@@ -12,6 +18,7 @@ const DEFAULT_FALLBACK_RESPONSE =
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
 const MAX_CITATIONS = 4;
+const TOOL_COMMAND_PREFIX = '/tool';
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 
@@ -98,6 +105,45 @@ function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<s
   }));
 }
 
+interface ParsedToolRequest {
+  toolName: string;
+  input: Record<string, unknown>;
+}
+
+function parseToolRequest(content: string): ParsedToolRequest | null {
+  const trimmed = content.trim();
+  if (!trimmed.toLowerCase().startsWith(TOOL_COMMAND_PREFIX)) {
+    return null;
+  }
+
+  const commandBody = trimmed.slice(TOOL_COMMAND_PREFIX.length).trim();
+  if (!commandBody) {
+    return null;
+  }
+
+  const firstSpace = commandBody.indexOf(' ');
+  const toolName = (firstSpace === -1 ? commandBody : commandBody.slice(0, firstSpace)).trim();
+  if (!toolName) {
+    return null;
+  }
+
+  const argsText = firstSpace === -1 ? '' : commandBody.slice(firstSpace + 1).trim();
+  if (!argsText) {
+    return { toolName, input: {} };
+  }
+
+  try {
+    const parsed = JSON.parse(argsText) as unknown;
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return { toolName, input: parsed as Record<string, unknown> };
+    }
+
+    return { toolName, input: { value: parsed } };
+  } catch {
+    return { toolName, input: { raw: argsText } };
+  }
+}
+
 export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly modelProvider: OpenAIProvider;
@@ -139,6 +185,63 @@ export class ChatService {
     }
 
     await messageRepository.create(conversation.id, 'user', userMessageContent);
+
+    const toolRequest = parseToolRequest(content);
+    if (toolRequest) {
+      const toolExecution = await toolExecutionRepository.create(
+        conversation.id,
+        null,
+        toolRequest.toolName,
+        toolRequest.input,
+        'native',
+      );
+      await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
+
+      const approval = await approvalRepository.create(
+        userId,
+        conversation.id,
+        toolExecution.id,
+        `Approve execution of tool "${toolRequest.toolName}"`,
+      );
+      await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
+
+      const assistantMessage = await messageRepository.create(conversation.id, 'assistant', [
+        {
+          type: 'text',
+          text: `Approval requested for tool "${toolRequest.toolName}".`,
+        },
+        {
+          type: 'tool_result',
+          toolExecutionId: toolExecution.id,
+          toolName: toolRequest.toolName,
+          status: 'pending',
+        },
+      ]);
+
+      const approvalEvent: ApprovalRequestedEvent = {
+        type: 'approval.requested',
+        conversationId: conversation.id,
+        approvalId: approval.id,
+        toolExecutionId: toolExecution.id,
+        description: approval.description,
+      };
+      broadcast(conversation.id, approvalEvent);
+
+      logger.info(
+        {
+          userId,
+          conversationId: conversation.id,
+          toolExecutionId: toolExecution.id,
+          toolName: toolRequest.toolName,
+        },
+        'Tool request created and awaiting approval',
+      );
+
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMessage.id,
+      };
+    }
 
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,

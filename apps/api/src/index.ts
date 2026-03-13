@@ -2,10 +2,13 @@ import { closePool, getPool } from '@aaa/db';
 import { buildServer } from './server.js';
 import { loadConfig } from './config.js';
 import { logger } from './lib/logger.js';
+import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
+import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
 
 async function main() {
   const config = loadConfig();
   getPool();
+  await startToolEventRelay();
   const server = await buildServer(config);
   let shuttingDown = false;
 
@@ -19,6 +22,8 @@ async function main() {
 
     try {
       await server.close();
+      await closeToolExecutionQueue();
+      await stopToolEventRelay();
       await closePool();
       logger.info('Shutdown complete');
     } catch (err) {
@@ -41,6 +46,8 @@ async function main() {
     logger.info(`Server listening on ${config.host}:${config.port}`);
   } catch (err) {
     logger.error(err, 'Failed to start server');
+    await closeToolExecutionQueue();
+    await stopToolEventRelay();
     await closePool();
     process.exit(1);
   }

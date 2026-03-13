@@ -6,6 +6,7 @@ import type { AppConfig } from './config.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './lib/errors.js';
 import { healthRoutes } from './routes/health.js';
+import { authRoutes } from './routes/auth.js';
 import { chatRoutes } from './routes/chat.js';
 import { uploadRoutes } from './routes/upload.js';
 import { approvalRoutes } from './routes/approvals.js';
@@ -24,6 +25,7 @@ export async function buildServer(config: AppConfig) {
   app.setErrorHandler(errorHandler);
 
   await app.register(healthRoutes);
+  await app.register(authRoutes, { prefix: '/api' });
   await app.register(chatRoutes, { prefix: '/api' });
   await app.register(uploadRoutes, { prefix: '/api' });
   await app.register(approvalRoutes, { prefix: '/api' });
