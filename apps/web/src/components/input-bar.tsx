@@ -250,7 +250,7 @@ export function InputBar() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4">
+    <form onSubmit={handleSubmit} className="border-t border-border bg-surface-elevated p-4">
       <input
         ref={fileInputRef}
         type="file"
@@ -263,18 +263,18 @@ export function InputBar() {
           {attachments.map((attachment) => (
             <span
               key={attachment.id}
-              className="inline-flex items-center gap-2 rounded-full border border-gray-300 bg-gray-50 px-3 py-1 text-xs text-gray-700"
+              className="inline-flex items-center gap-2 rounded-full border border-border bg-surface-input px-3 py-1 text-xs text-foreground"
             >
               <span>{attachment.name}</span>
               {attachment.indexedForRag ? (
-                <span className="rounded-full bg-gray-900 px-2 py-0.5 text-[10px] font-medium text-white">
+                <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
                   Indexed
                 </span>
               ) : null}
               <button
                 type="button"
                 onClick={() => removeAttachment(attachment.id)}
-                className="text-gray-400 hover:text-gray-700"
+                className="text-foreground-muted hover:text-foreground"
                 aria-label={`Remove ${attachment.name}`}
               >
                 x
@@ -288,7 +288,7 @@ export function InputBar() {
           type="button"
           onClick={handleFilePicker}
           disabled={loading.isUploadingAttachment}
-          className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+          className="rounded-lg p-2 text-foreground-muted hover:bg-surface-hover hover:text-foreground"
           title="Upload file"
         >
           <AttachmentIcon />
@@ -299,8 +299,8 @@ export function InputBar() {
           disabled={!isRecording && (loading.isSendingMessage || isProcessingVoice)}
           className={`rounded-lg p-2 transition-colors ${
             isRecording
-              ? 'bg-red-100 text-red-700 hover:bg-red-200'
-              : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+              ? 'bg-error/20 text-error hover:bg-error/30'
+              : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
           }`}
           title={isRecording ? 'Stop recording' : 'Voice mode'}
         >
@@ -311,29 +311,29 @@ export function InputBar() {
           value={message}
           onChange={(e) => setMessage(e.target.value)}
           placeholder="Type a message or attach files..."
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 text-sm focus:border-gray-500 focus:outline-none"
+          className="flex-1 rounded-lg border border-border-subtle bg-surface-input px-4 py-2 text-sm text-foreground placeholder:text-foreground-inactive focus:border-accent focus:outline-none"
         />
         <button
           type="submit"
           disabled={loading.isSendingMessage || (!message.trim() && attachments.length === 0)}
-          className="rounded-lg bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {loading.isSendingMessage ? 'Sending...' : 'Send'}
         </button>
       </div>
       {voiceStatus ? (
-        <p className="mt-3 text-xs text-gray-600">{voiceStatus}</p>
+        <p className="mt-3 text-xs text-foreground-muted">{voiceStatus}</p>
       ) : null}
-      <label className="mt-3 flex items-center gap-2 text-xs text-gray-600">
+      <label className="mt-3 flex items-center gap-2 text-xs text-foreground-muted">
         <input
           type="checkbox"
           checked={indexDocuments}
           onChange={(e) => setIndexDocuments(e.target.checked)}
-          className="rounded border-gray-300 text-gray-900 focus:ring-gray-500"
+          className="rounded border-border-subtle bg-surface-input text-accent focus:ring-accent"
         />
         Index text documents for RAG when possible
       </label>
-      <p className="mt-2 text-[11px] text-gray-500">
+      <p className="mt-2 text-[11px] text-foreground-inactive">
         Voice replies are AI-generated.
       </p>
     </form>

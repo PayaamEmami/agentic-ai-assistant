@@ -38,17 +38,17 @@ function getToolStatusLabel(status: string | undefined): string {
 function getToolStatusClass(status: string | undefined): string {
   switch (status) {
     case 'planned':
-      return 'bg-blue-100 text-blue-700';
+      return 'bg-accent/20 text-accent';
     case 'running':
-      return 'bg-yellow-100 text-yellow-700';
+      return 'bg-warning/20 text-warning';
     case 'pending':
-      return 'bg-gray-100 text-gray-700';
+      return 'bg-surface-input text-foreground-muted';
     case 'completed':
-      return 'bg-green-100 text-green-700';
+      return 'bg-success/20 text-success';
     case 'failed':
-      return 'bg-red-100 text-red-700';
+      return 'bg-error/20 text-error';
     default:
-      return 'bg-gray-100 text-gray-600';
+      return 'bg-surface-input text-foreground-inactive';
   }
 }
 
@@ -72,7 +72,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
             : 'File';
 
     return (
-      <div key={index} className="rounded border border-gray-300 bg-gray-50 px-3 py-2 text-xs text-gray-600">
+      <div key={index} className="rounded border border-border bg-surface-input px-3 py-2 text-xs text-foreground-muted">
         [{label}] {block.fileName ?? block.attachmentId ?? 'attachment'}
         {block.indexedForRag ? ' • indexed for RAG' : ''}
       </div>
@@ -81,9 +81,9 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
   if (block.type === 'tool_result') {
     return (
-      <div key={index} className="rounded border border-gray-300 bg-gray-50 p-2">
+      <div key={index} className="rounded border border-border bg-surface-input p-2">
         <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-gray-700">
+          <p className="text-xs font-medium text-foreground">
             Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
           </p>
           <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(block.status)}`}>
@@ -91,7 +91,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
           </span>
         </div>
         {typeof block.output === 'undefined' ? null : (
-          <pre className="overflow-x-auto text-xs text-gray-800">{stringify(block.output)}</pre>
+          <pre className="overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
         )}
       </div>
     );
@@ -99,7 +99,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
   if (block.type === 'citation') {
     return (
-      <blockquote key={index} className="border-l-2 border-gray-300 pl-3 text-xs italic text-gray-700">
+      <blockquote key={index} className="border-l-2 border-border pl-3 text-xs italic text-foreground-muted">
         {block.excerpt ?? 'Citation excerpt unavailable.'}
       </blockquote>
     );
@@ -107,14 +107,14 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
   if (block.type === 'transcript') {
     return (
-      <p key={index} className="text-xs italic text-gray-700">
+      <p key={index} className="text-xs italic text-foreground-muted">
         Transcript: {block.text}
       </p>
     );
   }
 
   return (
-    <pre key={index} className="overflow-x-auto text-xs text-gray-700">
+    <pre key={index} className="overflow-x-auto text-xs text-foreground-muted">
       {stringify(block)}
     </pre>
   );
@@ -123,7 +123,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 export function Message({ role, content }: MessageProps) {
   const isUser = role === 'user';
   const bubbleClassName = `max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-    isUser ? 'bg-gray-900 text-white' : 'bg-white border border-gray-200 text-gray-900'
+    isUser ? 'bg-accent text-white' : 'bg-surface-overlay border border-border text-foreground'
   } ${isUser ? '' : 'space-y-2'}`;
 
   return (

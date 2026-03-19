@@ -5,11 +5,11 @@ interface ToolActivityProps {
 
 export function ToolActivity({ name, status }: ToolActivityProps) {
   const statusColors: Record<string, string> = {
-    planned: 'bg-blue-100 text-blue-700',
-    pending: 'bg-gray-100 text-gray-600',
-    running: 'bg-yellow-100 text-yellow-700',
-    completed: 'bg-green-100 text-green-700',
-    failed: 'bg-red-100 text-red-700',
+    planned: 'bg-accent/20 text-accent',
+    pending: 'bg-surface-input text-foreground-muted',
+    running: 'bg-warning/20 text-warning',
+    completed: 'bg-success/20 text-success',
+    failed: 'bg-error/20 text-error',
   };
   const statusLabels: Record<string, string> = {
     planned: 'Planned by model',
@@ -20,8 +20,8 @@ export function ToolActivity({ name, status }: ToolActivityProps) {
   };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-gray-200 p-3">
-      <span className="text-sm">{name}</span>
+    <div className="flex items-center justify-between rounded-lg border border-border bg-surface-overlay p-3">
+      <span className="text-sm text-foreground">{name}</span>
       <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[status] ?? ''}`}>
         {statusLabels[status] ?? status}
       </span>

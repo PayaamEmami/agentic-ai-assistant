@@ -9,7 +9,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
       <ChatProvider>
         <div className="flex h-screen">
           <Sidebar />
-          <main className="flex flex-1 flex-col">{children}</main>
+          <main className="flex flex-1 flex-col bg-surface-elevated">{children}</main>
           <RightPanel />
         </div>
       </ChatProvider>

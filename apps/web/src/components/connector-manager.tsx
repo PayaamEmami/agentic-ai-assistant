@@ -113,8 +113,8 @@ export function ConnectorManager() {
         <p
           className={`rounded-lg px-3 py-2 text-xs ${
             connectorStatus === 'connected'
-              ? 'bg-emerald-50 text-emerald-700'
-              : 'bg-red-50 text-red-700'
+              ? 'bg-success/10 text-success'
+              : 'bg-error/10 text-error'
           }`}
         >
           {connectorLabel(
@@ -126,45 +126,45 @@ export function ConnectorManager() {
       ) : null}
 
       {actionError ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{actionError}</p>
+        <p className="rounded-lg bg-error/10 px-3 py-2 text-xs text-error">{actionError}</p>
       ) : null}
 
       {loading ? (
-        <p className="text-xs text-gray-400">Loading connectors...</p>
+        <p className="text-xs text-foreground-muted">Loading connectors...</p>
       ) : (
         connectors.map((connector) => (
-          <div key={connector.kind} className="rounded-xl border border-gray-200 p-3">
+          <div key={connector.kind} className="rounded-xl border border-border bg-surface-overlay p-3">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-gray-900">{connectorLabel(connector.kind)}</p>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="text-sm font-medium text-foreground">{connectorLabel(connector.kind)}</p>
+                <p className="mt-1 text-xs text-foreground-muted">
                   Status: {connector.status}
                   {connector.lastSyncStatus ? ` • sync ${connector.lastSyncStatus}` : ''}
                 </p>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-foreground-muted">
                   {formatSyncTimestamp(connector.lastSyncAt)}
                 </p>
                 {connector.kind === 'github' && connector.selectedRepoCount !== undefined ? (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-foreground-muted">
                     Selected repos: {connector.selectedRepoCount}
                   </p>
                 ) : null}
                 {connector.lastError ? (
-                  <p className="mt-2 text-xs text-red-600">{connector.lastError}</p>
+                  <p className="mt-2 text-xs text-error">{connector.lastError}</p>
                 ) : null}
               </div>
               <div className="flex flex-col gap-2">
                 {!connector.hasCredentials || connector.status !== 'connected' ? (
                   <button
                     onClick={() => void startConnection(connector.kind)}
-                    className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-medium text-white hover:bg-gray-800"
+                    className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
                   >
                     Connect
                   </button>
                 ) : (
                   <button
                     onClick={() => void triggerSync(connector.kind)}
-                    className="rounded-lg border border-gray-300 px-3 py-2 text-xs font-medium text-gray-700 hover:border-gray-400 hover:text-gray-900"
+                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
                   >
                     Sync now
                   </button>
@@ -174,11 +174,11 @@ export function ConnectorManager() {
 
             {connector.kind === 'github' && connector.status === 'connected' ? (
               <div className="mt-3 space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-gray-500">
+                <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
                   Repositories
                 </p>
                 {githubRepos.length === 0 ? (
-                  <p className="text-xs text-gray-400">No repositories loaded yet.</p>
+                  <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
                 ) : (
                   <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                     {githubRepos.map((repo) => {
@@ -186,7 +186,7 @@ export function ConnectorManager() {
                       return (
                         <label
                           key={repo.id}
-                          className="flex items-start gap-2 rounded-lg border border-gray-100 px-2 py-2 text-xs text-gray-700"
+                          className="flex items-start gap-2 rounded-lg border border-border px-2 py-2 text-xs text-foreground"
                         >
                           <input
                             type="checkbox"
@@ -201,8 +201,8 @@ export function ConnectorManager() {
                             className="mt-0.5"
                           />
                           <span>
-                            <span className="block font-medium text-gray-900">{repo.fullName}</span>
-                            <span className="block text-gray-500">
+                            <span className="block font-medium text-foreground">{repo.fullName}</span>
+                            <span className="block text-foreground-muted">
                               {repo.private ? 'Private' : 'Public'} • default branch {repo.defaultBranch}
                             </span>
                           </span>
@@ -214,7 +214,7 @@ export function ConnectorManager() {
                 <button
                   onClick={() => void saveRepoSelection()}
                   disabled={savingRepos}
-                  className="rounded-lg bg-white px-3 py-2 text-xs font-medium text-gray-700 ring-1 ring-gray-300 hover:bg-gray-50 disabled:opacity-50"
+                  className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
                 >
                   {savingRepos ? 'Saving...' : 'Save repos'}
                 </button>
