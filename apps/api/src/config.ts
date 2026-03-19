@@ -15,6 +15,14 @@ export interface AppConfig {
   s3Bucket: string;
   s3Region: string;
   s3Endpoint: string | undefined;
+  webBaseUrl: string;
+  connectorCredentialsSecret: string;
+  googleClientId?: string;
+  googleClientSecret?: string;
+  googleRedirectUri?: string;
+  githubClientId?: string;
+  githubClientSecret?: string;
+  githubRedirectUri?: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -46,5 +54,17 @@ export function loadConfig(): AppConfig {
     s3Bucket: process.env.S3_BUCKET ?? 'aaa-uploads',
     s3Region: process.env.S3_REGION ?? 'us-east-1',
     s3Endpoint: process.env.S3_ENDPOINT,
+    webBaseUrl: process.env.WEB_BASE_URL ?? 'http://localhost:3000',
+    connectorCredentialsSecret:
+      process.env.CONNECTOR_CREDENTIALS_SECRET ??
+      (nodeEnv === 'production'
+        ? required('CONNECTOR_CREDENTIALS_SECRET')
+        : 'dev-connector-credentials-secret'),
+    googleClientId: process.env.GOOGLE_CLIENT_ID,
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI,
+    githubClientId: process.env.GITHUB_CLIENT_ID,
+    githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
+    githubRedirectUri: process.env.GITHUB_REDIRECT_URI,
   };
 }

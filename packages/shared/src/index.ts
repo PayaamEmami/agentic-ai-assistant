@@ -64,6 +64,16 @@ export {
   VoiceMessageResponse,
   VoiceSpeechRequest,
   HealthResponse,
+  ConnectorKindDto,
+  ConnectorStatusDto,
+  ConnectorSyncStatusDto,
+  ConnectorSummaryDto,
+  ConnectorListResponse,
+  ConnectorConnectStartResponse,
+  ConnectorSyncResponse,
+  GitHubRepositoryDto,
+  GitHubRepositoriesResponse,
+  GitHubRepoSelectionRequest,
 } from './dto.js';
 
 export type { RealtimeEvent } from './events.js';

@@ -24,3 +24,11 @@ export { PassthroughReranker, KeywordReranker } from './reranking.js';
 
 export type { CitationService, DocumentMetadataResolver } from './citations.js';
 export { CitationServiceImpl } from './citations.js';
+
+export type {
+  DocumentReindexingService,
+  ClearDocumentIndex,
+  PersistChunk,
+  PersistEmbedding,
+} from './reindexing.js';
+export { DocumentReindexingServiceImpl } from './reindexing.js';

@@ -3,10 +3,12 @@ export type ConnectorKind = 'github' | 'google_drive' | 'google_docs' | 'proton_
 export interface ConnectorAuth {
   kind: ConnectorKind;
   credentials: Record<string, unknown>;
+  settings?: Record<string, unknown>;
 }
 
 export interface ConnectorItem {
   externalId: string;
+  sourceKind: 'document' | 'web_page' | 'email' | 'code_repository';
   title: string;
   content: string | null;
   mimeType: string;
@@ -16,6 +18,7 @@ export interface ConnectorItem {
 }
 
 export interface SyncResult {
+  items: ConnectorItem[];
   itemsSynced: number;
   errors: Array<{ externalId: string; error: string }>;
   nextCursor: string | null;

@@ -187,10 +187,15 @@ export interface ConnectorConfig {
   id: string;
   userId: string;
   kind: ConnectorKind;
+  status: 'pending' | 'connected' | 'failed';
   credentials: Record<string, unknown>;
   settings: Record<string, unknown>;
+  lastSyncCursor: string | null;
   lastSyncAt: Date | null;
+  lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
+  lastError: string | null;
   createdAt: Date;
+  updatedAt: Date;
 }
 
 export interface AgentTask {

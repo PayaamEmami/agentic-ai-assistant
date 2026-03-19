@@ -28,9 +28,14 @@ const envSchema = z.object({
   MCP_SERVERS_CONFIG_PATH: z.string().optional(),
 
   GITHUB_TOKEN: z.string().optional(),
+  GITHUB_CLIENT_ID: z.string().optional(),
+  GITHUB_CLIENT_SECRET: z.string().optional(),
+  GITHUB_REDIRECT_URI: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
+  WEB_BASE_URL: z.string().default('http://localhost:3000'),
+  CONNECTOR_CREDENTIALS_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

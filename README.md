@@ -141,9 +141,14 @@ Services:
 | `OPENAI_TTS_MODEL` | No | Text-to-speech model for assistant playback (default: `gpt-4o-mini-tts`) |
 | `OPENAI_TTS_VOICE` | No | Voice preset for assistant playback (default: `marin`) |
 | `MCP_SERVERS_CONFIG_PATH` | No | Path to MCP server config JSON |
-| `GITHUB_TOKEN` | No | GitHub personal access token |
+| `WEB_BASE_URL` | No | Frontend base URL for OAuth callback redirects (default: `http://localhost:3000`) |
+| `CONNECTOR_CREDENTIALS_SECRET` | No | Secret used to encrypt persisted connector credentials |
+| `GITHUB_CLIENT_ID` | No | GitHub OAuth app client ID |
+| `GITHUB_CLIENT_SECRET` | No | GitHub OAuth app client secret |
+| `GITHUB_REDIRECT_URI` | No | GitHub OAuth callback URL |
 | `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
 | `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
+| `GOOGLE_REDIRECT_URI` | No | Google OAuth callback URL |
 
 See `.env.example` for the full template.
 
@@ -202,8 +207,14 @@ The assistant uses a small multi-agent architecture:
 Initial data source connectors:
 
 - **GitHub** — Repository and code access
-- **Google Drive / Docs** — Document access and search
+- **Google Docs** — Native Google Docs indexing for RAG
 - **Proton Mail** — Email abstraction (custom integration boundary)
+
+Current connector behavior:
+
+- **Google Docs** — RAG enabled
+- **GitHub** — RAG enabled, with user-selected repositories
+- **Proton Mail** — Tooling only, not indexed for RAG
 
 ### Tool System
 

@@ -25,7 +25,20 @@ export interface DocumentRepository {
     content: string | null,
     mimeType: string,
   ): Promise<Document>;
+  upsertBySourceId(
+    userId: string,
+    sourceId: string,
+    title: string,
+    content: string | null,
+    mimeType: string,
+  ): Promise<Document>;
   updateContent(id: string, content: string | null): Promise<void>;
+  updateDocument(
+    id: string,
+    title: string,
+    content: string | null,
+    mimeType: string,
+  ): Promise<void>;
 }
 
 export const documentRepository: DocumentRepository = {
@@ -87,11 +100,57 @@ export const documentRepository: DocumentRepository = {
     return result.rows[0]!;
   },
 
+  async upsertBySourceId(
+    userId: string,
+    sourceId: string,
+    title: string,
+    content: string | null,
+    mimeType: string,
+  ): Promise<Document> {
+    const pool = getPool();
+    const existing = await pool.query<DocumentRow>(
+      `SELECT id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM documents
+       WHERE source_id = $1
+       LIMIT 1`,
+      [sourceId],
+    );
+
+    const row = existing.rows[0];
+    if (row) {
+      const result = await pool.query<DocumentRow>(
+        `UPDATE documents
+         SET title = $2, content = $3, mime_type = $4, updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [row.id, title, content, mimeType],
+      );
+      return result.rows[0]!;
+    }
+
+    return documentRepository.create(userId, sourceId, title, content, mimeType);
+  },
+
   async updateContent(id: string, content: string | null): Promise<void> {
     const pool = getPool();
     await pool.query(
       'UPDATE documents SET content = $1, updated_at = NOW() WHERE id = $2',
       [content, id],
+    );
+  },
+
+  async updateDocument(
+    id: string,
+    title: string,
+    content: string | null,
+    mimeType: string,
+  ): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      'UPDATE documents SET title = $1, content = $2, mime_type = $3, updated_at = NOW() WHERE id = $4',
+      [title, content, mimeType, id],
     );
   },
 };

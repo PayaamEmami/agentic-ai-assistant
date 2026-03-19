@@ -33,3 +33,6 @@ export type { Preference, PreferenceRepository } from './preferences.js';
 
 export { memoryRepository } from './memories.js';
 export type { Memory, MemoryRepository } from './memories.js';
+
+export { connectorConfigRepository } from './connector-configs.js';
+export type { ConnectorConfig, ConnectorConfigRepository } from './connector-configs.js';

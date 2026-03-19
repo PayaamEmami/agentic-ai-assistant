@@ -103,6 +103,27 @@ interface AuthPayload {
   };
 }
 
+export interface ConnectorSummary {
+  id: string;
+  kind: 'github' | 'google_docs';
+  status: 'pending' | 'connected' | 'failed';
+  lastSyncAt: string | null;
+  lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
+  lastError: string | null;
+  hasCredentials: boolean;
+  selectedRepoCount?: number;
+}
+
+export interface GitHubRepositorySummary {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  defaultBranch: string;
+  private: boolean;
+  selected: boolean;
+}
+
 export function buildWebSocketUrl(token: string): string {
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -185,6 +206,30 @@ export const api = {
       return request<{ ok: boolean }>(`/api/approvals/${id}/decide`, {
         method: 'POST',
         body: JSON.stringify({ status }),
+      });
+    },
+  },
+  connectors: {
+    list() {
+      return request<{ connectors: ConnectorSummary[] }>('/api/connectors');
+    },
+    start(kind: 'github' | 'google_docs') {
+      return request<{ authorizationUrl: string }>(`/api/connectors/${kind}/start`, {
+        method: 'POST',
+      });
+    },
+    sync(kind: 'github' | 'google_docs') {
+      return request<{ queued: boolean }>(`/api/connectors/${kind}/sync`, {
+        method: 'POST',
+      });
+    },
+    listGitHubRepos() {
+      return request<{ repositories: GitHubRepositorySummary[] }>('/api/connectors/github/repos');
+    },
+    saveGitHubRepos(repositoryIds: number[]) {
+      return request<{ ok: boolean }>('/api/connectors/github/repos', {
+        method: 'POST',
+        body: JSON.stringify({ repositoryIds }),
       });
     },
   },

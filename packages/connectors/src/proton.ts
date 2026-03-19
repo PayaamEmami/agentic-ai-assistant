@@ -28,6 +28,6 @@ export class ProtonConnector implements Connector {
 
   async sync(_cursor?: string): Promise<SyncResult> {
     // TODO: sync emails incrementally
-    return { itemsSynced: 0, errors: [], nextCursor: null };
+    return { items: [], itemsSynced: 0, errors: [], nextCursor: null };
   }
 }

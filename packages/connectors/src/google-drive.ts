@@ -24,6 +24,6 @@ export class GoogleDriveConnector implements Connector {
 
   async sync(_cursor?: string): Promise<SyncResult> {
     // TODO: sync files incrementally using changes API
-    return { itemsSynced: 0, errors: [], nextCursor: null };
+    return { items: [], itemsSynced: 0, errors: [], nextCursor: null };
   }
 }

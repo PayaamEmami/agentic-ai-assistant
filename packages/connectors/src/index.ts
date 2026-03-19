@@ -5,6 +5,7 @@ export type {
   SyncResult,
   Connector,
 } from './types.js';
+export { encryptConnectorCredentials, decryptConnectorCredentials } from './credentials.js';
 
 export { GitHubConnector } from './github.js';
 export { GoogleDriveConnector } from './google-drive.js';

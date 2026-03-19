@@ -8,13 +8,15 @@ import {
   getPool,
   sourceRepository,
 } from '@aaa/db';
+import {
+  DocumentReindexingServiceImpl,
+  SimpleChunkingService,
+  type EmbeddingService,
+} from '@aaa/retrieval';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
 const MAX_FILE_BYTES = 10 * 1024 * 1024;
-const DEFAULT_CHUNK_TOKEN_SIZE = 512;
-const DEFAULT_CHUNK_OVERLAP_TOKENS = 64;
-const TOKEN_MULTIPLIER = 1.3;
 const EXTRACTABLE_TEXT_MIME_TYPES = new Set([
   'text/plain',
   'text/csv',
@@ -52,98 +54,36 @@ function extractTextContent(mimeType: string, buffer: Buffer): string | null {
   return text.length > 0 ? text : null;
 }
 
-interface ChunkCandidate {
-  content: string;
-  tokenCount: number;
-  index: number;
-}
+class UploadEmbeddingService implements EmbeddingService {
+  constructor(private readonly modelProvider: OpenAIProvider) {}
 
-function tokenizeWords(text: string): string[] {
-  return text.trim().split(/\s+/).filter(Boolean);
-}
-
-function estimateTokenCount(text: string): number {
-  const wordCount = tokenizeWords(text).length;
-  return wordCount === 0 ? 0 : Math.ceil(wordCount * TOKEN_MULTIPLIER);
-}
-
-function buildChunkWithOverlap(
-  previousChunk: string,
-  nextParagraph: string,
-  overlapTokens: number,
-  chunkSize: number,
-): string {
-  if (overlapTokens <= 0) {
-    return nextParagraph;
-  }
-
-  const previousWords = tokenizeWords(previousChunk);
-  if (previousWords.length === 0) {
-    return nextParagraph;
-  }
-
-  let wordsToTake = Math.min(previousWords.length, Math.ceil(overlapTokens / TOKEN_MULTIPLIER));
-
-  while (wordsToTake > 0) {
-    const overlapText = previousWords.slice(-wordsToTake).join(' ');
-    const candidate = `${overlapText}\n\n${nextParagraph}`;
-    if (estimateTokenCount(candidate) <= chunkSize) {
-      return candidate;
-    }
-    wordsToTake -= 1;
-  }
-
-  return nextParagraph;
-}
-
-function chunkTextContent(content: string): ChunkCandidate[] {
-  const normalizedContent = content.trim();
-  if (!normalizedContent) {
-    return [];
-  }
-
-  const paragraphs = normalizedContent
-    .split(/\r?\n\r?\n+/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  if (paragraphs.length === 0) {
-    return [];
-  }
-
-  const chunkContents: string[] = [];
-  let currentChunk = '';
-
-  for (const paragraph of paragraphs) {
-    if (!currentChunk) {
-      currentChunk = paragraph;
-      continue;
+  async generateEmbeddings(chunks: Array<{ id: string; content: string }>) {
+    if (chunks.length === 0) {
+      return [];
     }
 
-    const candidate = `${currentChunk}\n\n${paragraph}`;
-    if (estimateTokenCount(candidate) <= DEFAULT_CHUNK_TOKEN_SIZE) {
-      currentChunk = candidate;
-      continue;
-    }
+    const response = await this.modelProvider.embed({
+      input: chunks.map((chunk) => chunk.content),
+      model: process.env['OPENAI_EMBEDDING_MODEL'],
+    });
 
-    chunkContents.push(currentChunk);
-    currentChunk = buildChunkWithOverlap(
-      currentChunk,
-      paragraph,
-      DEFAULT_CHUNK_OVERLAP_TOKENS,
-      DEFAULT_CHUNK_TOKEN_SIZE,
-    );
+    return chunks.map((chunk, index) => {
+      const vector = response.embeddings[index];
+      if (!vector) {
+        throw new AppError(
+          502,
+          'Embedding generation failed for one or more chunks',
+          'EMBEDDING_FAILED',
+        );
+      }
+
+      return {
+        chunkId: chunk.id,
+        vector,
+        model: response.model,
+      };
+    });
   }
-
-  if (currentChunk) {
-    chunkContents.push(currentChunk);
-  }
-
-  return chunkContents.map((chunk, index) => ({
-    content: chunk,
-    tokenCount: estimateTokenCount(chunk),
-    index,
-  }));
 }
 
 export class UploadService {
@@ -183,39 +123,43 @@ export class UploadService {
       mimeType,
     );
 
-    const chunks = chunkTextContent(textContent);
-    const storedChunks = await Promise.all(
-      chunks.map((chunk) =>
-        chunkRepository.create(
-          document.id,
+    const reindexingService = new DocumentReindexingServiceImpl(
+      new SimpleChunkingService(),
+      new UploadEmbeddingService(this.modelProvider),
+      async (documentId) => {
+        const existingChunks = await chunkRepository.listByDocument(documentId);
+        await embeddingRepository.deleteByChunkIds(existingChunks.map((chunk) => chunk.id));
+        await chunkRepository.deleteByDocument(documentId);
+      },
+      async (chunk) => {
+        await chunkRepository.createWithId(
+          chunk.id,
+          chunk.documentId,
           chunk.content,
           chunk.index,
           chunk.tokenCount,
-          { source: 'upload', fileName, attachmentId },
-        ),
-      ),
+          chunk.metadata,
+        );
+      },
+      async (embedding) => {
+        await embeddingRepository.create(embedding.chunkId, embedding.vector, embedding.model);
+      },
     );
 
-    if (storedChunks.length > 0) {
-      const embeddings = await this.modelProvider.embed({
-        input: storedChunks.map((chunk) => chunk.content),
-        model: process.env['OPENAI_EMBEDDING_MODEL'],
-      });
+    await reindexingService.reindexDocument({
+      id: document.id,
+      sourceId: source.id,
+      title: fileName,
+      content: textContent,
+      mimeType,
+      metadata: {
+        source: 'upload',
+        fileName,
+        attachmentId,
+      },
+    });
 
-      await Promise.all(
-        storedChunks.map(async (chunk, index) => {
-          const vector = embeddings.embeddings[index];
-          if (!vector) {
-            throw new AppError(
-              502,
-              'Embedding generation failed for one or more chunks',
-              'EMBEDDING_FAILED',
-            );
-          }
-          await embeddingRepository.create(chunk.id, vector, embeddings.model);
-        }),
-      );
-    }
+    const storedChunks = await chunkRepository.listByDocument(document.id);
 
     await attachmentRepository.setDocument(attachmentId, document.id, userId);
 

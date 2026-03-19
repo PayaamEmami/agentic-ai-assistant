@@ -4,6 +4,7 @@ import { useChatContext } from '@/lib/chat-context';
 import { CitationCard } from './citation-card';
 import { ToolActivity } from './tool-activity';
 import { ApprovalCard } from './approval-card';
+import { ConnectorManager } from './connector-manager';
 
 export function RightPanel() {
   const { pendingApprovals, toolActivities, citations, loading } = useChatContext();
@@ -14,6 +15,9 @@ export function RightPanel() {
         <h2 className="text-sm font-semibold">Activity</h2>
       </div>
       <div className="flex-1 overflow-y-auto">
+        <Section title="Connectors">
+          <ConnectorManager />
+        </Section>
         <Section title="Approvals">
           {loading.isLoadingApprovals && pendingApprovals.length === 0 ? (
             <p className="text-xs text-gray-400">Loading approvals...</p>

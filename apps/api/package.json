@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@aaa/ai": "workspace:*",
+    "@aaa/connectors": "workspace:*",
     "@aaa/db": "workspace:*",
     "@aaa/mcp": "workspace:*",
+    "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",
     "@fastify/cors": "^10.0.0",
     "@fastify/multipart": "^9.0.0",

@@ -37,6 +37,22 @@ CREATE TABLE sources (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+CREATE TABLE connector_configs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  kind TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  credentials_encrypted TEXT NOT NULL,
+  settings JSONB NOT NULL DEFAULT '{}',
+  last_sync_cursor TEXT,
+  last_sync_at TIMESTAMPTZ,
+  last_sync_status TEXT,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, kind)
+);
+
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
@@ -136,4 +152,11 @@ CREATE INDEX idx_approvals_user_status ON approvals(user_id, status);
 CREATE INDEX idx_memories_user ON memories(user_id);
 CREATE INDEX idx_tool_executions_conversation ON tool_executions(conversation_id);
 CREATE INDEX idx_sources_user ON sources(user_id);
+CREATE UNIQUE INDEX idx_sources_connector_external
+  ON sources(user_id, connector_kind, external_id)
+  WHERE connector_kind IS NOT NULL AND external_id IS NOT NULL;
 CREATE INDEX idx_documents_user ON documents(user_id);
+CREATE UNIQUE INDEX idx_documents_source_unique
+  ON documents(source_id)
+  WHERE source_id IS NOT NULL;
+CREATE INDEX idx_connector_configs_user ON connector_configs(user_id);

@@ -93,7 +93,7 @@ export class SimpleChunkingService implements ChunkingService {
       content: chunkContent,
       index,
       tokenCount: estimateTokenCount(chunkContent),
-      metadata: {},
+      metadata: { ...document.metadata },
     }));
   }
 }

@@ -4,6 +4,7 @@ import { loadConfig } from './config.js';
 import { logger } from './lib/logger.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
 import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
+import { closeConnectorSyncQueue } from './services/connector-queue.js';
 
 async function main() {
   const config = loadConfig();
@@ -22,6 +23,7 @@ async function main() {
 
     try {
       await server.close();
+      await closeConnectorSyncQueue();
       await closeToolExecutionQueue();
       await stopToolEventRelay();
       await closePool();
@@ -47,6 +49,7 @@ async function main() {
   } catch (err) {
     logger.error(err, 'Failed to start server');
     await closeToolExecutionQueue();
+    await closeConnectorSyncQueue();
     await stopToolEventRelay();
     await closePool();
     process.exit(1);

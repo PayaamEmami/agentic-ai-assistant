@@ -139,3 +139,60 @@ export const HealthResponse = z.object({
   uptime: z.number(),
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
+
+export const ConnectorKindDto = z.enum(['github', 'google_docs']);
+export type ConnectorKindDto = z.infer<typeof ConnectorKindDto>;
+
+export const ConnectorStatusDto = z.enum(['pending', 'connected', 'failed']);
+export type ConnectorStatusDto = z.infer<typeof ConnectorStatusDto>;
+
+export const ConnectorSyncStatusDto = z.enum(['pending', 'running', 'completed', 'failed']);
+export type ConnectorSyncStatusDto = z.infer<typeof ConnectorSyncStatusDto>;
+
+export const ConnectorSummaryDto = z.object({
+  id: z.string().uuid(),
+  kind: ConnectorKindDto,
+  status: ConnectorStatusDto,
+  lastSyncAt: z.string().datetime().nullable(),
+  lastSyncStatus: ConnectorSyncStatusDto.nullable(),
+  lastError: z.string().nullable(),
+  hasCredentials: z.boolean(),
+  selectedRepoCount: z.number().int().nonnegative().optional(),
+});
+export type ConnectorSummaryDto = z.infer<typeof ConnectorSummaryDto>;
+
+export const ConnectorListResponse = z.object({
+  connectors: z.array(ConnectorSummaryDto),
+});
+export type ConnectorListResponse = z.infer<typeof ConnectorListResponse>;
+
+export const ConnectorConnectStartResponse = z.object({
+  authorizationUrl: z.string().url(),
+});
+export type ConnectorConnectStartResponse = z.infer<typeof ConnectorConnectStartResponse>;
+
+export const ConnectorSyncResponse = z.object({
+  queued: z.boolean(),
+});
+export type ConnectorSyncResponse = z.infer<typeof ConnectorSyncResponse>;
+
+export const GitHubRepositoryDto = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  fullName: z.string(),
+  owner: z.string(),
+  defaultBranch: z.string(),
+  private: z.boolean(),
+  selected: z.boolean(),
+});
+export type GitHubRepositoryDto = z.infer<typeof GitHubRepositoryDto>;
+
+export const GitHubRepositoriesResponse = z.object({
+  repositories: z.array(GitHubRepositoryDto),
+});
+export type GitHubRepositoriesResponse = z.infer<typeof GitHubRepositoriesResponse>;
+
+export const GitHubRepoSelectionRequest = z.object({
+  repositoryIds: z.array(z.number().int()).max(100),
+});
+export type GitHubRepoSelectionRequest = z.infer<typeof GitHubRepoSelectionRequest>;
