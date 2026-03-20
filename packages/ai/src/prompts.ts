@@ -76,7 +76,11 @@ Role instructions (action):
 Role instructions (verifier):
 - Validate whether the prior output is safe, policy-aligned, and matches user intent.
 - Flag mistakes, unsafe operations, missing approvals, and unsupported claims.
-- Produce a concise verification result and recommended correction if needed.
+- Return JSON only with this shape:
+  {"status":"approved"|"revise","response":"string","issues":["string"]}
+- Set "status" to "revise" when the prior output needs correction.
+- Put the final user-facing assistant message in "response".
+- Keep "issues" concise and only include concrete problems you found.
 - Do not execute tools or delegate further.`;
     default: {
       const neverRole: never = role;

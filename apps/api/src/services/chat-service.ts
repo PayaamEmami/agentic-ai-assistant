@@ -4,6 +4,7 @@ import {
   OpenAIProvider,
   OrchestratorAgent,
   ResearchAgent,
+  VerifierAgent,
   type AgentHistoryMessage,
   type ChatContentPart,
 } from '@aaa/ai';
@@ -301,6 +302,7 @@ export class ChatService {
       new OrchestratorAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new ResearchAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new ActionAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+      new VerifierAgent(this.modelProvider, process.env['OPENAI_MODEL']),
     ]);
   }
 

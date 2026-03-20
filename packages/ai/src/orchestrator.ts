@@ -10,6 +10,7 @@ export class AgentOrchestrator {
   async run(context: AgentContext): Promise<AgentResult> {
     const orchestrator = this.agents.get('orchestrator');
     if (!orchestrator) throw new Error('Orchestrator agent not registered');
+    const verifier = this.agents.get('verifier');
 
     let currentAgent: Agent = orchestrator;
     let currentContext: AgentContext = context;
@@ -18,7 +19,13 @@ export class AgentOrchestrator {
 
     for (let i = 0; i < maxDelegations; i++) {
       result = await currentAgent.execute(currentContext);
-      if (!result.delegateTo) return result;
+      if (!result.delegateTo) {
+        if (!verifier || currentAgent.role === 'verifier') {
+          return result;
+        }
+
+        return verifier.execute({ ...currentContext, previousResult: result });
+      }
 
       const next = this.agents.get(result.delegateTo);
       if (!next) throw new Error(`Agent not found: ${result.delegateTo}`);
