@@ -27,11 +27,17 @@ export interface AgentContext {
   previousResult?: AgentResult;
 }
 
+export interface AgentVerificationResult {
+  status: 'approved' | 'revise';
+  issues: string[];
+}
+
 export interface AgentResult {
   response: string | null;
   toolCalls: Array<{ name: string; arguments: Record<string, unknown> }>;
   delegateTo: AgentRole | null;
   requiresApproval: boolean;
+  verification?: AgentVerificationResult;
 }
 
 export interface Agent {

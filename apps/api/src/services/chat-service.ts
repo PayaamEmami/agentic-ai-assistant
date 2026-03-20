@@ -17,6 +17,7 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
+import { getConfiguredToolRegistry, type UnifiedToolDescriptor } from '@aaa/mcp';
 import {
   NATIVE_TOOL_DEFINITIONS,
   type ApprovalRequestedEvent,
@@ -41,6 +42,13 @@ const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
 type AgentToolCall = { name: string; arguments: Record<string, unknown> };
+type AvailableTool = {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  requiresApproval: boolean;
+  origin: 'native' | 'mcp';
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -230,13 +238,18 @@ function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<s
   }));
 }
 
-function toAgentToolContexts(): Array<{
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  requiresApproval: boolean;
-}> {
+function toNativeAvailableTools(): AvailableTool[] {
   return NATIVE_TOOL_DEFINITIONS.map((tool) => ({
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    requiresApproval: tool.requiresApproval,
+    origin: 'native',
+  }));
+}
+
+function toAgentToolContexts(tools: AvailableTool[]) {
+  return tools.map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters,
@@ -270,6 +283,30 @@ function normalizeAssistantResponse(
   }
 
   return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_ACTION_RESPONSE;
+}
+
+async function loadAvailableTools(): Promise<AvailableTool[]> {
+  const tools = [...toNativeAvailableTools()];
+
+  try {
+    const registry = await getConfiguredToolRegistry();
+    const mcpTools = registry.listTools().map<AvailableTool>((tool) => toAvailableTool(tool));
+    tools.push(...mcpTools);
+  } catch {
+    // Fall back to native tools only if MCP config is unavailable or startup fails.
+  }
+
+  return tools;
+}
+
+function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
+  return {
+    name: tool.name,
+    description: tool.description,
+    parameters: tool.parameters,
+    requiresApproval: tool.requiresApproval,
+    origin: tool.origin,
+  };
 }
 
 interface SendMessageOptions {
@@ -405,21 +442,26 @@ export class ChatService {
     const activeConnectors = (await connectorConfigRepository.listByUser(userId))
       .filter((connector) => connector.status === 'connected')
       .map((connector) => connectorLabel(connector.kind));
+    const availableTools = await loadAvailableTools();
 
     let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
     let toolCalls: AgentToolCall[] = [];
     let requiresApproval = false;
+    let verificationIssues: string[] = [];
+    let verificationStatus: 'approved' | 'revise' | null = null;
     try {
       const result = await this.agentOrchestrator.run({
         conversationId: conversation.id,
         userId,
         messageHistory,
-        availableTools: toAgentToolContexts(),
+        availableTools: toAgentToolContexts(availableTools),
         retrievedContext: retrievalContext,
         activeConnectors,
       });
       toolCalls = result.toolCalls;
       requiresApproval = result.requiresApproval;
+      verificationIssues = result.verification?.issues ?? [];
+      verificationStatus = result.verification?.status ?? null;
       assistantResponse = normalizeAssistantResponse(result.response, toolCalls, requiresApproval);
     } catch (error) {
       logger.error(
@@ -431,16 +473,16 @@ export class ChatService {
       );
     }
 
-    const nativeToolsByName = new Map(
-      NATIVE_TOOL_DEFINITIONS.map((tool) => [tool.name, tool] as const),
+    const availableToolsByName = new Map(
+      availableTools.map((tool) => [tool.name, tool] as const),
     );
     const toolResultBlocks: Array<Record<string, unknown>> = [];
     const approvalEvents: ApprovalRequestedEvent[] = [];
     let hasApprovalRequest = false;
 
     for (const toolCall of toolCalls) {
-      const nativeTool = nativeToolsByName.get(toolCall.name);
-      if (!nativeTool) {
+      const tool = availableToolsByName.get(toolCall.name);
+      if (!tool) {
         continue;
       }
 
@@ -450,10 +492,10 @@ export class ChatService {
         null,
         toolCall.name,
         toolInput,
-        'native',
+        tool.origin,
       );
 
-      if (nativeTool.requiresApproval) {
+      if (tool.requiresApproval) {
         hasApprovalRequest = true;
         await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
         const approval = await approvalRepository.create(
@@ -503,7 +545,15 @@ export class ChatService {
       assistantResponse = TOOL_APPROVAL_RESPONSE;
     }
 
-    const assistantContent: Array<Record<string, unknown>> = [{ type: 'text', text: assistantResponse }];
+    const assistantTextBlock: Record<string, unknown> = { type: 'text', text: assistantResponse };
+    if (verificationStatus) {
+      assistantTextBlock['verificationStatus'] = verificationStatus;
+    }
+    if (verificationIssues.length > 0) {
+      assistantTextBlock['verificationIssues'] = verificationIssues;
+    }
+
+    const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
     if (toolResultBlocks.length > 0) {
       assistantContent.push(...toolResultBlocks);
     } else {
@@ -528,6 +578,17 @@ export class ChatService {
       broadcast(conversation.id, approvalEvent);
     }
 
+    if (verificationIssues.length > 0) {
+      logger.warn(
+        {
+          conversationId: conversation.id,
+          verificationStatus,
+          verificationIssues,
+        },
+        'Verifier revised or flagged the assistant response',
+      );
+    }
+
     logger.info({ userId, conversationId: conversation.id }, 'Processing chat message');
     logger.debug(
       {
@@ -538,6 +599,8 @@ export class ChatService {
         citationCount: retrieval.citations.length,
         toolCallCount: toolCalls.length,
         approvalRequestCount: approvalEvents.length,
+        verificationStatus,
+        verifierIssueCount: verificationIssues.length,
       },
       'Chat message processed',
     );

@@ -1,4 +1,5 @@
 import { closePool, getPool } from '@aaa/db';
+import { closeConfiguredToolRegistry } from '@aaa/mcp';
 import { buildServer } from './server.js';
 import { loadConfig } from './config.js';
 import { logger } from './lib/logger.js';
@@ -25,6 +26,7 @@ async function main() {
       await server.close();
       await closeConnectorSyncQueue();
       await closeToolExecutionQueue();
+      await closeConfiguredToolRegistry();
       await stopToolEventRelay();
       await closePool();
       logger.info('Shutdown complete');
@@ -50,6 +52,7 @@ async function main() {
     logger.error(err, 'Failed to start server');
     await closeToolExecutionQueue();
     await closeConnectorSyncQueue();
+    await closeConfiguredToolRegistry();
     await stopToolEventRelay();
     await closePool();
     process.exit(1);

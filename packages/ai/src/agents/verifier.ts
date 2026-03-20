@@ -38,6 +38,10 @@ export class VerifierAgent implements Agent {
       toolCalls: context.previousResult.toolCalls,
       delegateTo: null,
       requiresApproval: context.previousResult.requiresApproval,
+      verification: {
+        status: verified.status,
+        issues: verified.issues,
+      },
     };
   }
 }
@@ -62,8 +66,9 @@ function buildPreviousResultMessage(context: AgentContext): ChatMessage {
 function parseVerificationContent(
   content: string | null,
   previousResult: AgentResult,
-): { response: string | null; issues: string[] } {
+): { status: 'approved' | 'revise'; response: string | null; issues: string[] } {
   const fallback = {
+    status: 'approved' as const,
     response: previousResult.response,
     issues: [] as string[],
   };
@@ -75,17 +80,20 @@ function parseVerificationContent(
   const parsed = parseJsonObject(content);
   if (!parsed) {
     return {
+      status: 'revise',
       response: content.trim() || previousResult.response,
       issues: [],
     };
   }
 
+  const status = parsed.status === 'revise' ? 'revise' : 'approved';
   const response =
     typeof parsed.response === 'string' && parsed.response.trim().length > 0
       ? parsed.response.trim()
       : previousResult.response;
 
   return {
+    status,
     response,
     issues: Array.isArray(parsed.issues)
       ? parsed.issues.filter((issue): issue is string => typeof issue === 'string' && issue.trim().length > 0)

@@ -1,5 +1,6 @@
 import type { Job } from 'bullmq';
 import { getPool, messageRepository, toolExecutionRepository } from '@aaa/db';
+import { getConfiguredToolRegistry } from '@aaa/mcp';
 import type { ToolDoneEvent, ToolStartEvent } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 
@@ -64,6 +65,22 @@ async function executeNativeTool(
   }
 }
 
+async function executeTool(
+  origin: string,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<{ success: boolean; result: unknown; error?: string }> {
+  if (origin === 'mcp') {
+    const registry = await getConfiguredToolRegistry();
+    return registry.executeTool({
+      toolName,
+      arguments: input,
+    });
+  }
+
+  return executeNativeTool(toolName, input);
+}
+
 export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promise<void> {
   const { toolExecutionId, toolName, conversationId } = job.data;
   logger.info({ toolExecutionId, toolName, conversationId, jobId: job.id }, 'Processing tool execution job');
@@ -93,7 +110,7 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   };
   await publishToolEvent(startEvent);
 
-  const result = await executeNativeTool(toolName, job.data.input);
+  const result = await executeTool(execution.origin, toolName, job.data.input);
 
   if (result.success) {
     await toolExecutionRepository.updateStatus(toolExecutionId, 'completed', result.result);
