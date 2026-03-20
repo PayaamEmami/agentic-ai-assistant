@@ -41,9 +41,7 @@ export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
 
 export const ConnectorKind = {
   GitHub: 'github',
-  GoogleDrive: 'google_drive',
   GoogleDocs: 'google_docs',
-  ProtonMail: 'proton_mail',
 } as const;
 export type ConnectorKind = (typeof ConnectorKind)[keyof typeof ConnectorKind];
 

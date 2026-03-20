@@ -3,6 +3,16 @@ import type { SystemPromptContext } from '../prompts.js';
 import type { AgentContext, AgentHistoryMessage, AgentResult, AgentToolContext } from './types.js';
 
 const RESEARCH_HINTS = [
+  '?',
+  'what',
+  'when',
+  'where',
+  'who',
+  'why',
+  'how',
+  'tell me about',
+  'explain',
+  'show me',
   'search',
   'find',
   'look up',
@@ -72,7 +82,7 @@ export function parseToolCalls(toolCalls: ToolCall[]): AgentResult['toolCalls'] 
 export function latestUserMessage(context: AgentContext): string {
   const history = [...context.messageHistory].reverse();
   const userMessage = history.find((message) => normalizeRole(message.role) === 'user');
-  return userMessage?.content ?? '';
+  return userMessage ? extractTextContent(userMessage.content) : '';
 }
 
 export function shouldDelegateToResearch(context: AgentContext): boolean {
@@ -83,6 +93,10 @@ export function shouldDelegateToResearch(context: AgentContext): boolean {
   const latestMessage = latestUserMessage(context).toLowerCase();
   if (!latestMessage) {
     return false;
+  }
+
+  if (latestMessage.includes('?')) {
+    return true;
   }
 
   return RESEARCH_HINTS.some((hint) => latestMessage.includes(hint));
@@ -132,4 +146,16 @@ function normalizeRole(role: string): ChatMessage['role'] {
     default:
       return 'user';
   }
+}
+
+function extractTextContent(content: ChatMessage['content']): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+
+  return content
+    .filter((part): part is Extract<typeof part, { type: 'text' }> => part.type === 'text')
+    .map((part) => part.text)
+    .join('\n')
+    .trim();
 }

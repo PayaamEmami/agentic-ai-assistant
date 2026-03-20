@@ -1,8 +1,10 @@
+import type { ChatMessage } from '../types.js';
+
 export type AgentRole = 'orchestrator' | 'research' | 'action' | 'verifier';
 
 export interface AgentHistoryMessage {
   role: string;
-  content: string;
+  content: ChatMessage['content'];
   name?: string;
   toolCallId?: string;
 }

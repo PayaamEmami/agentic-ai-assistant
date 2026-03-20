@@ -8,7 +8,5 @@ export type {
 export { encryptConnectorCredentials, decryptConnectorCredentials } from './credentials.js';
 
 export { GitHubConnector } from './github.js';
-export { GoogleDriveConnector } from './google-drive.js';
 export { GoogleDocsConnector } from './google-docs.js';
-export { ProtonConnector } from './proton.js';
 export { createConnector } from './factory.js';

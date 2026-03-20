@@ -1,4 +1,4 @@
-export type ConnectorKind = 'github' | 'google_drive' | 'google_docs' | 'proton_mail';
+export type ConnectorKind = 'github' | 'google_docs';
 
 export interface ConnectorAuth {
   kind: ConnectorKind;

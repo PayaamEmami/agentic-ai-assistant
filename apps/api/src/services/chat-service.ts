@@ -1,11 +1,16 @@
 import {
+  ActionAgent,
+  AgentOrchestrator,
   OpenAIProvider,
+  OrchestratorAgent,
+  ResearchAgent,
+  type AgentHistoryMessage,
   type ChatContentPart,
-  type ChatMessage as ModelChatMessage,
 } from '@aaa/ai';
 import {
   approvalRepository,
   attachmentRepository,
+  connectorConfigRepository,
   conversationRepository,
   getPool,
   messageRepository,
@@ -34,21 +39,10 @@ const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
+type AgentToolCall = { name: string; arguments: Record<string, unknown> };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function messageRoleToModelRole(role: string): ModelChatMessage['role'] {
-  switch (role) {
-    case 'system':
-    case 'assistant':
-    case 'tool':
-    case 'user':
-      return role;
-    default:
-      return 'user';
-  }
 }
 
 function extractTextFromContent(content: unknown[]): string {
@@ -103,27 +97,39 @@ function toAttachmentPromptText(attachment: NonNullable<DbAttachment>): string {
   return `${header}\n\nThis file is available to tools, but its contents are not inlined in the prompt.`;
 }
 
-async function toModelMessages(
+function stringifyValue(value: unknown): string {
+  if (typeof value === 'string') {
+    return value;
+  }
+
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return String(value);
+  }
+}
+
+function summarizeToolContent(content: unknown[]): string {
+  const summaries: string[] = [];
+
+  for (const block of content) {
+    if (!isRecord(block) || block.type !== 'tool_result') {
+      continue;
+    }
+
+    const toolName = typeof block.toolName === 'string' ? block.toolName : 'tool';
+    const status = typeof block.status === 'string' ? block.status : 'completed';
+    const output = 'output' in block ? stringifyValue(block.output) : null;
+    summaries.push(output ? `Tool ${toolName} ${status}. Output: ${output}` : `Tool ${toolName} ${status}.`);
+  }
+
+  return summaries.join('\n').trim();
+}
+
+async function toAgentHistoryMessages(
   messages: DbMessage[],
-  retrievalContext: string[],
   userId: string,
-): Promise<ModelChatMessage[]> {
-  const systemPrompt: ModelChatMessage = {
-    role: 'system',
-    content:
-      'You are a personal AI assistant. Be concise, accurate, and practical. If context sources are provided, ground your answer in that context and cite sources using [Source n].',
-  };
-
-  const contextMessage =
-    retrievalContext.length > 0
-      ? ({
-          role: 'system',
-          content: `Relevant context:\n\n${retrievalContext
-            .map((item, index) => `[Source ${index + 1}] ${item}`)
-            .join('\n\n')}`,
-        } as const)
-      : null;
-
+): Promise<AgentHistoryMessage[]> {
   const attachmentIds = Array.from(
     new Set(messages.flatMap((message) => getAttachmentIdsFromContent(message.content))),
   );
@@ -135,17 +141,20 @@ async function toModelMessages(
     attachments.map((attachment) => [attachment.id, attachment] as const),
   );
 
-  const historyMessages = messages
-    .map<ModelChatMessage | null>((message) => {
-      const role = messageRoleToModelRole(message.role);
-      if (role !== 'user') {
-        const text = extractTextFromContent(message.content);
+  return messages
+    .map<AgentHistoryMessage | null>((message) => {
+      if (message.role !== 'user') {
+        const text =
+          message.role === 'tool'
+            ? summarizeToolContent(message.content)
+            : extractTextFromContent(message.content);
+
         if (!text) {
           return null;
         }
 
         return {
-          role,
+          role: message.role === 'tool' ? 'assistant' : message.role,
           content: text,
         };
       }
@@ -202,15 +211,11 @@ async function toModelMessages(
       }
 
       return {
-        role,
+        role: 'user',
         content: contentParts,
       };
     })
-    .filter((message): message is ModelChatMessage => message !== null);
-
-  return contextMessage
-    ? [systemPrompt, contextMessage, ...historyMessages]
-    : [systemPrompt, ...historyMessages];
+    .filter((message): message is AgentHistoryMessage => message !== null);
 }
 
 function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<string, unknown>> {
@@ -224,29 +229,46 @@ function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<s
   }));
 }
 
-function parseToolArguments(argumentsJson: string): Record<string, unknown> {
-  if (!argumentsJson.trim()) {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(argumentsJson) as unknown;
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>;
-    }
-
-    return { value: parsed };
-  } catch {
-    return { rawArguments: argumentsJson };
-  }
-}
-
-function toToolDefinitions(): Array<{ name: string; description: string; parameters: Record<string, unknown> }> {
+function toAgentToolContexts(): Array<{
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  requiresApproval: boolean;
+}> {
   return NATIVE_TOOL_DEFINITIONS.map((tool) => ({
     name: tool.name,
     description: tool.description,
     parameters: tool.parameters,
+    requiresApproval: tool.requiresApproval,
   }));
+}
+
+function connectorLabel(kind: string): string {
+  switch (kind) {
+    case 'github':
+      return 'GitHub';
+    case 'google_docs':
+      return 'Google Docs';
+    default:
+      return kind;
+  }
+}
+
+function normalizeAssistantResponse(
+  response: string | null,
+  toolCalls: AgentToolCall[],
+  requiresApproval: boolean,
+): string {
+  const trimmed = response?.trim() ?? '';
+  if (trimmed) {
+    return trimmed;
+  }
+
+  if (toolCalls.length === 0) {
+    return DEFAULT_FALLBACK_RESPONSE;
+  }
+
+  return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_ACTION_RESPONSE;
 }
 
 interface SendMessageOptions {
@@ -264,6 +286,7 @@ interface SendMessageResult {
 export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly modelProvider: OpenAIProvider;
+  private readonly agentOrchestrator: AgentOrchestrator;
 
   constructor(retrievalBridge?: RetrievalBridge, modelProvider?: OpenAIProvider) {
     this.retrievalBridge = retrievalBridge ?? new RetrievalBridge();
@@ -274,6 +297,11 @@ export class ChatService {
         process.env['OPENAI_MODEL'],
         process.env['OPENAI_EMBEDDING_MODEL'],
       );
+    this.agentOrchestrator = new AgentOrchestrator([
+      new OrchestratorAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+      new ResearchAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+      new ActionAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+    ]);
   }
 
   async sendMessage(
@@ -371,28 +399,26 @@ export class ChatService {
 
     const retrieval = await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT);
     const retrievalContext = retrieval.results.map((result) => result.content);
-    const modelMessages = await toModelMessages(recentMessages, retrievalContext, userId);
+    const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
+    const activeConnectors = (await connectorConfigRepository.listByUser(userId))
+      .filter((connector) => connector.status === 'connected')
+      .map((connector) => connectorLabel(connector.kind));
 
     let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
-    let toolCalls: Array<{ name: string; arguments: string }> = [];
+    let toolCalls: AgentToolCall[] = [];
+    let requiresApproval = false;
     try {
-      const completion = await this.modelProvider.complete({
-        messages: modelMessages,
-        model: process.env['OPENAI_MODEL'],
-        temperature: 0.2,
-        tools: toToolDefinitions(),
+      const result = await this.agentOrchestrator.run({
+        conversationId: conversation.id,
+        userId,
+        messageHistory,
+        availableTools: toAgentToolContexts(),
+        retrievedContext: retrievalContext,
+        activeConnectors,
       });
-      toolCalls = completion.toolCalls.map((toolCall) => ({
-        name: toolCall.name,
-        arguments: toolCall.arguments,
-      }));
-
-      const generated = completion.content?.trim() ?? '';
-      if (generated) {
-        assistantResponse = generated;
-      } else if (toolCalls.length > 0) {
-        assistantResponse = TOOL_ACTION_RESPONSE;
-      }
+      toolCalls = result.toolCalls;
+      requiresApproval = result.requiresApproval;
+      assistantResponse = normalizeAssistantResponse(result.response, toolCalls, requiresApproval);
     } catch (error) {
       logger.error(
         {
@@ -416,7 +442,7 @@ export class ChatService {
         continue;
       }
 
-      const toolInput = parseToolArguments(toolCall.arguments);
+      const toolInput = toolCall.arguments;
       const toolExecution = await toolExecutionRepository.create(
         conversation.id,
         null,
@@ -467,7 +493,11 @@ export class ChatService {
       }
     }
 
-    if (hasApprovalRequest && toolCalls.length > 0 && assistantResponse === TOOL_ACTION_RESPONSE) {
+    if (
+      hasApprovalRequest &&
+      toolCalls.length > 0 &&
+      (assistantResponse === TOOL_ACTION_RESPONSE || (!assistantResponse.trim() && requiresApproval))
+    ) {
       assistantResponse = TOOL_APPROVAL_RESPONSE;
     }
 

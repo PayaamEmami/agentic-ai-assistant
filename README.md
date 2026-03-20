@@ -14,7 +14,7 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 │   ├── ai/                   # Model gateway, prompts, agent orchestration
 │   ├── mcp/                  # MCP client adapter and tool registry
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
-│   ├── connectors/           # GitHub, Google Drive/Docs, Proton email
+│   ├── connectors/           # GitHub and Google Docs connectors
 │   ├── memory/               # Preferences, personalization, memory
 │   ├── db/                   # Database schema, migrations, repositories
 │   └── config/               # Environment parsing, constants
@@ -204,17 +204,15 @@ The assistant uses a small multi-agent architecture:
 
 ### Connectors
 
-Initial data source connectors:
+Current data source connectors:
 
 - **GitHub** — Repository and code access
 - **Google Docs** — Native Google Docs indexing for RAG
-- **Proton Mail** — Email abstraction (custom integration boundary)
 
 Current connector behavior:
 
 - **Google Docs** — RAG enabled
 - **GitHub** — RAG enabled, with user-selected repositories
-- **Proton Mail** — Tooling only, not indexed for RAG
 
 ### Tool System
 
