@@ -14,6 +14,15 @@ interface SourceRow {
 
 export interface Source extends SourceRow {}
 
+export interface IndexedSourceSummary {
+  id: string;
+  kind: string;
+  title: string;
+  uri: string | null;
+  mimeType: string | null;
+  updatedAt: Date;
+}
+
 export interface SourceRepository {
   findById(id: string): Promise<Source | null>;
   findByExternalId(userId: string, connectorKind: string, externalId: string): Promise<Source | null>;
@@ -35,6 +44,11 @@ export interface SourceRepository {
   ): Promise<Source>;
   update(id: string, title: string, uri: string | null): Promise<void>;
   listByUser(userId: string, limit?: number, offset?: number): Promise<Source[]>;
+  listIndexedByUserAndConnector(
+    userId: string,
+    connectorKind: string,
+    limit?: number,
+  ): Promise<IndexedSourceSummary[]>;
   deleteByUserAndConnector(userId: string, connectorKind: string): Promise<number>;
 }
 
@@ -133,6 +147,29 @@ export const sourceRepository: SourceRepository = {
        ORDER BY created_at DESC
        LIMIT $2 OFFSET $3`,
       [userId, limit, offset],
+    );
+    return result.rows;
+  },
+
+  async listIndexedByUserAndConnector(
+    userId: string,
+    connectorKind: string,
+    limit = 8,
+  ): Promise<IndexedSourceSummary[]> {
+    const pool = getPool();
+    const result = await pool.query<IndexedSourceSummary>(
+      `SELECT s.id,
+              s.kind,
+              s.title,
+              s.uri,
+              d.mime_type AS "mimeType",
+              COALESCE(d.updated_at, s.created_at) AS "updatedAt"
+       FROM sources AS s
+       LEFT JOIN documents AS d ON d.source_id = s.id
+       WHERE s.user_id = $1 AND s.connector_kind = $2
+       ORDER BY COALESCE(d.updated_at, s.created_at) DESC, s.created_at DESC
+       LIMIT $3`,
+      [userId, connectorKind, limit],
     );
     return result.rows;
   },

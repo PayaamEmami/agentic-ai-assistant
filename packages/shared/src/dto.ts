@@ -178,6 +178,16 @@ export const ConnectorSyncRunDto = z.object({
 });
 export type ConnectorSyncRunDto = z.infer<typeof ConnectorSyncRunDto>;
 
+export const ConnectorSourceDto = z.object({
+  id: z.string().uuid(),
+  kind: z.string(),
+  title: z.string(),
+  uri: z.string().nullable(),
+  mimeType: z.string().nullable(),
+  updatedAt: z.string().datetime(),
+});
+export type ConnectorSourceDto = z.infer<typeof ConnectorSourceDto>;
+
 export const ConnectorSummaryDto = z.object({
   id: z.string().uuid(),
   kind: ConnectorKindDto,
@@ -188,6 +198,7 @@ export const ConnectorSummaryDto = z.object({
   hasCredentials: z.boolean(),
   selectedRepoCount: z.number().int().nonnegative().optional(),
   recentSyncRuns: z.array(ConnectorSyncRunDto).default([]),
+  recentSources: z.array(ConnectorSourceDto).default([]),
 });
 export type ConnectorSummaryDto = z.infer<typeof ConnectorSummaryDto>;
 

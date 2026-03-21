@@ -113,6 +113,7 @@ export interface ConnectorSummary {
   hasCredentials: boolean;
   selectedRepoCount?: number;
   recentSyncRuns: ConnectorSyncRunSummary[];
+  recentSources: ConnectorSourceSummary[];
 }
 
 export interface ConnectorSyncRunSummary {
@@ -126,6 +127,15 @@ export interface ConnectorSyncRunSummary {
   errorSummary: string | null;
   startedAt: string;
   completedAt: string | null;
+}
+
+export interface ConnectorSourceSummary {
+  id: string;
+  kind: string;
+  title: string;
+  uri: string | null;
+  mimeType: string | null;
+  updatedAt: string;
 }
 
 export interface GitHubRepositorySummary {

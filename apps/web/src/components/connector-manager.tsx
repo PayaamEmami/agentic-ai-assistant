@@ -76,6 +76,26 @@ function runStatusLabel(status: ConnectorSyncRunSummary['status']): string {
   return 'Running';
 }
 
+function sourceKindLabel(kind: string): string {
+  if (kind === 'code_repository') {
+    return 'Code';
+  }
+
+  if (kind === 'document') {
+    return 'Document';
+  }
+
+  if (kind === 'web_page') {
+    return 'Web page';
+  }
+
+  if (kind === 'email') {
+    return 'Email';
+  }
+
+  return kind;
+}
+
 export function ConnectorManager() {
   const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
@@ -302,6 +322,42 @@ export function ConnectorManager() {
                     {run.errorSummary ? (
                       <p className="mt-2 text-error">{run.errorSummary}</p>
                     ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                Indexed Sources
+              </p>
+              {connector.recentSources.length === 0 ? (
+                <p className="text-xs text-foreground-muted">No indexed sources yet.</p>
+              ) : (
+                connector.recentSources.map((source) => (
+                  <div
+                    key={source.id}
+                    className="rounded-lg border border-border px-3 py-2 text-xs"
+                  >
+                    {source.uri ? (
+                      <a
+                        href={source.uri}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="block font-medium text-link underline underline-offset-4"
+                      >
+                        {source.title}
+                      </a>
+                    ) : (
+                      <p className="font-medium text-foreground">{source.title}</p>
+                    )}
+                    <p className="mt-1 text-foreground-muted">
+                      {sourceKindLabel(source.kind)}
+                      {source.mimeType ? ` | ${source.mimeType}` : ''}
+                    </p>
+                    <p className="mt-1 text-foreground-muted">
+                      Updated {formatRunTimestamp(source.updatedAt)}
+                    </p>
                   </div>
                 ))
               )}

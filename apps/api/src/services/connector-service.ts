@@ -3,6 +3,7 @@ import {
   connectorConfigRepository,
   connectorSyncRunRepository,
   getPool,
+  sourceRepository,
 } from '@aaa/db';
 import {
   GitHubConnector,
@@ -41,6 +42,14 @@ interface ConnectorSummary {
     errorSummary: string | null;
     startedAt: string;
     completedAt: string | null;
+  }>;
+  recentSources: Array<{
+    id: string;
+    kind: string;
+    title: string;
+    uri: string | null;
+    mimeType: string | null;
+    updatedAt: string;
   }>;
 }
 
@@ -220,13 +229,31 @@ async function toRecentSyncRuns(userId: string, kind: SupportedConnectorKind) {
   }));
 }
 
+async function toRecentSources(userId: string, kind: SupportedConnectorKind) {
+  const sources = await sourceRepository.listIndexedByUserAndConnector(userId, kind, 8);
+  return sources.map((source) => ({
+    id: source.id,
+    kind: source.kind,
+    title: source.title,
+    uri: source.uri,
+    mimeType: source.mimeType,
+    updatedAt: source.updatedAt.toISOString(),
+  }));
+}
+
 export class ConnectorService {
   async listConnectors(userId: string): Promise<ConnectorSummary[]> {
     const configs = await connectorConfigRepository.listByUser(userId);
     const byKind = new Map(configs.map((config) => [config.kind, config]));
     const recentRunsByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSyncRuns>>>();
+    const recentSourcesByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSources>>>();
     for (const kind of ['google_docs', 'github'] as const) {
-      recentRunsByKind.set(kind, await toRecentSyncRuns(userId, kind));
+      const [recentRuns, recentSources] = await Promise.all([
+        toRecentSyncRuns(userId, kind),
+        toRecentSources(userId, kind),
+      ]);
+      recentRunsByKind.set(kind, recentRuns);
+      recentSourcesByKind.set(kind, recentSources);
     }
 
     return (['google_docs', 'github'] as const).map((kind) => {
@@ -241,6 +268,7 @@ export class ConnectorService {
         hasCredentials: Boolean(config?.credentialsEncrypted),
         selectedRepoCount: config ? getSelectedRepoCount(config.settings) : undefined,
         recentSyncRuns: recentRunsByKind.get(kind) ?? [],
+        recentSources: recentSourcesByKind.get(kind) ?? [],
       };
     });
   }
