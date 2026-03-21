@@ -41,9 +41,19 @@ export const messageRepository: MessageRepository = {
     const pool = getPool();
     const id = crypto.randomUUID();
     const result = await pool.query<Message>(
-      `INSERT INTO messages (id, conversation_id, role, content)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"`,
+      `WITH inserted AS (
+         INSERT INTO messages (id, conversation_id, role, content)
+         VALUES ($1, $2, $3, $4)
+         RETURNING id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+       ),
+       touched AS (
+         UPDATE conversations
+         SET updated_at = NOW()
+         WHERE id = $2
+         RETURNING id
+       )
+       SELECT id, "conversationId", role, content, "createdAt"
+       FROM inserted`,
       [id, conversationId, role, JSON.stringify(content)],
     );
     return result.rows[0]!;

@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import { useAuthContext } from './auth-context';
-import { api, buildWebSocketUrl } from './api-client';
+import { api, buildWebSocketUrl, type ConversationSummaryResponse } from './api-client';
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -123,6 +123,8 @@ interface ChatContextValue {
   sendMessage: (content: string, attachments?: UploadedAttachment[]) => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;
+  renameConversation: (conversationId: string, title: string) => Promise<void>;
+  deleteConversation: (conversationId: string) => Promise<void>;
   uploadAttachment: (file: File, options?: { indexForRag?: boolean }) => Promise<UploadedAttachment>;
   approveAction: (approvalId: string) => Promise<void>;
   rejectAction: (approvalId: string) => Promise<void>;
@@ -264,6 +266,28 @@ function sortConversations(items: ConversationSummary[]): ConversationSummary[] 
     const bTime = new Date(b.updatedAt).getTime();
     return bTime - aTime;
   });
+}
+
+function normalizeConversationSummary(conversation: ConversationSummaryResponse): ConversationSummary {
+  return {
+    id: conversation.id,
+    title: conversation.title,
+    createdAt: conversation.createdAt,
+    updatedAt: conversation.updatedAt,
+  };
+}
+
+function buildConversationTitle(content: string): string {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return 'Untitled conversation';
+  }
+
+  if (normalized.length <= 80) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 77).trimEnd()}...`;
 }
 
 function upsertConversation(
@@ -436,12 +460,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setIsLoadingConversations(true);
     try {
       const response = await api.chat.listConversations();
-      const remoteConversations: ConversationSummary[] = response.conversations.map((conversation) => ({
-        id: conversation.id,
-        title: conversation.title,
-        createdAt: conversation.createdAt,
-        updatedAt: conversation.updatedAt,
-      }));
+      const remoteConversations = response.conversations.map(normalizeConversationSummary);
       setConversations((previous) => mergeConversations(previous, remoteConversations));
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Failed to load conversations');
@@ -501,7 +520,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setConversations((previous) =>
           upsertConversation(previous, {
             id: response.conversationId,
-            title: trimmedContent.slice(0, 80),
+            title: buildConversationTitle(trimmedContent),
             createdAt: timestamp,
             updatedAt: timestamp,
           }),
@@ -609,7 +628,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setConversations((previous) =>
         upsertConversation(previous, {
           id: response.conversationId,
-          title: transcript.slice(0, 80),
+          title: buildConversationTitle(transcript),
           createdAt: timestamp,
           updatedAt: timestamp,
         }),
@@ -640,6 +659,55 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsSendingMessage(false);
     }
   }, [currentConversationId, loadConversations, loadPendingApprovals, refreshConversation]);
+
+  const renameConversation = useCallback(async (conversationId: string, title: string) => {
+    setError(null);
+    try {
+      const response = await api.chat.updateConversation(conversationId, title);
+      setConversations((previous) =>
+        upsertConversation(previous, normalizeConversationSummary(response.conversation)),
+      );
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : 'Failed to rename conversation');
+      throw requestError;
+    }
+  }, []);
+
+  const deleteConversation = useCallback(
+    async (conversationId: string) => {
+      setError(null);
+      try {
+        await api.chat.deleteConversation(conversationId);
+        const remaining = conversations.filter((conversation) => conversation.id !== conversationId);
+        setConversations(remaining);
+
+        if (currentConversationId === conversationId) {
+          const nextConversationId = remaining[0]?.id;
+          setCurrentConversationId(nextConversationId);
+
+          if (!nextConversationId) {
+            setMessages([]);
+          } else {
+            setIsLoadingMessages(true);
+            try {
+              await refreshConversation(nextConversationId);
+            } catch (requestError) {
+              setError(requestError instanceof Error ? requestError.message : 'Failed to load conversation');
+              setMessages([]);
+            } finally {
+              setIsLoadingMessages(false);
+            }
+          }
+        }
+
+        await loadPendingApprovals();
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : 'Failed to delete conversation');
+        throw requestError;
+      }
+    },
+    [conversations, currentConversationId, loadPendingApprovals, refreshConversation],
+  );
 
   useEffect(() => {
     void loadConversations();
@@ -741,6 +809,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       sendMessage,
       loadConversations,
       selectConversation,
+      renameConversation,
+      deleteConversation,
       uploadAttachment,
       approveAction,
       rejectAction,
@@ -756,7 +826,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       loading,
       messages,
       pendingApprovals,
+      deleteConversation,
       rejectAction,
+      renameConversation,
       selectConversation,
       sendMessage,
       sendVoiceMessage,

@@ -76,6 +76,21 @@ export const ConversationDetailResponse = z.object({
 });
 export type ConversationDetailResponse = z.infer<typeof ConversationDetailResponse>;
 
+export const UpdateConversationRequest = z.object({
+  title: z.string().trim().min(1).max(120),
+});
+export type UpdateConversationRequest = z.infer<typeof UpdateConversationRequest>;
+
+export const UpdateConversationResponse = z.object({
+  conversation: ConversationListItem,
+});
+export type UpdateConversationResponse = z.infer<typeof UpdateConversationResponse>;
+
+export const DeleteConversationResponse = z.object({
+  ok: z.literal(true),
+});
+export type DeleteConversationResponse = z.infer<typeof DeleteConversationResponse>;
+
 export const ApprovalDecisionRequest = z.object({
   status: z.enum(['approved', 'rejected']),
 });

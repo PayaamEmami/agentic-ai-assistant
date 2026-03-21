@@ -20,7 +20,7 @@ CREATE TABLE conversations (
 
 CREATE TABLE messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  conversation_id UUID NOT NULL REFERENCES conversations(id),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
   role TEXT NOT NULL,
   content JSONB NOT NULL DEFAULT '[]',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -67,7 +67,7 @@ CREATE TABLE documents (
 CREATE TABLE attachments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id),
-  message_id UUID REFERENCES messages(id),
+  message_id UUID REFERENCES messages(id) ON DELETE CASCADE,
   document_id UUID REFERENCES documents(id),
   kind TEXT NOT NULL,
   file_name TEXT NOT NULL,
@@ -99,8 +99,8 @@ CREATE INDEX idx_embeddings_vector ON embeddings USING ivfflat (vector vector_co
 
 CREATE TABLE tool_executions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  conversation_id UUID NOT NULL REFERENCES conversations(id),
-  message_id UUID REFERENCES messages(id),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   tool_name TEXT NOT NULL,
   input JSONB NOT NULL,
   output JSONB,
@@ -114,8 +114,8 @@ CREATE TABLE tool_executions (
 CREATE TABLE approvals (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id),
-  conversation_id UUID NOT NULL REFERENCES conversations(id),
-  tool_execution_id UUID NOT NULL REFERENCES tool_executions(id),
+  conversation_id UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+  tool_execution_id UUID NOT NULL REFERENCES tool_executions(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   decided_at TIMESTAMPTZ,

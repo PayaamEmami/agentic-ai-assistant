@@ -38,6 +38,7 @@ const MAX_CITATIONS = 4;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for protected actions.';
+const MAX_CONVERSATION_TITLE_CHARS = 80;
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
@@ -268,6 +269,19 @@ function connectorLabel(kind: string): string {
   }
 }
 
+function buildConversationTitle(content: string): string | undefined {
+  const normalized = content.replace(/\s+/g, ' ').trim();
+  if (!normalized) {
+    return undefined;
+  }
+
+  if (normalized.length <= MAX_CONVERSATION_TITLE_CHARS) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, MAX_CONVERSATION_TITLE_CHARS - 3).trimEnd()}...`;
+}
+
 function normalizeAssistantResponse(
   response: string | null,
   toolCalls: AgentToolCall[],
@@ -378,10 +392,11 @@ export class ChatService {
     options: SendMessageOptions,
   ): Promise<SendMessageResult> {
     getPool();
+    const initialConversationTitle = buildConversationTitle(content);
 
     const conversation =
       options.conversationId === undefined
-        ? await conversationRepository.create(userId)
+        ? await conversationRepository.create(userId, initialConversationTitle)
         : await conversationRepository.findById(options.conversationId);
 
     if (!conversation || conversation.userId !== userId) {
@@ -435,6 +450,14 @@ export class ChatService {
       conversation.id,
       HISTORY_LIMIT,
     );
+
+    if (
+      conversation.title === null &&
+      recentMessages.length === 1 &&
+      initialConversationTitle
+    ) {
+      await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
+    }
 
     const retrieval = await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT);
     const retrievalContext = retrieval.results.map((result) => result.content);
@@ -615,6 +638,43 @@ export class ChatService {
   async listConversations(userId: string) {
     getPool();
     return conversationRepository.listByUser(userId);
+  }
+
+  async updateConversationTitle(userId: string, conversationId: string, title: string) {
+    getPool();
+
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    const normalizedTitle = title.trim();
+    if (!normalizedTitle) {
+      throw new AppError(400, 'Conversation title is required', 'VALIDATION_ERROR');
+    }
+
+    const updated = await conversationRepository.updateTitle(conversationId, normalizedTitle);
+    if (!updated) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    return updated;
+  }
+
+  async deleteConversation(userId: string, conversationId: string) {
+    getPool();
+
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    const deleted = await conversationRepository.delete(conversationId);
+    if (!deleted) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    return { ok: true as const };
   }
 
   async getConversation(userId: string, conversationId: string) {

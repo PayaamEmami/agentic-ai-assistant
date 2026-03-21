@@ -13,7 +13,8 @@ export interface ConversationRepository {
   findById(id: string): Promise<Conversation | null>;
   listByUser(userId: string, limit?: number, offset?: number): Promise<Conversation[]>;
   create(userId: string, title?: string): Promise<Conversation>;
-  updateTitle(id: string, title: string): Promise<void>;
+  updateTitle(id: string, title: string): Promise<Conversation | null>;
+  delete(id: string): Promise<boolean>;
 }
 
 export const conversationRepository: ConversationRepository = {
@@ -32,7 +33,7 @@ export const conversationRepository: ConversationRepository = {
     const result = await pool.query<Conversation>(
       `SELECT id, user_id AS "userId", title, created_at AS "createdAt", updated_at AS "updatedAt"
        FROM conversations WHERE user_id = $1
-       ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
+       ORDER BY updated_at DESC, created_at DESC LIMIT $2 OFFSET $3`,
       [userId, limit, offset],
     );
     return result.rows;
@@ -50,11 +51,42 @@ export const conversationRepository: ConversationRepository = {
     return result.rows[0]!;
   },
 
-  async updateTitle(id: string, title: string): Promise<void> {
+  async updateTitle(id: string, title: string): Promise<Conversation | null> {
     const pool = getPool();
-    await pool.query(
-      'UPDATE conversations SET title = $1, updated_at = NOW() WHERE id = $2',
+    const result = await pool.query<Conversation>(
+      `UPDATE conversations
+       SET title = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, user_id AS "userId", title, created_at AS "createdAt", updated_at AS "updatedAt"`,
       [title, id],
     );
+    return result.rows[0] ?? null;
+  },
+
+  async delete(id: string): Promise<boolean> {
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM approvals WHERE conversation_id = $1', [id]);
+      await client.query('DELETE FROM tool_executions WHERE conversation_id = $1', [id]);
+      await client.query(
+        `DELETE FROM attachments
+         WHERE message_id IN (
+           SELECT id FROM messages WHERE conversation_id = $1
+         )`,
+        [id],
+      );
+      await client.query('DELETE FROM messages WHERE conversation_id = $1', [id]);
+      const result = await client.query('DELETE FROM conversations WHERE id = $1', [id]);
+      await client.query('COMMIT');
+      return (result.rowCount ?? 0) > 0;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 };

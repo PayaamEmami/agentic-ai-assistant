@@ -124,6 +124,13 @@ export interface GitHubRepositorySummary {
   selected: boolean;
 }
 
+export interface ConversationSummaryResponse {
+  id: string;
+  title: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export function buildWebSocketUrl(token: string): string {
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -164,10 +171,21 @@ export const api = {
       });
     },
     listConversations() {
-      return request<{ conversations: Array<{ id: string; title: string | null; createdAt: string; updatedAt: string }> }>('/api/conversations');
+      return request<{ conversations: ConversationSummaryResponse[] }>('/api/conversations');
     },
     getConversation(id: string) {
       return request<{ id: string; title: string | null; messages: Array<{ id: string; role: string; content: unknown[]; createdAt: string }> }>(`/api/conversations/${id}`);
+    },
+    updateConversation(id: string, title: string) {
+      return request<{ conversation: ConversationSummaryResponse }>(`/api/conversations/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ title }),
+      });
+    },
+    deleteConversation(id: string) {
+      return request<{ ok: boolean }>(`/api/conversations/${id}`, {
+        method: 'DELETE',
+      });
     },
   },
   upload: {
