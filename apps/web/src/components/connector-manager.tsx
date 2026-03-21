@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   api,
+  type ConnectorSyncRunSummary,
   type ConnectorSummary,
   type GitHubRepositorySummary,
 } from '@/lib/api-client';
@@ -21,8 +22,58 @@ function formatSyncTimestamp(value: string | null): string {
   return timestamp.toLocaleString();
 }
 
+function formatRunTimestamp(value: string): string {
+  const timestamp = new Date(value);
+  if (Number.isNaN(timestamp.getTime())) {
+    return 'Unknown time';
+  }
+
+  return timestamp.toLocaleString();
+}
+
+function formatRunDuration(startedAt: string, completedAt: string | null): string {
+  const start = new Date(startedAt).getTime();
+  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
+  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
+    return completedAt ? 'Completed' : 'Running';
+  }
+
+  const totalSeconds = Math.round((end - start) / 1000);
+  if (totalSeconds < 60) {
+    return `${totalSeconds}s`;
+  }
+
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
+}
+
 function connectorLabel(kind: ConnectorSummary['kind']): string {
   return kind === 'google_docs' ? 'Google Docs' : 'GitHub';
+}
+
+function runStatusTone(status: ConnectorSyncRunSummary['status']): string {
+  if (status === 'completed') {
+    return 'text-success';
+  }
+
+  if (status === 'failed') {
+    return 'text-error';
+  }
+
+  return 'text-foreground';
+}
+
+function runStatusLabel(status: ConnectorSyncRunSummary['status']): string {
+  if (status === 'completed') {
+    return 'Completed';
+  }
+
+  if (status === 'failed') {
+    return 'Failed';
+  }
+
+  return 'Running';
 }
 
 export function ConnectorManager() {
@@ -39,35 +90,48 @@ export function ConnectorManager() {
   const connectorMessage = searchParams.get('connectorMessage');
   const connectorKind = searchParams.get('connector');
 
-  useEffect(() => {
-    async function load() {
+  const load = useCallback(async (showLoading = true) => {
+    if (showLoading) {
       setLoading(true);
-      try {
-        const response = await api.connectors.list();
-        setConnectors(response.connectors);
+    }
 
-        const github = response.connectors.find((connector) => connector.kind === 'github');
-        if (github?.status === 'connected') {
-          const repoResponse = await api.connectors.listGitHubRepos();
-          setGitHubRepos(repoResponse.repositories);
-          setSelectedRepoIds(
-            repoResponse.repositories
-              .filter((repo) => repo.selected)
-              .map((repo) => repo.id),
-          );
-        } else {
-          setGitHubRepos([]);
-          setSelectedRepoIds([]);
-        }
-      } catch (error) {
-        setActionError(error instanceof Error ? error.message : 'Failed to load connectors');
-      } finally {
+    try {
+      const response = await api.connectors.list();
+      setConnectors(response.connectors);
+
+      const github = response.connectors.find((connector) => connector.kind === 'github');
+      if (github?.status === 'connected') {
+        const repoResponse = await api.connectors.listGitHubRepos();
+        setGitHubRepos(repoResponse.repositories);
+        setSelectedRepoIds(
+          repoResponse.repositories
+            .filter((repo) => repo.selected)
+            .map((repo) => repo.id),
+        );
+      } else {
+        setGitHubRepos([]);
+        setSelectedRepoIds([]);
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to load connectors');
+    } finally {
+      if (showLoading) {
         setLoading(false);
       }
     }
+  }, []);
 
+  useEffect(() => {
     void load();
-  }, [connectorKind, connectorMessage, connectorStatus]);
+  }, [connectorKind, connectorMessage, connectorStatus, load]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void load(false);
+    }, 15000);
+
+    return () => window.clearInterval(interval);
+  }, [load]);
 
   const startConnection = async (kind: 'github' | 'google_docs') => {
     setActionError(null);
@@ -83,8 +147,7 @@ export function ConnectorManager() {
     setActionError(null);
     try {
       await api.connectors.sync(kind);
-      const refreshed = await api.connectors.list();
-      setConnectors(refreshed.connectors);
+      await load(false);
     } catch (error) {
       setActionError(error instanceof Error ? error.message : 'Failed to queue sync');
     }
@@ -121,8 +184,7 @@ export function ConnectorManager() {
     setActionError(null);
     try {
       await api.connectors.disconnect(kind);
-      const refreshed = await api.connectors.list();
-      setConnectors(refreshed.connectors);
+      await load(false);
       if (kind === 'github') {
         setGitHubRepos([]);
         setSelectedRepoIds([]);
@@ -166,7 +228,7 @@ export function ConnectorManager() {
                 <p className="text-sm font-medium text-foreground">{connectorLabel(connector.kind)}</p>
                 <p className="mt-1 text-xs text-foreground-muted">
                   Status: {connector.status}
-                  {connector.lastSyncStatus ? ` • sync ${connector.lastSyncStatus}` : ''}
+                  {connector.lastSyncStatus ? ` | sync ${connector.lastSyncStatus}` : ''}
                 </p>
                 <p className="mt-1 text-xs text-foreground-muted">
                   {formatSyncTimestamp(connector.lastSyncAt)}
@@ -208,6 +270,43 @@ export function ConnectorManager() {
               </div>
             </div>
 
+            <div className="mt-3 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
+                Recent Sync Runs
+              </p>
+              {connector.recentSyncRuns.length === 0 ? (
+                <p className="text-xs text-foreground-muted">No sync history yet.</p>
+              ) : (
+                connector.recentSyncRuns.map((run) => (
+                  <div
+                    key={run.id}
+                    className="rounded-lg border border-border px-3 py-2 text-xs"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className={`font-medium ${runStatusTone(run.status)}`}>
+                          {runStatusLabel(run.status)}
+                        </p>
+                        <p className="mt-1 text-foreground-muted">
+                          Started {formatRunTimestamp(run.startedAt)}
+                        </p>
+                      </div>
+                      <p className="text-foreground-muted">
+                        {formatRunDuration(run.startedAt, run.completedAt)}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-foreground-muted">
+                      {run.itemsDiscovered} seen | {run.itemsQueued} queued | {run.itemsDeleted} deleted
+                      {run.errorCount > 0 ? ` | ${run.errorCount} errors` : ''}
+                    </p>
+                    {run.errorSummary ? (
+                      <p className="mt-2 text-error">{run.errorSummary}</p>
+                    ) : null}
+                  </div>
+                ))
+              )}
+            </div>
+
             {connector.kind === 'github' && connector.status === 'connected' ? (
               <div className="mt-3 space-y-2">
                 <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
@@ -239,7 +338,7 @@ export function ConnectorManager() {
                           <span>
                             <span className="block font-medium text-foreground">{repo.fullName}</span>
                             <span className="block text-foreground-muted">
-                              {repo.private ? 'Private' : 'Public'} • default branch {repo.defaultBranch}
+                              {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
                             </span>
                           </span>
                         </label>

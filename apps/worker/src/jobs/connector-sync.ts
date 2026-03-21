@@ -1,6 +1,7 @@
 import type { Job } from 'bullmq';
 import {
   connectorConfigRepository,
+  connectorSyncRunRepository,
   documentRepository,
   sourceRepository,
   chunkRepository,
@@ -26,6 +27,13 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
     return;
   }
 
+  const syncRun = await connectorSyncRunRepository.create(
+    userId,
+    connectorKind,
+    connectorConfigId,
+    'manual',
+  );
+
   await connectorConfigRepository.updateSyncState(connectorConfigId, {
     lastSyncAt: new Date(),
     lastSyncStatus: 'running',
@@ -41,6 +49,12 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
     });
 
     const result = await connector.sync(config.lastSyncCursor ?? undefined);
+    const itemsDeleted = result.items.filter((item) => item.metadata.deleted === true).length;
+    const itemsQueued = result.items.length - itemsDeleted;
+    const errorSummary =
+      result.errors.length > 0
+        ? result.errors.map((entry) => `${entry.externalId}: ${entry.error}`).join('; ')
+        : null;
 
     for (const item of result.items) {
       if (item.metadata.deleted === true) {
@@ -98,15 +112,21 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       lastSyncCursor: result.nextCursor,
       lastSyncAt: new Date(),
       lastSyncStatus: result.errors.length > 0 ? 'failed' : 'completed',
-      lastError: result.errors.length > 0 ? result.errors.map((entry) => `${entry.externalId}: ${entry.error}`).join('; ') : null,
+      lastError: errorSummary,
     });
     await connectorConfigRepository.updateStatus(
       connectorConfigId,
       'connected',
-      result.errors.length > 0
-        ? result.errors.map((entry) => `${entry.externalId}: ${entry.error}`).join('; ')
-        : null,
+      errorSummary,
     );
+    await connectorSyncRunRepository.complete(syncRun.id, {
+      status: result.errors.length > 0 ? 'failed' : 'completed',
+      itemsDiscovered: result.items.length,
+      itemsQueued,
+      itemsDeleted,
+      errorCount: result.errors.length,
+      errorSummary,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await connectorConfigRepository.updateStatus(connectorConfigId, 'failed', message);
@@ -114,6 +134,14 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       lastSyncAt: new Date(),
       lastSyncStatus: 'failed',
       lastError: message,
+    });
+    await connectorSyncRunRepository.complete(syncRun.id, {
+      status: 'failed',
+      itemsDiscovered: 0,
+      itemsQueued: 0,
+      itemsDeleted: 0,
+      errorCount: 1,
+      errorSummary: message,
     });
     throw error;
   }

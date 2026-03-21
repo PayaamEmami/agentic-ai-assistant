@@ -164,6 +164,20 @@ export type ConnectorStatusDto = z.infer<typeof ConnectorStatusDto>;
 export const ConnectorSyncStatusDto = z.enum(['pending', 'running', 'completed', 'failed']);
 export type ConnectorSyncStatusDto = z.infer<typeof ConnectorSyncStatusDto>;
 
+export const ConnectorSyncRunDto = z.object({
+  id: z.string().uuid(),
+  trigger: z.string(),
+  status: z.enum(['running', 'completed', 'failed']),
+  itemsDiscovered: z.number().int().nonnegative(),
+  itemsQueued: z.number().int().nonnegative(),
+  itemsDeleted: z.number().int().nonnegative(),
+  errorCount: z.number().int().nonnegative(),
+  errorSummary: z.string().nullable(),
+  startedAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+});
+export type ConnectorSyncRunDto = z.infer<typeof ConnectorSyncRunDto>;
+
 export const ConnectorSummaryDto = z.object({
   id: z.string().uuid(),
   kind: ConnectorKindDto,
@@ -173,6 +187,7 @@ export const ConnectorSummaryDto = z.object({
   lastError: z.string().nullable(),
   hasCredentials: z.boolean(),
   selectedRepoCount: z.number().int().nonnegative().optional(),
+  recentSyncRuns: z.array(ConnectorSyncRunDto).default([]),
 });
 export type ConnectorSummaryDto = z.infer<typeof ConnectorSummaryDto>;
 

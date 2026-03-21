@@ -70,6 +70,7 @@ export {
   ConnectorKindDto,
   ConnectorStatusDto,
   ConnectorSyncStatusDto,
+  ConnectorSyncRunDto,
   ConnectorSummaryDto,
   ConnectorListResponse,
   ConnectorConnectStartResponse,

@@ -36,3 +36,6 @@ export type { Memory, MemoryRepository } from './memories.js';
 
 export { connectorConfigRepository } from './connector-configs.js';
 export type { ConnectorConfig, ConnectorConfigRepository } from './connector-configs.js';
+
+export { connectorSyncRunRepository } from './connector-sync-runs.js';
+export type { ConnectorSyncRun, ConnectorSyncRunRepository } from './connector-sync-runs.js';

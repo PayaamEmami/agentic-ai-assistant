@@ -112,6 +112,20 @@ export interface ConnectorSummary {
   lastError: string | null;
   hasCredentials: boolean;
   selectedRepoCount?: number;
+  recentSyncRuns: ConnectorSyncRunSummary[];
+}
+
+export interface ConnectorSyncRunSummary {
+  id: string;
+  trigger: string;
+  status: 'running' | 'completed' | 'failed';
+  itemsDiscovered: number;
+  itemsQueued: number;
+  itemsDeleted: number;
+  errorCount: number;
+  errorSummary: string | null;
+  startedAt: string;
+  completedAt: string | null;
 }
 
 export interface GitHubRepositorySummary {

@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import {
   connectorConfigRepository,
+  connectorSyncRunRepository,
   getPool,
 } from '@aaa/db';
 import {
@@ -29,6 +30,18 @@ interface ConnectorSummary {
   lastError: string | null;
   hasCredentials: boolean;
   selectedRepoCount?: number;
+  recentSyncRuns: Array<{
+    id: string;
+    trigger: string;
+    status: 'running' | 'completed' | 'failed';
+    itemsDiscovered: number;
+    itemsQueued: number;
+    itemsDeleted: number;
+    errorCount: number;
+    errorSummary: string | null;
+    startedAt: string;
+    completedAt: string | null;
+  }>;
 }
 
 interface GitHubRepositorySummary {
@@ -191,10 +204,30 @@ function getSelectedRepoCount(settings: Record<string, unknown>): number | undef
   return Array.isArray(selectedRepos) ? selectedRepos.length : undefined;
 }
 
+async function toRecentSyncRuns(userId: string, kind: SupportedConnectorKind) {
+  const runs = await connectorSyncRunRepository.listRecentByUserAndKind(userId, kind, 5);
+  return runs.map((run) => ({
+    id: run.id,
+    trigger: run.trigger,
+    status: run.status,
+    itemsDiscovered: run.itemsDiscovered,
+    itemsQueued: run.itemsQueued,
+    itemsDeleted: run.itemsDeleted,
+    errorCount: run.errorCount,
+    errorSummary: run.errorSummary,
+    startedAt: run.startedAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+  }));
+}
+
 export class ConnectorService {
   async listConnectors(userId: string): Promise<ConnectorSummary[]> {
     const configs = await connectorConfigRepository.listByUser(userId);
     const byKind = new Map(configs.map((config) => [config.kind, config]));
+    const recentRunsByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSyncRuns>>>();
+    for (const kind of ['google_docs', 'github'] as const) {
+      recentRunsByKind.set(kind, await toRecentSyncRuns(userId, kind));
+    }
 
     return (['google_docs', 'github'] as const).map((kind) => {
       const config = byKind.get(kind);
@@ -207,6 +240,7 @@ export class ConnectorService {
         lastError: config?.lastError ?? null,
         hasCredentials: Boolean(config?.credentialsEncrypted),
         selectedRepoCount: config ? getSelectedRepoCount(config.settings) : undefined,
+        recentSyncRuns: recentRunsByKind.get(kind) ?? [],
       };
     });
   }

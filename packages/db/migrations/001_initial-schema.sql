@@ -53,6 +53,22 @@ CREATE TABLE connector_configs (
   UNIQUE(user_id, kind)
 );
 
+CREATE TABLE connector_sync_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id),
+  connector_config_id UUID REFERENCES connector_configs(id) ON DELETE SET NULL,
+  connector_kind TEXT NOT NULL,
+  trigger TEXT NOT NULL DEFAULT 'manual',
+  status TEXT NOT NULL DEFAULT 'running',
+  items_discovered INTEGER NOT NULL DEFAULT 0,
+  items_queued INTEGER NOT NULL DEFAULT 0,
+  items_deleted INTEGER NOT NULL DEFAULT 0,
+  error_count INTEGER NOT NULL DEFAULT 0,
+  error_summary TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at TIMESTAMPTZ
+);
+
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
@@ -160,3 +176,5 @@ CREATE UNIQUE INDEX idx_documents_source_unique
   ON documents(source_id)
   WHERE source_id IS NOT NULL;
 CREATE INDEX idx_connector_configs_user ON connector_configs(user_id);
+CREATE INDEX idx_connector_sync_runs_user_kind_started
+  ON connector_sync_runs(user_id, connector_kind, started_at DESC);
