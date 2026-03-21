@@ -241,6 +241,11 @@ export const api = {
         method: 'POST',
       });
     },
+    disconnect(kind: 'github' | 'google_docs') {
+      return request<{ ok: boolean }>(`/api/connectors/${kind}`, {
+        method: 'DELETE',
+      });
+    },
     listGitHubRepos() {
       return request<{ repositories: GitHubRepositorySummary[] }>('/api/connectors/github/repos');
     },

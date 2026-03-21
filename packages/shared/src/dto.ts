@@ -191,6 +191,11 @@ export const ConnectorSyncResponse = z.object({
 });
 export type ConnectorSyncResponse = z.infer<typeof ConnectorSyncResponse>;
 
+export const ConnectorDisconnectResponse = z.object({
+  ok: z.literal(true),
+});
+export type ConnectorDisconnectResponse = z.infer<typeof ConnectorDisconnectResponse>;
+
 export const GitHubRepositoryDto = z.object({
   id: z.number().int(),
   name: z.string(),

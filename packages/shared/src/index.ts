@@ -74,6 +74,7 @@ export {
   ConnectorListResponse,
   ConnectorConnectStartResponse,
   ConnectorSyncResponse,
+  ConnectorDisconnectResponse,
   GitHubRepositoryDto,
   GitHubRepositoriesResponse,
   GitHubRepoSelectionRequest,

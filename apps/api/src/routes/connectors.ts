@@ -105,6 +105,22 @@ export async function connectorRoutes(app: FastifyInstance) {
     },
   );
 
+  app.delete<{ Params: { kind: 'github' | 'google_docs' } }>(
+    '/connectors/:kind',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const parsed = ConnectorKindDto.safeParse(request.params.kind);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
+
+      const result = await connectorService.disconnect(request.user!.id, parsed.data);
+      return reply.status(200).send(result);
+    },
+  );
+
   app.get('/connectors/github/repos', { preHandler: authenticate }, async (request, reply) => {
     const repositories = await connectorService.listGitHubRepositories(request.user!.id);
     return reply.status(200).send({ repositories });

@@ -1,5 +1,8 @@
 import crypto from 'node:crypto';
-import { connectorConfigRepository } from '@aaa/db';
+import {
+  connectorConfigRepository,
+  getPool,
+} from '@aaa/db';
 import {
   GitHubConnector,
   encryptConnectorCredentials,
@@ -290,6 +293,39 @@ export class ConnectorService {
       connectorKind: kind,
       userId,
     });
+  }
+
+  async disconnect(userId: string, kind: SupportedConnectorKind): Promise<{ ok: true }> {
+    const config = await connectorConfigRepository.findByUserAndKind(userId, kind);
+    if (!config) {
+      throw new AppError(404, 'Connector is not connected', 'CONNECTOR_NOT_FOUND');
+    }
+
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `DELETE FROM sources
+         WHERE user_id = $1 AND connector_kind = $2`,
+        [userId, kind],
+      );
+      const deleteResult = await client.query(
+        'DELETE FROM connector_configs WHERE id = $1',
+        [config.id],
+      );
+      if ((deleteResult.rowCount ?? 0) === 0) {
+        throw new AppError(404, 'Connector is not connected', 'CONNECTOR_NOT_FOUND');
+      }
+      await client.query('COMMIT');
+      return { ok: true };
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   async listGitHubRepositories(userId: string): Promise<GitHubRepositorySummary[]> {

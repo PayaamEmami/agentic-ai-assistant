@@ -35,6 +35,7 @@ export interface SourceRepository {
   ): Promise<Source>;
   update(id: string, title: string, uri: string | null): Promise<void>;
   listByUser(userId: string, limit?: number, offset?: number): Promise<Source[]>;
+  deleteByUserAndConnector(userId: string, connectorKind: string): Promise<number>;
 }
 
 export const sourceRepository: SourceRepository = {
@@ -134,5 +135,15 @@ export const sourceRepository: SourceRepository = {
       [userId, limit, offset],
     );
     return result.rows;
+  },
+
+  async deleteByUserAndConnector(userId: string, connectorKind: string): Promise<number> {
+    const pool = getPool();
+    const result = await pool.query(
+      `DELETE FROM sources
+       WHERE user_id = $1 AND connector_kind = $2`,
+      [userId, connectorKind],
+    );
+    return result.rowCount ?? 0;
   },
 };

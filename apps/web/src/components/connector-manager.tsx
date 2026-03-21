@@ -32,6 +32,7 @@ export function ConnectorManager() {
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingRepos, setSavingRepos] = useState(false);
+  const [disconnectingKind, setDisconnectingKind] = useState<ConnectorSummary['kind'] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const connectorStatus = searchParams.get('connectorStatus');
@@ -107,6 +108,32 @@ export function ConnectorManager() {
     }
   };
 
+  const disconnect = async (kind: ConnectorSummary['kind']) => {
+    const label = connectorLabel(kind);
+    const confirmed = window.confirm(
+      `Disconnect ${label} and remove its indexed data from this workspace?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setDisconnectingKind(kind);
+    setActionError(null);
+    try {
+      await api.connectors.disconnect(kind);
+      const refreshed = await api.connectors.list();
+      setConnectors(refreshed.connectors);
+      if (kind === 'github') {
+        setGitHubRepos([]);
+        setSelectedRepoIds([]);
+      }
+    } catch (error) {
+      setActionError(error instanceof Error ? error.message : 'Failed to disconnect connector');
+    } finally {
+      setDisconnectingKind(null);
+    }
+  };
+
   return (
     <div className="space-y-3">
       {connectorStatus && connectorKind ? (
@@ -169,6 +196,15 @@ export function ConnectorManager() {
                     Sync now
                   </button>
                 )}
+                {connector.hasCredentials ? (
+                  <button
+                    onClick={() => void disconnect(connector.kind)}
+                    disabled={disconnectingKind === connector.kind}
+                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                  >
+                    {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
+                  </button>
+                ) : null}
               </div>
             </div>
 

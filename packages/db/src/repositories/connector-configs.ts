@@ -42,6 +42,7 @@ export interface ConnectorConfigRepository {
       lastError?: string | null;
     },
   ): Promise<void>;
+  delete(id: string): Promise<boolean>;
 }
 
 function mapRow(row: ConnectorConfigRow): ConnectorConfig {
@@ -207,5 +208,11 @@ export const connectorConfigRepository: ConnectorConfigRepository = {
         id,
       ],
     );
+  },
+
+  async delete(id: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool.query('DELETE FROM connector_configs WHERE id = $1', [id]);
+    return (result.rowCount ?? 0) > 0;
   },
 };

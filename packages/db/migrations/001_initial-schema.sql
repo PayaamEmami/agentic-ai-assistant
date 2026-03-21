@@ -56,7 +56,7 @@ CREATE TABLE connector_configs (
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
-  source_id UUID REFERENCES sources(id),
+  source_id UUID REFERENCES sources(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   content TEXT,
   mime_type TEXT NOT NULL,
@@ -80,7 +80,7 @@ CREATE TABLE attachments (
 
 CREATE TABLE chunks (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  document_id UUID NOT NULL REFERENCES documents(id),
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
   content TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
   token_count INTEGER NOT NULL,
@@ -89,7 +89,7 @@ CREATE TABLE chunks (
 
 CREATE TABLE embeddings (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  chunk_id UUID NOT NULL REFERENCES chunks(id),
+  chunk_id UUID NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
   vector vector(1536),
   model TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
