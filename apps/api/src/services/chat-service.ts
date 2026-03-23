@@ -327,7 +327,6 @@ function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
 interface SendMessageOptions {
   conversationId?: string;
   attachmentIds?: string[];
-  inputType?: 'text' | 'transcript';
 }
 
 interface SendMessageResult {
@@ -369,24 +368,12 @@ export class ChatService {
     const result = await this.processMessage(userId, content, {
       conversationId,
       attachmentIds,
-      inputType: 'text',
     });
 
     return {
       conversationId: result.conversationId,
       messageId: result.messageId,
     };
-  }
-
-  async sendVoiceMessage(
-    userId: string,
-    transcript: string,
-    conversationId?: string,
-  ): Promise<SendMessageResult> {
-    return this.processMessage(userId, transcript, {
-      conversationId,
-      inputType: 'transcript',
-    });
   }
 
   private async processMessage(
@@ -419,9 +406,7 @@ export class ChatService {
     }
 
     const userMessageContent: Array<Record<string, unknown>> = [
-      options.inputType === 'transcript'
-        ? { type: 'transcript', text: content, durationMs: 0 }
-        : { type: 'text', text: content },
+      { type: 'text', text: content },
     ];
     for (const attachment of attachments) {
       userMessageContent.push({

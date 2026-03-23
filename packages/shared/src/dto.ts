@@ -118,35 +118,27 @@ export type VoiceSessionRequest = z.infer<typeof VoiceSessionRequest>;
 
 export const VoiceSessionResponse = z.object({
   sessionId: z.string(),
-  ephemeralToken: z.string(),
+  clientSecret: z.string(),
   expiresAt: z.string().datetime(),
   conversationId: z.string().uuid(),
+  model: z.string(),
+  voice: z.string(),
 });
 export type VoiceSessionResponse = z.infer<typeof VoiceSessionResponse>;
 
-export const VoiceTranscriptionResponse = z.object({
-  transcript: z.string(),
-});
-export type VoiceTranscriptionResponse = z.infer<typeof VoiceTranscriptionResponse>;
-
-export const VoiceMessageRequest = z.object({
+export const VoiceTurnRequest = z.object({
   conversationId: z.string().uuid().optional(),
-  transcript: z.string().min(1).max(32000),
+  userTranscript: z.string().trim().min(1).max(32000),
+  assistantTranscript: z.string().trim().min(1).max(32000),
 });
-export type VoiceMessageRequest = z.infer<typeof VoiceMessageRequest>;
+export type VoiceTurnRequest = z.infer<typeof VoiceTurnRequest>;
 
-export const VoiceMessageResponse = z.object({
+export const VoiceTurnResponse = z.object({
   conversationId: z.string().uuid(),
-  messageId: z.string().uuid(),
-  assistantText: z.string(),
-  transcript: z.string(),
+  userMessageId: z.string().uuid(),
+  assistantMessageId: z.string().uuid(),
 });
-export type VoiceMessageResponse = z.infer<typeof VoiceMessageResponse>;
-
-export const VoiceSpeechRequest = z.object({
-  text: z.string().min(1).max(4000),
-});
-export type VoiceSpeechRequest = z.infer<typeof VoiceSpeechRequest>;
+export type VoiceTurnResponse = z.infer<typeof VoiceTurnResponse>;
 
 export const HealthResponse = z.object({
   status: z.literal('ok'),

@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
-import { api } from '@/lib/api-client';
+import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
 
 const INDEXABLE_MIME_TYPES = new Set([
   'application/json',
@@ -21,113 +21,23 @@ function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): stri
   return 'Attached files';
 }
 
-const RECORDING_MIME_TYPES = [
-  'audio/webm;codecs=opus',
-  'audio/webm',
-  'audio/mp4',
-  'audio/ogg;codecs=opus',
-];
-
-function getSupportedRecordingMimeType(): string | undefined {
-  if (typeof MediaRecorder === 'undefined') {
-    return undefined;
-  }
-
-  return RECORDING_MIME_TYPES.find((mimeType) => MediaRecorder.isTypeSupported(mimeType));
-}
-
-function buildVoiceFile(blob: Blob): File {
-  const mimeType = blob.type || 'audio/webm';
-  const extension =
-    mimeType.includes('mp4')
-      ? 'm4a'
-      : mimeType.includes('ogg')
-        ? 'ogg'
-        : mimeType.includes('wav')
-          ? 'wav'
-          : 'webm';
-
-  return new File([blob], `voice-message.${extension}`, { type: mimeType });
-}
-
 export function InputBar() {
-  const { sendMessage, uploadAttachment, sendVoiceMessage, loading } = useChatContext();
+  const {
+    sendMessage,
+    uploadAttachment,
+    startLiveVoiceSession,
+    syncConversationState,
+    loading,
+  } = useChatContext();
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const [indexDocuments, setIndexDocuments] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isProcessingVoice, setIsProcessingVoice] = useState(false);
-  const [voiceStatus, setVoiceStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const audioUrlRef = useRef<string | null>(null);
 
-  const stopAudioPlayback = () => {
-    audioRef.current?.pause();
-    audioRef.current = null;
-
-    if (audioUrlRef.current) {
-      URL.revokeObjectURL(audioUrlRef.current);
-      audioUrlRef.current = null;
-    }
-  };
-
-  const releaseMicrophone = () => {
-    streamRef.current?.getTracks().forEach((track) => track.stop());
-    streamRef.current = null;
-  };
-
-  const playAssistantReply = async (blob: Blob) => {
-    stopAudioPlayback();
-
-    const audioUrl = URL.createObjectURL(blob);
-    audioUrlRef.current = audioUrl;
-
-    const audio = new Audio(audioUrl);
-    audioRef.current = audio;
-
-    audio.onended = () => {
-      if (audioUrlRef.current === audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-        audioUrlRef.current = null;
-      }
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setVoiceStatus(null);
-    };
-
-    audio.onerror = () => {
-      if (audioUrlRef.current === audioUrl) {
-        URL.revokeObjectURL(audioUrl);
-        audioUrlRef.current = null;
-      }
-      if (audioRef.current === audio) {
-        audioRef.current = null;
-      }
-      setVoiceStatus('Assistant reply is ready, but audio playback failed.');
-    };
-
-    try {
-      await audio.play();
-    } catch (error) {
-      stopAudioPlayback();
-      throw error;
-    }
-  };
-
-  useEffect(() => {
-    return () => {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-        mediaRecorderRef.current.stop();
-      }
-      releaseMicrophone();
-      stopAudioPlayback();
-    };
-  }, []);
+  const liveVoice = useLiveVoiceSession({
+    startSession: startLiveVoiceSession,
+    syncConversation: syncConversationState,
+  });
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -164,90 +74,55 @@ export function InputBar() {
     e.target.value = '';
   };
 
-  const handleVoiceMode = async () => {
-    if (isRecording) {
-      setVoiceStatus('Processing your voice message...');
-      mediaRecorderRef.current?.stop();
-      setIsRecording(false);
-      return;
-    }
-
-    if (
-      typeof window === 'undefined' ||
-      typeof navigator === 'undefined' ||
-      !navigator.mediaDevices?.getUserMedia ||
-      typeof MediaRecorder === 'undefined'
-    ) {
-      setVoiceStatus('Voice recording is not supported in this browser.');
-      return;
-    }
-
-    try {
-      stopAudioPlayback();
-      setVoiceStatus('Listening...');
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      streamRef.current = stream;
-
-      audioChunksRef.current = [];
-      const mimeType = getSupportedRecordingMimeType();
-      const recorder = mimeType
-        ? new MediaRecorder(stream, { mimeType })
-        : new MediaRecorder(stream);
-
-      recorder.addEventListener('dataavailable', (event) => {
-        if (event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      });
-
-      recorder.addEventListener('stop', () => {
-        const recordedBlob = new Blob(audioChunksRef.current, {
-          type: recorder.mimeType || mimeType || 'audio/webm',
-        });
-
-        audioChunksRef.current = [];
-        mediaRecorderRef.current = null;
-        releaseMicrophone();
-
-        void (async () => {
-          if (recordedBlob.size === 0) {
-            setVoiceStatus('No audio was captured. Please try again.');
-            return;
-          }
-
-          setIsProcessingVoice(true);
-          try {
-            const voiceFile = buildVoiceFile(recordedBlob);
-            const { assistantText } = await sendVoiceMessage(voiceFile);
-            setVoiceStatus('Playing assistant response...');
-            const speech = await api.voice.synthesize(assistantText);
-            await playAssistantReply(speech);
-          } catch (error) {
-            setVoiceStatus(
-              error instanceof Error ? error.message : 'Voice mode failed. Please try again.',
-            );
-          } finally {
-            setIsProcessingVoice(false);
-          }
-        })();
-      });
-
-      recorder.start();
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-    } catch (error) {
-      releaseMicrophone();
-      setIsRecording(false);
-      setVoiceStatus(
-        error instanceof Error ? error.message : 'Microphone access failed.',
-      );
-    }
-  };
-
   const removeAttachment = (attachmentId: string) => {
     setAttachments((previous) => previous.filter((attachment) => attachment.id !== attachmentId));
   };
+
+  if (liveVoice.isActive) {
+    return (
+      <section className="border-t border-border bg-surface-elevated p-4">
+        <div className="rounded-3xl border border-border bg-surface px-4 py-4 shadow-sm">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Live Voice</p>
+              <p className="mt-1 text-xs text-foreground-muted">{liveVoice.connectionLabel}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void liveVoice.stop()}
+              className="rounded-full border border-error/30 bg-error/10 px-4 py-2 text-xs font-medium text-error transition-colors hover:bg-error/20"
+            >
+              End voice mode
+            </button>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <div className="rounded-2xl border border-border-subtle bg-surface-input p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
+                You
+              </p>
+              <p className="mt-2 min-h-16 text-sm text-foreground">
+                {liveVoice.userCaption || 'Start speaking and your live caption will appear here.'}
+              </p>
+            </div>
+
+            <div className="rounded-2xl border border-border-subtle bg-surface-input p-3">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
+                Assistant
+              </p>
+              <p className="mt-2 min-h-16 text-sm text-foreground">
+                {liveVoice.assistantCaption || 'The assistant will answer here in text while speaking back to you.'}
+              </p>
+            </div>
+          </div>
+
+          <p className="mt-3 text-[11px] text-foreground-inactive">
+            Live voice is conversational-only in this version. Use text chat for tools and actions.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} className="border-t border-border bg-surface-elevated p-4">
@@ -295,14 +170,10 @@ export function InputBar() {
         </button>
         <button
           type="button"
-          onClick={handleVoiceMode}
-          disabled={!isRecording && (loading.isSendingMessage || isProcessingVoice)}
-          className={`rounded-lg p-2 transition-colors ${
-            isRecording
-              ? 'bg-error/20 text-error hover:bg-error/30'
-              : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-          }`}
-          title={isRecording ? 'Stop recording' : 'Voice mode'}
+          onClick={() => void liveVoice.toggle()}
+          disabled={loading.isSendingMessage}
+          className="rounded-lg p-2 text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground"
+          title="Live voice mode"
         >
           <MicIcon />
         </button>
@@ -316,13 +187,13 @@ export function InputBar() {
         <button
           type="submit"
           disabled={loading.isSendingMessage || (!message.trim() && attachments.length === 0)}
-          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:bg-accent-hover disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
         >
           {loading.isSendingMessage ? 'Sending...' : 'Send'}
         </button>
       </div>
-      {voiceStatus ? (
-        <p className="mt-3 text-xs text-foreground-muted">{voiceStatus}</p>
+      {liveVoice.error ? (
+        <p className="mt-3 text-xs text-error">{liveVoice.error}</p>
       ) : null}
       <label className="mt-3 flex items-center gap-2 text-xs text-foreground-muted">
         <input
@@ -334,7 +205,7 @@ export function InputBar() {
         Index text documents for RAG when possible
       </label>
       <p className="mt-2 text-[11px] text-foreground-inactive">
-        Voice replies are AI-generated.
+        Live voice is AI-generated and saved back into this conversation when each turn finishes.
       </p>
     </form>
   );

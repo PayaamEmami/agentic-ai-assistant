@@ -137,9 +137,8 @@ Services:
 | `S3_ENDPOINT` | No | S3 endpoint override (for local MinIO) |
 | `OPENAI_MODEL` | No | Chat model (default: `gpt-5-mini`) |
 | `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-small`) |
-| `OPENAI_TRANSCRIPTION_MODEL` | No | Speech-to-text model for voice input (default: `gpt-4o-mini-transcribe`) |
-| `OPENAI_TTS_MODEL` | No | Text-to-speech model for assistant playback (default: `gpt-4o-mini-tts`) |
-| `OPENAI_TTS_VOICE` | No | Voice preset for assistant playback (default: `marin`) |
+| `OPENAI_REALTIME_MODEL` | No | Realtime speech-to-speech model for live voice mode (default: `gpt-realtime-1.5`) |
+| `OPENAI_REALTIME_VOICE` | No | Voice preset for live voice mode (default: `marin`) |
 | `MCP_SERVERS_CONFIG_PATH` | No | Path to MCP server config JSON |
 | `WEB_BASE_URL` | No | Frontend base URL for OAuth callback redirects (default: `http://localhost:3000`) |
 | `CONNECTOR_CREDENTIALS_SECRET` | No | Secret used to encrypt persisted connector credentials |
@@ -225,12 +224,18 @@ Tools requiring user confirmation go through an approval flow before execution.
 
 ### Voice Support
 
-Voice mode supports a push-to-talk flow on top of the existing agent pipeline:
+Voice mode supports an inline live conversation flow inside chat:
 
-1. Client records microphone audio in the browser
-2. API transcribes that audio with OpenAI speech-to-text
-3. The transcript is sent through the existing chat and tool orchestration path
-4. API synthesizes the assistant's final text reply into audio for playback
+1. Client opens a live voice session from the chat input
+2. Browser streams microphone audio to OpenAI Realtime over WebRTC
+3. OpenAI streams spoken audio and captions back in the same live session
+4. Finalized user and assistant turns are persisted into the existing conversation history
+
+Current live voice behavior:
+
+- Automatic turn detection and interruption are enabled
+- Live voice is conversational-only in v1
+- Tools, approvals, MCP actions, and retrieval stay available in text chat
 
 ## License
 

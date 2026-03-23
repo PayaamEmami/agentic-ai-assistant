@@ -21,9 +21,8 @@ const envSchema = z.object({
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().default('gpt-5-mini'),
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
-  OPENAI_TRANSCRIPTION_MODEL: z.string().default('gpt-4o-mini-transcribe'),
-  OPENAI_TTS_MODEL: z.string().default('gpt-4o-mini-tts'),
-  OPENAI_TTS_VOICE: z.string().default('marin'),
+  OPENAI_REALTIME_MODEL: z.string().default('gpt-realtime-1.5'),
+  OPENAI_REALTIME_VOICE: z.string().default('marin'),
 
   MCP_SERVERS_CONFIG_PATH: z.string().optional(),
 

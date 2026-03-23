@@ -128,7 +128,15 @@ interface ChatContextValue {
   uploadAttachment: (file: File, options?: { indexForRag?: boolean }) => Promise<UploadedAttachment>;
   approveAction: (approvalId: string) => Promise<void>;
   rejectAction: (approvalId: string) => Promise<void>;
-  sendVoiceMessage: (file: File) => Promise<{ assistantText: string }>;
+  startLiveVoiceSession: () => Promise<{
+    sessionId: string;
+    clientSecret: string;
+    expiresAt: string;
+    conversationId: string;
+    model: string;
+    voice: string;
+  }>;
+  syncConversationState: (conversationId: string) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -390,21 +398,6 @@ function createOptimisticUserMessage(
   };
 }
 
-function createOptimisticTranscriptMessage(content: string): ChatMessage {
-  return {
-    id: `local-user-${crypto.randomUUID()}`,
-    role: 'user',
-    content: [
-      {
-        type: 'transcript',
-        text: content,
-        durationMs: 0,
-      },
-    ],
-    createdAt: new Date().toISOString(),
-  };
-}
-
 function createFallbackAssistantMessage(messageId: string): ChatMessage {
   return {
     id: `local-assistant-${messageId}`,
@@ -473,6 +466,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     const response = await api.chat.getConversation(conversationId);
     setMessages(response.messages.map(normalizeMessage));
   }, []);
+
+  const syncConversationState = useCallback(
+    async (conversationId: string) => {
+      setCurrentConversationId(conversationId);
+      await refreshConversation(conversationId);
+      await loadConversations();
+    },
+    [loadConversations, refreshConversation],
+  );
 
   const selectConversation = useCallback(async (conversationId?: string) => {
     setError(null);
@@ -608,57 +610,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [decideApproval],
   );
 
-  const sendVoiceMessage = useCallback(async (file: File) => {
+  const startLiveVoiceSession = useCallback(async () => {
     setError(null);
-    setIsSendingMessage(true);
-    try {
-      const transcription = await api.voice.transcribe(file);
-      const transcript = transcription.transcript.trim();
-      if (!transcript) {
-        throw new Error('No speech was detected in that recording.');
-      }
-
-      const optimisticUserMessage = createOptimisticTranscriptMessage(transcript);
-      setMessages((previous) => [...previous, optimisticUserMessage]);
-
-      const response = await api.voice.sendMessage(transcript, currentConversationId);
-      const timestamp = new Date().toISOString();
-
-      setCurrentConversationId(response.conversationId);
-      setConversations((previous) =>
-        upsertConversation(previous, {
-          id: response.conversationId,
-          title: buildConversationTitle(transcript),
-          createdAt: timestamp,
-          updatedAt: timestamp,
-        }),
-      );
-
-      try {
-        await refreshConversation(response.conversationId);
-      } catch (detailError) {
-        console.error('Failed to refresh conversation after voice message', detailError);
-      }
-
-      await Promise.all([loadConversations(), loadPendingApprovals()]);
-      return { assistantText: response.assistantText };
-    } catch (requestError) {
-      const message = requestError instanceof Error ? requestError.message : 'Failed to send voice message';
-      setError(message);
-      setMessages((previous) => [
-        ...previous,
-        {
-          id: `local-error-${crypto.randomUUID()}`,
-          role: 'assistant',
-          content: [{ type: 'text', text: `Error: ${message}` }],
-          createdAt: new Date().toISOString(),
-        },
-      ]);
-      throw requestError;
-    } finally {
-      setIsSendingMessage(false);
-    }
-  }, [currentConversationId, loadConversations, loadPendingApprovals, refreshConversation]);
+    const session = await api.voice.createSession(currentConversationId);
+    await syncConversationState(session.conversationId);
+    return session;
+  }, [currentConversationId, syncConversationState]);
 
   const renameConversation = useCallback(async (conversationId: string, title: string) => {
     setError(null);
@@ -814,7 +771,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       uploadAttachment,
       approveAction,
       rejectAction,
-      sendVoiceMessage,
+      startLiveVoiceSession,
+      syncConversationState,
     }),
     [
       approveAction,
@@ -831,7 +789,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       renameConversation,
       selectConversation,
       sendMessage,
-      sendVoiceMessage,
+      startLiveVoiceSession,
+      syncConversationState,
       toolActivities,
       uploadAttachment,
     ],

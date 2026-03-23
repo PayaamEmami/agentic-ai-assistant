@@ -1,16 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import {
   VoiceSessionRequest,
-  VoiceMessageRequest,
-  VoiceSpeechRequest,
+  VoiceTurnRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { ChatService } from '../services/chat-service.js';
 import { VoiceService } from '../services/voice-service.js';
 
 export async function voiceRoutes(app: FastifyInstance) {
   const voiceService = new VoiceService();
-  const chatService = new ChatService();
 
   app.addHook('preHandler', authenticate);
 
@@ -30,53 +27,47 @@ export async function voiceRoutes(app: FastifyInstance) {
     return reply.status(200).send(session);
   });
 
-  app.post('/voice/transcribe', async (request, reply) => {
-    const file = await request.file();
-    if (!file) {
-      return reply
-        .status(400)
-        .send({ error: { code: 'NO_FILE', message: 'No audio file provided' } });
+  app.post('/voice/session/answer', async (request, reply) => {
+    const body =
+      typeof request.body === 'object' && request.body !== null
+        ? (request.body as { conversationId?: unknown; sdp?: unknown })
+        : null;
+    if (
+      !body ||
+      typeof body.conversationId !== 'string' ||
+      body.conversationId.trim().length === 0 ||
+      typeof body.sdp !== 'string' ||
+      body.sdp.trim().length === 0
+    ) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'conversationId and sdp are required' },
+      });
     }
 
-    const transcript = await voiceService.transcribeAudio(request.user!.id, file);
-    return reply.status(200).send({ transcript });
+    const answer = await voiceService.answerSession(
+      request.user!.id,
+      body.conversationId,
+      body.sdp,
+    );
+
+    return reply.status(200).type('application/sdp').send(answer);
   });
 
-  app.post('/voice/message', async (request, reply) => {
-    const parsed = VoiceMessageRequest.safeParse(request.body);
+  app.post('/voice/turns', async (request, reply) => {
+    const parsed = VoiceTurnRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
       });
     }
 
-    const result = await chatService.sendVoiceMessage(
+    const result = await voiceService.persistTurn(
       request.user!.id,
-      parsed.data.transcript,
+      parsed.data.userTranscript,
+      parsed.data.assistantTranscript,
       parsed.data.conversationId,
     );
 
-    return reply.status(200).send({
-      conversationId: result.conversationId,
-      messageId: result.messageId,
-      assistantText: result.assistantText,
-      transcript: parsed.data.transcript,
-    });
-  });
-
-  app.post('/voice/speech', async (request, reply) => {
-    const parsed = VoiceSpeechRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-      });
-    }
-
-    const response = await voiceService.synthesizeSpeech(parsed.data.text);
-    return reply
-      .status(200)
-      .header('Content-Type', response.contentType)
-      .header('Cache-Control', 'no-store')
-      .send(response.audio);
+    return reply.status(200).send(result);
   });
 }

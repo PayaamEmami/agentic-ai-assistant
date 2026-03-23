@@ -1,4 +1,4 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
+export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const TOKEN_STORAGE_KEY = 'aaa_auth_token';
 
 let cachedToken: string | null = null;
@@ -303,54 +303,31 @@ export const api = {
   },
   voice: {
     createSession(conversationId?: string) {
-      return request<{ sessionId: string; ephemeralToken: string; expiresAt: string; conversationId: string }>('/api/voice/session', {
+      return request<{
+        sessionId: string;
+        clientSecret: string;
+        expiresAt: string;
+        conversationId: string;
+        model: string;
+        voice: string;
+      }>('/api/voice/session', {
         method: 'POST',
         body: JSON.stringify({ conversationId }),
       });
     },
-    async transcribe(file: File) {
-      const token = await getAuthToken();
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const res = await fetch(`${API_BASE}/api/voice/transcribe`, {
+    persistTurn(
+      conversationId: string | undefined,
+      userTranscript: string,
+      assistantTranscript: string,
+    ) {
+      return request<{
+        conversationId: string;
+        userMessageId: string;
+        assistantMessageId: string;
+      }>('/api/voice/turns', {
         method: 'POST',
-        body: formData,
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        body: JSON.stringify({ conversationId, userTranscript, assistantTranscript }),
       });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new ApiError(res.status, body?.error?.message ?? 'Voice transcription failed', body?.error?.code);
-      }
-
-      return res.json() as Promise<{ transcript: string }>;
-    },
-    sendMessage(transcript: string, conversationId?: string) {
-      return request<{ conversationId: string; messageId: string; assistantText: string; transcript: string }>('/api/voice/message', {
-        method: 'POST',
-        body: JSON.stringify({ transcript, conversationId }),
-      });
-    },
-    async synthesize(text: string) {
-      const token = await getAuthToken();
-      const res = await fetch(`${API_BASE}/api/voice/speech`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ text }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        throw new ApiError(res.status, body?.error?.message ?? 'Voice synthesis failed', body?.error?.code);
-      }
-
-      return res.blob();
     },
   },
   personalization: {

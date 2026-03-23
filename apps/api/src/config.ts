@@ -8,9 +8,8 @@ export interface AppConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
-  openaiTranscriptionModel: string;
-  openaiTtsModel: string;
-  openaiTtsVoice: string;
+  openaiRealtimeModel: string;
+  openaiRealtimeVoice: string;
   jwtSecret: string;
   s3Bucket: string;
   s3Region: string;
@@ -47,9 +46,8 @@ export function loadConfig(): AppConfig {
     openaiApiKey: required('OPENAI_API_KEY'),
     openaiModel: process.env.OPENAI_MODEL ?? 'gpt-5-mini',
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
-    openaiTranscriptionModel: process.env.OPENAI_TRANSCRIPTION_MODEL ?? 'gpt-4o-mini-transcribe',
-    openaiTtsModel: process.env.OPENAI_TTS_MODEL ?? 'gpt-4o-mini-tts',
-    openaiTtsVoice: process.env.OPENAI_TTS_VOICE ?? 'marin',
+    openaiRealtimeModel: process.env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-1.5',
+    openaiRealtimeVoice: process.env.OPENAI_REALTIME_VOICE ?? 'marin',
     jwtSecret,
     s3Bucket: process.env.S3_BUCKET ?? 'aaa-uploads',
     s3Region: process.env.S3_REGION ?? 'us-east-1',
