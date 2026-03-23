@@ -63,16 +63,16 @@ export default function Home() {
             Agentic AI Assistant
           </p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">
-            Secure access for your personal AI workspace.
+            Welcome
           </h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-foreground-muted">
-            Sign in with a real account before opening chat, tools, and realtime events.
-            The chat area is now protected behind authenticated API and WebSocket access.
+            Sign in to your workspace, or create an account to start chatting, use tools, and get answers in
+            real time. Everything here stays private to your account.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-foreground-muted">
-            <span className="rounded-full bg-surface-input px-4 py-2">Credential login</span>
-            <span className="rounded-full bg-surface-input px-4 py-2">JWT API access</span>
-            <span className="rounded-full bg-surface-input px-4 py-2">Authenticated sockets</span>
+            <span className="rounded-full bg-surface-input px-4 py-2">Private workspace</span>
+            <span className="rounded-full bg-surface-input px-4 py-2">{'Chat & tools'}</span>
+            <span className="rounded-full bg-surface-input px-4 py-2">Live responses</span>
           </div>
         </section>
 
