@@ -150,7 +150,7 @@ CREATE TABLE preferences (
 CREATE TABLE memories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id),
-  kind TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('fact', 'preference', 'relationship', 'project', 'person', 'instruction')),
   content TEXT NOT NULL,
   metadata JSONB NOT NULL DEFAULT '{}',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -166,6 +166,7 @@ CREATE INDEX idx_chunks_document ON chunks(document_id);
 CREATE INDEX idx_embeddings_chunk ON embeddings(chunk_id);
 CREATE INDEX idx_approvals_user_status ON approvals(user_id, status);
 CREATE INDEX idx_memories_user ON memories(user_id);
+CREATE INDEX idx_memories_user_kind_updated ON memories(user_id, kind, updated_at DESC);
 CREATE INDEX idx_tool_executions_conversation ON tool_executions(conversation_id);
 CREATE INDEX idx_sources_user ON sources(user_id);
 CREATE UNIQUE INDEX idx_sources_connector_external

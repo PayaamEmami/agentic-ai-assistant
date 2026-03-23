@@ -5,6 +5,7 @@ import type {
   ToolExecutionStatus,
   SourceKind,
   ConnectorKind,
+  MemoryKind,
   AgentRole,
 } from './enums.js';
 
@@ -168,7 +169,7 @@ export interface Embedding {
 export interface Memory {
   id: string;
   userId: string;
-  kind: string;
+  kind: MemoryKind;
   content: string;
   metadata: Record<string, unknown>;
   createdAt: Date;

@@ -45,6 +45,16 @@ export const ConnectorKind = {
 } as const;
 export type ConnectorKind = (typeof ConnectorKind)[keyof typeof ConnectorKind];
 
+export const MemoryKind = {
+  Fact: 'fact',
+  Preference: 'preference',
+  Relationship: 'relationship',
+  Project: 'project',
+  Person: 'person',
+  Instruction: 'instruction',
+} as const;
+export type MemoryKind = (typeof MemoryKind)[keyof typeof MemoryKind];
+
 export const AgentRole = {
   Orchestrator: 'orchestrator',
   Research: 'research',

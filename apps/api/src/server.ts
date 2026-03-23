@@ -10,6 +10,7 @@ import { authRoutes } from './routes/auth.js';
 import { chatRoutes } from './routes/chat.js';
 import { uploadRoutes } from './routes/upload.js';
 import { approvalRoutes } from './routes/approvals.js';
+import { personalizationRoutes } from './routes/personalization.js';
 import { voiceRoutes } from './routes/voice.js';
 import { connectorRoutes } from './routes/connectors.js';
 import { wsHandler } from './ws/handler.js';
@@ -30,6 +31,7 @@ export async function buildServer(config: AppConfig) {
   await app.register(chatRoutes, { prefix: '/api' });
   await app.register(uploadRoutes, { prefix: '/api' });
   await app.register(approvalRoutes, { prefix: '/api' });
+  await app.register(personalizationRoutes, { prefix: '/api' });
   await app.register(voiceRoutes, { prefix: '/api' });
   await app.register(connectorRoutes, { prefix: '/api' });
   await app.register(wsHandler, { prefix: '/ws' });

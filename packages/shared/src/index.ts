@@ -5,6 +5,7 @@ export {
   ToolExecutionStatus,
   SourceKind,
   ConnectorKind,
+  MemoryKind,
   AgentRole,
 } from './enums.js';
 export type {
@@ -14,6 +15,7 @@ export type {
   ToolExecutionStatus as ToolExecutionStatusType,
   SourceKind as SourceKindType,
   ConnectorKind as ConnectorKindType,
+  MemoryKind as MemoryKindType,
   AgentRole as AgentRoleType,
 } from './enums.js';
 
@@ -68,6 +70,7 @@ export {
   VoiceSpeechRequest,
   HealthResponse,
   ConnectorKindDto,
+  MemoryKindDto,
   ConnectorStatusDto,
   ConnectorSyncStatusDto,
   ConnectorSyncRunDto,
@@ -80,6 +83,14 @@ export {
   GitHubRepositoryDto,
   GitHubRepositoriesResponse,
   GitHubRepoSelectionRequest,
+  PersonalizationProfileDto,
+  MemoryItemDto,
+  PersonalizationResponse,
+  UpdatePersonalizationProfileRequest,
+  CreateMemoryRequest,
+  UpdateMemoryRequest,
+  MemoryMutationResponse,
+  DeleteMemoryResponse,
 } from './dto.js';
 
 export type { RealtimeEvent } from './events.js';

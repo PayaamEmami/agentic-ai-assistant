@@ -18,6 +18,11 @@ export interface PersonalizationProfile {
   recentTopics: string[];
 }
 
+export interface ProfileUpdateInput {
+  writingStyle?: string | null;
+  tonePreference?: string | null;
+}
+
 export interface PreferenceEntry {
   key: string;
   value: string;

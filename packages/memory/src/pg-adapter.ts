@@ -84,6 +84,25 @@ function normalizeLimit(limit?: number): number | undefined {
 export class PgMemoryAdapter implements MemoryDbAdapter {
   constructor(private readonly executor: QueryExecutor) {}
 
+  async getMemory(id: string): Promise<MemoryRow | null> {
+    const sql = `
+      SELECT
+        id,
+        user_id AS "userId",
+        kind,
+        content,
+        metadata,
+        created_at AS "createdAt",
+        updated_at AS "updatedAt"
+      FROM memories
+      WHERE id = $1
+      LIMIT 1
+    `;
+    const result = await this.executor.query<MemorySqlRow>(sql, [id]);
+    const row = result.rows[0];
+    return row ? toMemoryRow(row) : null;
+  }
+
   async insertMemory(
     userId: string,
     kind: string,
@@ -108,6 +127,22 @@ export class PgMemoryAdapter implements MemoryDbAdapter {
       throw new Error('Failed to insert memory');
     }
     return toMemoryRow(row);
+  }
+
+  async updateMemory(
+    id: string,
+    content: string,
+    metadata: Record<string, unknown>,
+  ): Promise<void> {
+    const sql = `
+      UPDATE memories
+      SET
+        content = $1,
+        metadata = $2::jsonb,
+        updated_at = NOW()
+      WHERE id = $3
+    `;
+    await this.executor.query(sql, [content, JSON.stringify(metadata), id]);
   }
 
   async findMemories(userId: string, kind?: string, limit?: number): Promise<MemoryRow[]> {
@@ -213,5 +248,12 @@ export class PgMemoryAdapter implements MemoryDbAdapter {
         updated_at = NOW()
     `;
     await this.executor.query(sql, [userId, key, value]);
+  }
+
+  async deletePreference(userId: string, key: string): Promise<void> {
+    await this.executor.query(
+      'DELETE FROM preferences WHERE user_id = $1 AND key = $2',
+      [userId, key],
+    );
   }
 }

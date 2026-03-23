@@ -148,6 +148,27 @@ export interface GitHubRepositorySummary {
   selected: boolean;
 }
 
+export type PersonalizationMemoryKind =
+  | 'fact'
+  | 'preference'
+  | 'relationship'
+  | 'project'
+  | 'person'
+  | 'instruction';
+
+export interface PersonalizationProfile {
+  writingStyle: string | null;
+  tonePreference: string | null;
+}
+
+export interface PersonalizationMemory {
+  id: string;
+  kind: PersonalizationMemoryKind;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ConversationSummaryResponse {
   id: string;
   title: string | null;
@@ -330,6 +351,43 @@ export const api = {
       }
 
       return res.blob();
+    },
+  },
+  personalization: {
+    get() {
+      return request<{
+        profile: PersonalizationProfile;
+        memories: PersonalizationMemory[];
+      }>('/api/personalization');
+    },
+    updateProfile(input: {
+      writingStyle?: string | null;
+      tonePreference?: string | null;
+    }) {
+      return request<{ profile: PersonalizationProfile }>('/api/personalization/profile', {
+        method: 'PUT',
+        body: JSON.stringify(input),
+      });
+    },
+    createMemory(input: {
+      kind: PersonalizationMemoryKind;
+      content: string;
+    }) {
+      return request<{ memory: PersonalizationMemory }>('/api/personalization/memories', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    updateMemory(memoryId: string, input: { content: string }) {
+      return request<{ memory: PersonalizationMemory }>(`/api/personalization/memories/${memoryId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(input),
+      });
+    },
+    deleteMemory(memoryId: string) {
+      return request<{ ok: boolean }>(`/api/personalization/memories/${memoryId}`, {
+        method: 'DELETE',
+      });
     },
   },
 };

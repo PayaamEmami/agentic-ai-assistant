@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useChatContext } from '@/lib/chat-context';
 import { useAuthContext } from '@/lib/auth-context';
 
 export function Sidebar() {
   const router = useRouter();
+  const pathname = usePathname();
   const { user, logout } = useAuthContext();
   const {
     conversations,
@@ -19,10 +20,18 @@ export function Sidebar() {
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
+  const isMemoryPage = pathname === '/chat/memory';
 
   const handleLogout = () => {
     logout();
     router.replace('/');
+  };
+
+  const openChat = async (conversationId?: string) => {
+    await selectConversation(conversationId);
+    if (pathname !== '/chat') {
+      router.push('/chat');
+    }
   };
 
   const startEditing = (conversationId: string, title: string | null) => {
@@ -75,7 +84,7 @@ export function Sidebar() {
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-foreground">Conversations</h2>
           <button
-            onClick={() => void selectConversation(undefined)}
+            onClick={() => void openChat(undefined)}
             className="rounded p-1 text-foreground-muted hover:bg-surface-hover hover:text-foreground"
             title="New conversation"
           >
@@ -94,6 +103,17 @@ export function Sidebar() {
             Sign out
           </button>
         </div>
+        <button
+          onClick={() => router.push('/chat/memory')}
+          className={`mt-3 flex w-full items-center gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors ${
+            isMemoryPage
+              ? 'bg-surface-accent text-foreground'
+              : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
+          }`}
+        >
+          <MemoryIcon />
+          Memory
+        </button>
       </div>
       <nav className="flex-1 overflow-y-auto p-2">
         {loading.isLoadingConversations && conversations.length === 0 ? (
@@ -153,7 +173,7 @@ export function Sidebar() {
                 ) : (
                   <div className="group flex items-center gap-2">
                     <button
-                      onClick={() => void selectConversation(conversation.id)}
+                      onClick={() => void openChat(conversation.id)}
                       className="min-w-0 flex-1 text-left"
                       disabled={isPending}
                     >
@@ -197,6 +217,18 @@ function PlusIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  );
+}
+
+function MemoryIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 5H8a2 2 0 0 0-2 2v10" />
+      <path d="M12 5h4a2 2 0 0 1 2 2v10" />
+      <path d="M8 17h8" />
+      <path d="M8 21h8" />
+      <path d="M12 5v16" />
     </svg>
   );
 }

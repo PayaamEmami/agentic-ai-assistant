@@ -3,6 +3,7 @@ export type {
   MemoryKind,
   PersonalizationProfile,
   PreferenceEntry,
+  ProfileUpdateInput,
 } from './types.js';
 
 export type { MemoryService } from './memory-service.js';

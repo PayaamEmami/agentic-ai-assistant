@@ -14,6 +14,7 @@
     "@aaa/ai": "workspace:*",
     "@aaa/connectors": "workspace:*",
     "@aaa/db": "workspace:*",
+    "@aaa/memory": "workspace:*",
     "@aaa/mcp": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",

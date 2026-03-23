@@ -32,12 +32,21 @@ importers:
       '@aaa/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@aaa/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@aaa/db':
         specifier: workspace:*
         version: link:../../packages/db
       '@aaa/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
+      '@aaa/memory':
+        specifier: workspace:*
+        version: link:../../packages/memory
+      '@aaa/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
       '@aaa/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -109,9 +118,21 @@ importers:
 
   apps/worker:
     dependencies:
+      '@aaa/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
+      '@aaa/connectors':
+        specifier: workspace:*
+        version: link:../../packages/connectors
       '@aaa/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@aaa/mcp':
+        specifier: workspace:*
+        version: link:../../packages/mcp
+      '@aaa/retrieval':
+        specifier: workspace:*
+        version: link:../../packages/retrieval
       '@aaa/shared':
         specifier: workspace:*
         version: link:../../packages/shared

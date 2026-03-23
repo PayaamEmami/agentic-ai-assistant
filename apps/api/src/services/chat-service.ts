@@ -26,6 +26,7 @@ import {
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { RetrievalCitation } from './retrieval-bridge.js';
+import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
@@ -339,6 +340,7 @@ export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly modelProvider: OpenAIProvider;
   private readonly agentOrchestrator: AgentOrchestrator;
+  private readonly personalizationService: PersonalizationService;
 
   constructor(retrievalBridge?: RetrievalBridge, modelProvider?: OpenAIProvider) {
     this.retrievalBridge = retrievalBridge ?? new RetrievalBridge();
@@ -355,6 +357,7 @@ export class ChatService {
       new ActionAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new VerifierAgent(this.modelProvider, process.env['OPENAI_MODEL']),
     ]);
+    this.personalizationService = new PersonalizationService();
   }
 
   async sendMessage(
@@ -462,6 +465,7 @@ export class ChatService {
     const retrieval = await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT);
     const retrievalContext = retrieval.results.map((result) => result.content);
     const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
+    const personalContext = await this.personalizationService.getPersonalContext(userId);
     const activeConnectors = (await connectorConfigRepository.listByUser(userId))
       .filter((connector) => connector.status === 'connected')
       .map((connector) => connectorLabel(connector.kind));
@@ -479,6 +483,7 @@ export class ChatService {
         messageHistory,
         availableTools: toAgentToolContexts(availableTools),
         retrievedContext: retrievalContext,
+        personalContext,
         activeConnectors,
       });
       toolCalls = result.toolCalls;
