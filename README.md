@@ -47,81 +47,68 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 - **pnpm** >= 9 (`corepack enable && corepack prepare pnpm@9.15.4 --activate`)
 - **Docker** and **Docker Compose** (for local services)
 - **OpenAI API key**
+- **WSL or Git Bash on Windows** recommended for local app startup
+
+## Quick Start
+
+1. Copy `.env.example` to `.env`
+2. Add your real local values to `.env`
+3. Run:
+
+```bash
+pnpm dev:local
+```
+
+That command handles the local startup flow for you.
+
+Then open:
+- **Web**: http://localhost:3000
+- **API health**: http://localhost:3001/health
+
+For local testing, you can use the built-in **development login** from the home page when `NODE_ENV` is not `production`.
 
 ## Local Development Setup
 
-### 1. Clone and install
+### What You Need Installed
+
+- `OPENAI_API_KEY`
+- `JWT_SECRET`
+- `CONNECTOR_CREDENTIALS_SECRET`
+- GitHub and Google OAuth values if you want connectors locally
+
+### One-Time Setup
 
 ```bash
 git clone https://github.com/your-org/agentic-ai-assistant.git
 cd agentic-ai-assistant
 cp .env.example .env
-# Edit .env and add your OPENAI_API_KEY
+# Edit .env and add your real values
+
+corepack enable
+corepack prepare pnpm@9.15.4 --activate
 pnpm install
 ```
 
-### 2. Start local services (PostgreSQL + Redis)
+Optional connector values:
+- `GITHUB_CLIENT_ID`
+- `GITHUB_CLIENT_SECRET`
+- `GITHUB_REDIRECT_URI`
+- `GOOGLE_CLIENT_ID`
+- `GOOGLE_CLIENT_SECRET`
+- `GOOGLE_REDIRECT_URI`
+
+### Start The App
 
 ```bash
-docker compose -f docker/docker-compose.yml up -d postgres redis
+pnpm dev:local
 ```
 
-This starts:
-- PostgreSQL 16 with pgvector on port 5432
-- Redis 7 on port 6379
+### Verify It’s Working
 
-### 3. Run database migrations
-
-```bash
-cd packages/db
-pnpm migrate:up
-cd ../..
-```
-
-### 4. Build packages
-
-```bash
-pnpm build
-```
-
-### 5. Start development servers
-
-```bash
-pnpm dev
-```
-
-This starts the API server (port 3001), the worker, and the Next.js frontend (port 3000) concurrently.
-
-Alternatively, start services individually:
-
-```bash
-# Terminal 1: API
-pnpm --filter @aaa/api dev
-
-# Terminal 2: Worker
-pnpm --filter @aaa/worker dev
-
-# Terminal 3: Web
-pnpm --filter @aaa/web dev
-```
-
-## Running with Docker Compose
-
-To run the full stack in containers:
-
-```bash
-# Set your OpenAI API key
-export OPENAI_API_KEY=sk-your-key-here
-
-# Build and start everything
-docker compose -f docker/docker-compose.yml up --build
-```
-
-Services:
-- **Web**: http://localhost:3000
-- **API**: http://localhost:3001
-- **PostgreSQL**: localhost:5432
-- **Redis**: localhost:6379
+- Open `http://localhost:3000`
+- Use development login or create an account
+- Send a test message
+- Optionally upload a text or markdown file with RAG indexing enabled
 
 ## Required Environment Variables
 
