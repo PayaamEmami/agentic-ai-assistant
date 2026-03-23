@@ -17,7 +17,7 @@ import { wsHandler } from './ws/handler.js';
 
 export async function buildServer(config: AppConfig) {
   const app = Fastify({
-    logger: logger,
+    loggerInstance: logger,
   });
 
   await app.register(cors, { origin: true });

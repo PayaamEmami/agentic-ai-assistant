@@ -28,12 +28,13 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
+    const preparedTools = this.prepareTools(request.tools);
     const completion = await this.client.chat.completions.create({
       model: request.model ?? this.defaultModel,
       messages: this.mapMessages(request.messages),
       temperature: request.temperature,
       max_tokens: request.maxTokens,
-      tools: this.mapTools(request.tools),
+      tools: preparedTools.tools,
     });
 
     const choice = completion.choices[0];
@@ -44,7 +45,7 @@ export class OpenAIProvider implements ModelProvider {
     return {
       messageId: completion.id,
       content: this.extractTextContent(choice.message.content),
-      toolCalls: this.mapToolCalls(choice.message.tool_calls),
+      toolCalls: this.mapToolCalls(choice.message.tool_calls, preparedTools.aliasToOriginal),
       finishReason: this.mapFinishReason(choice.finish_reason),
       usage: {
         promptTokens: completion.usage?.prompt_tokens ?? 0,
@@ -55,12 +56,13 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
+    const preparedTools = this.prepareTools(request.tools);
     const stream = await this.client.chat.completions.create({
       model: request.model ?? this.defaultModel,
       messages: this.mapMessages(request.messages),
       temperature: request.temperature,
       max_tokens: request.maxTokens,
-      tools: this.mapTools(request.tools),
+      tools: preparedTools.tools,
       stream: true,
     });
 
@@ -92,7 +94,13 @@ export class OpenAIProvider implements ModelProvider {
 
           toolCallState.set(toolCallDelta.index, current);
           if (current.name) {
-            yield { type: 'tool_call', toolCall: { ...current } };
+            yield {
+              type: 'tool_call',
+              toolCall: {
+                ...current,
+                name: preparedTools.aliasToOriginal.get(current.name) ?? current.name,
+              },
+            };
           }
         }
 
@@ -217,25 +225,63 @@ export class OpenAIProvider implements ModelProvider {
       .trim();
   }
 
-  private mapTools(tools?: ToolDefinition[]): OpenAI.ChatCompletionTool[] | undefined {
-    if (!tools || tools.length === 0) return undefined;
+  private prepareTools(tools?: ToolDefinition[]): {
+    tools: OpenAI.ChatCompletionTool[] | undefined;
+    aliasToOriginal: Map<string, string>;
+  } {
+    if (!tools || tools.length === 0) {
+      return {
+        tools: undefined,
+        aliasToOriginal: new Map<string, string>(),
+      };
+    }
 
-    return tools.map((tool) => ({
-      type: 'function',
-      function: {
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      },
-    }));
+    const originalToAlias = new Map<string, string>();
+    const aliasToOriginal = new Map<string, string>();
+    const preparedTools = tools.map((tool) => {
+      const alias = this.toToolAlias(tool.name, aliasToOriginal);
+      originalToAlias.set(tool.name, alias);
+      aliasToOriginal.set(alias, tool.name);
+
+      return {
+        type: 'function',
+        function: {
+          name: alias,
+          description: tool.description,
+          parameters: tool.parameters,
+        },
+      } satisfies OpenAI.ChatCompletionTool;
+    });
+
+    return {
+      tools: preparedTools,
+      aliasToOriginal,
+    };
   }
 
-  private mapToolCalls(toolCalls?: OpenAI.ChatCompletionMessageToolCall[]): ToolCall[] {
+  private toToolAlias(name: string, existingAliases: Map<string, string>): string {
+    const sanitizedBase = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+    const base = sanitizedBase.length > 0 ? sanitizedBase : 'tool';
+    let alias = base;
+    let suffix = 2;
+
+    while (existingAliases.has(alias) && existingAliases.get(alias) !== name) {
+      alias = `${base}_${suffix}`;
+      suffix += 1;
+    }
+
+    return alias;
+  }
+
+  private mapToolCalls(
+    toolCalls?: OpenAI.ChatCompletionMessageToolCall[],
+    aliasToOriginal?: Map<string, string>,
+  ): ToolCall[] {
     if (!toolCalls || toolCalls.length === 0) return [];
 
     return toolCalls.map((toolCall) => ({
       id: toolCall.id,
-      name: toolCall.function.name,
+      name: aliasToOriginal?.get(toolCall.function.name) ?? toolCall.function.name,
       arguments: toolCall.function.arguments,
     }));
   }

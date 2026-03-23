@@ -33,25 +33,6 @@ function parseEvent(raw: string): { type?: string; [key: string]: unknown } | nu
   }
 }
 
-async function requestSdpAnswerDirect(clientSecret: string, sdp: string): Promise<string> {
-  const formData = new FormData();
-  formData.set('sdp', sdp);
-
-  const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${clientSecret}`,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error(await response.text());
-  }
-
-  return response.text();
-}
-
 async function requestSdpAnswerFallback(
   conversationId: string,
   sdp: string,
@@ -323,12 +304,7 @@ export function useLiveVoiceSession({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      let answerSdp: string;
-      try {
-        answerSdp = await requestSdpAnswerDirect(session.clientSecret, offer.sdp ?? '');
-      } catch {
-        answerSdp = await requestSdpAnswerFallback(session.conversationId, offer.sdp ?? '');
-      }
+      const answerSdp = await requestSdpAnswerFallback(session.conversationId, offer.sdp ?? '');
 
       await pc.setRemoteDescription({
         type: 'answer',

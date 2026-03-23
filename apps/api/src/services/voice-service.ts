@@ -121,7 +121,6 @@ function buildRealtimeSessionConfig(
     type: 'realtime',
     model,
     instructions,
-    modalities: ['audio', 'text'],
     tool_choice: 'none',
     max_response_output_tokens: MAX_OUTPUT_TOKENS,
     audio: {
@@ -182,48 +181,15 @@ export class VoiceService {
     const model = process.env['OPENAI_REALTIME_MODEL'] ?? 'gpt-realtime-1.5';
     const voice = process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
     const instructions = buildRealtimeInstructions(personalContext, recentMessages);
-    const sessionConfig = buildRealtimeSessionConfig(model, voice, instructions);
+    buildRealtimeSessionConfig(model, voice, instructions);
 
-    const response = await fetch('https://api.openai.com/v1/realtime/client_secrets', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env['OPENAI_API_KEY'] ?? ''}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ session: sessionConfig }),
-    });
-
-    if (!response.ok) {
-      const detail = await response.text();
-      logger.error(
-        {
-          userId,
-          conversationId: conversation.id,
-          status: response.status,
-          detail,
-        },
-        'Failed to create realtime client secret',
-      );
-      throw new AppError(502, 'Failed to create live voice session', 'VOICE_SESSION_CREATE_FAILED');
-    }
-
-    const data = (await response.json()) as {
-      client_secret?: { value?: string; expires_at?: number };
-    };
-    const clientSecret = data.client_secret?.value;
-    const expiresAt = data.client_secret?.expires_at;
-
-    if (!clientSecret || !expiresAt) {
-      throw new AppError(502, 'Live voice session response was incomplete', 'VOICE_SESSION_INVALID');
-    }
-
-    logger.info({ userId, conversationId: conversation.id }, 'Created live voice session');
+    logger.info({ userId, conversationId: conversation.id }, 'Prepared live voice session');
 
     return {
       sessionId: crypto.randomUUID(),
       conversationId: conversation.id,
-      clientSecret,
-      expiresAt: new Date(expiresAt * 1000).toISOString(),
+      clientSecret: '',
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
       model,
       voice,
     };

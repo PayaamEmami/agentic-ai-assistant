@@ -43,3 +43,4 @@ docker/.env
 # Misc
 tmp/
 .cache/
+.codex-runtime/
