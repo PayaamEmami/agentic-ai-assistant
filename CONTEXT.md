@@ -109,7 +109,9 @@ pnpm build
 Important local dependencies and secrets:
 
 - `DATABASE_URL`
+- `LOCAL_POSTGRES_PORT` when `5432` is already in use
 - `REDIS_URL`
+- `LOCAL_REDIS_PORT` when `6379` is already in use
 - `OPENAI_API_KEY`
 - `JWT_SECRET`
 - `CONNECTOR_CREDENTIALS_SECRET`
