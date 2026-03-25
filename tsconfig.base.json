@@ -8,6 +8,7 @@
       "@aaa/db": ["packages/db/src/index.ts"],
       "@aaa/mcp": ["packages/mcp/src/index.ts"],
       "@aaa/memory": ["packages/memory/src/index.ts"],
+      "@aaa/observability": ["packages/observability/src/index.ts"],
       "@aaa/retrieval": ["packages/retrieval/src/index.ts"],
       "@aaa/shared": ["packages/shared/src/index.ts"]
     },

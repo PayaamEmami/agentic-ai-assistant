@@ -3,6 +3,7 @@ export interface AppConfig {
   port: number;
   nodeEnv: string;
   logLevel: string;
+  logFormat: 'pretty' | 'json';
   databaseUrl: string;
   redisUrl: string;
   openaiApiKey: string;
@@ -41,6 +42,14 @@ export function loadConfig(): AppConfig {
     port: parseInt(process.env.API_PORT ?? '3001', 10),
     nodeEnv,
     logLevel: process.env.LOG_LEVEL ?? 'info',
+    logFormat:
+      process.env.LOG_FORMAT === 'json'
+        ? 'json'
+        : process.env.LOG_FORMAT === 'pretty'
+          ? 'pretty'
+          : nodeEnv === 'development'
+            ? 'pretty'
+            : 'json',
     databaseUrl: required('DATABASE_URL'),
     redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
     openaiApiKey: required('OPENAI_API_KEY'),

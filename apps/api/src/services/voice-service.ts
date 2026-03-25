@@ -6,9 +6,9 @@ import {
   getPool,
   messageRepository,
 } from '@aaa/db';
+import { addLogContext, getLogger } from '@aaa/observability';
 import type { AssistantTextDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
-import { logger } from '../lib/logger.js';
 import { broadcast } from '../ws/connections.js';
 import { PersonalizationService } from './personalization-service.js';
 
@@ -172,7 +172,14 @@ export class VoiceService {
   async createSession(userId: string, conversationId?: string) {
     getPool();
 
+    const sessionId = crypto.randomUUID();
     const conversation = await ensureOwnedConversation(userId, conversationId);
+    addLogContext({
+      correlationId: sessionId,
+      voiceSessionId: sessionId,
+      userId,
+      conversationId: conversation.id,
+    });
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,
       HISTORY_LIMIT,
@@ -183,10 +190,23 @@ export class VoiceService {
     const instructions = buildRealtimeInstructions(personalContext, recentMessages);
     buildRealtimeSessionConfig(model, voice, instructions);
 
-    logger.info({ userId, conversationId: conversation.id }, 'Prepared live voice session');
+    getLogger({
+      component: 'voice-service',
+      voiceSessionId: sessionId,
+      conversationId: conversation.id,
+      userId,
+    }).info(
+      {
+        event: 'voice.session.started',
+        outcome: 'success',
+        model,
+        voice,
+      },
+      'Prepared live voice session',
+    );
 
     return {
-      sessionId: crypto.randomUUID(),
+      sessionId,
       conversationId: conversation.id,
       clientSecret: '',
       expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
@@ -199,10 +219,19 @@ export class VoiceService {
     userId: string,
     conversationId: string,
     sdp: string,
+    sessionId?: string,
   ): Promise<string> {
     getPool();
 
     const conversation = await ensureOwnedConversation(userId, conversationId);
+    if (sessionId) {
+      addLogContext({
+        correlationId: sessionId,
+        voiceSessionId: sessionId,
+        userId,
+        conversationId: conversation.id,
+      });
+    }
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,
       HISTORY_LIMIT,
@@ -226,10 +255,15 @@ export class VoiceService {
 
     if (!response.ok) {
       const detail = await response.text();
-      logger.error(
+      getLogger({
+        component: 'voice-service',
+        voiceSessionId: sessionId,
+        conversationId,
+        userId,
+      }).error(
         {
-          userId,
-          conversationId,
+          event: 'voice.sdp_exchange.failed',
+          outcome: 'failure',
           status: response.status,
           detail,
         },
@@ -238,6 +272,18 @@ export class VoiceService {
       throw new AppError(502, 'Failed to connect live voice session', 'VOICE_SDP_EXCHANGE_FAILED');
     }
 
+    getLogger({
+      component: 'voice-service',
+      voiceSessionId: sessionId,
+      conversationId,
+      userId,
+    }).info(
+      {
+        event: 'voice.sdp_exchange.completed',
+        outcome: 'success',
+      },
+      'Realtime SDP exchange completed',
+    );
     return response.text();
   }
 
@@ -280,10 +326,14 @@ export class VoiceService {
     };
     broadcast(conversation.id, event);
 
-    logger.info(
+    getLogger({
+      component: 'voice-service',
+      userId,
+      conversationId: conversation.id,
+    }).info(
       {
-        userId,
-        conversationId: conversation.id,
+        event: 'voice.turn.persisted',
+        outcome: 'success',
         userTranscriptLength: trimmedUserTranscript.length,
         assistantTranscriptLength: trimmedAssistantTranscript.length,
       },

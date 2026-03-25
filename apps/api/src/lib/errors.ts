@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { logger } from './logger.js';
+import { getLogger, serializeError } from '@aaa/observability';
 
 export class AppError extends Error {
   constructor(
@@ -14,16 +14,40 @@ export class AppError extends Error {
 
 export function errorHandler(
   error: FastifyError,
-  _request: FastifyRequest,
+  request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  const componentLogger = getLogger({
+    component: 'http',
+    route: request.routeOptions.url,
+    method: request.method,
+  });
+
   if (error instanceof AppError) {
+    const level = error.statusCode >= 500 ? 'error' : 'warn';
+    componentLogger[level](
+      {
+        event: 'http.request.failed',
+        outcome: 'failure',
+        statusCode: error.statusCode,
+        error: serializeError(error),
+      },
+      'Request failed with application error',
+    );
     return reply.status(error.statusCode).send({
       error: { code: error.code ?? 'APP_ERROR', message: error.message },
     });
   }
 
-  logger.error(error, 'Unhandled error');
+  componentLogger.error(
+    {
+      event: 'http.request.failed',
+      outcome: 'failure',
+      statusCode: 500,
+      error: serializeError(error),
+    },
+    'Unhandled error',
+  );
   return reply.status(500).send({
     error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
   });

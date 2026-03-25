@@ -17,15 +17,36 @@ export interface IngestionJobData {
   sourceId: string;
   userId: string;
   externalId: string;
+  correlationId: string;
 }
 
 export async function handleIngestion(job: Job<IngestionJobData>): Promise<void> {
-  const { connectorConfigId, documentId, sourceId, externalId } = job.data;
-  logger.info({ documentId, sourceId, externalId, jobId: job.id }, 'Processing ingestion job');
+  const { connectorConfigId, documentId, sourceId, externalId, correlationId } = job.data;
+  logger.info(
+    {
+      event: 'ingestion.started',
+      outcome: 'start',
+      documentId,
+      sourceId,
+      externalId,
+      jobId: job.id,
+      correlationId,
+    },
+    'Processing ingestion job',
+  );
 
   const config = await connectorConfigRepository.findById(connectorConfigId);
   if (!config) {
-    logger.warn({ connectorConfigId, jobId: job.id }, 'Connector config not found for ingestion job');
+    logger.warn(
+      {
+        event: 'ingestion.skipped',
+        outcome: 'failure',
+        connectorConfigId,
+        jobId: job.id,
+        correlationId,
+      },
+      'Connector config not found for ingestion job',
+    );
     return;
   }
 
@@ -38,7 +59,17 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
 
   const item = await connector.read(externalId);
   if (!item) {
-    logger.warn({ externalId, connectorConfigId, jobId: job.id }, 'Connector item could not be read');
+    logger.warn(
+      {
+        event: 'ingestion.skipped',
+        outcome: 'failure',
+        externalId,
+        connectorConfigId,
+        jobId: job.id,
+        correlationId,
+      },
+      'Connector item could not be read',
+    );
     return;
   }
 
@@ -51,6 +82,16 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
 
   const content = item.content?.trim() ?? '';
   if (!content) {
+    logger.info(
+      {
+        event: 'ingestion.completed',
+        outcome: 'success',
+        documentId,
+        correlationId,
+        chunkCount: 0,
+      },
+      'Ingestion completed without chunking',
+    );
     return;
   }
 
@@ -86,6 +127,19 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
     await enqueueEmbeddingJob({
       chunkIds: chunks.map((chunk) => chunk.id),
       model: process.env['OPENAI_EMBEDDING_MODEL'] ?? 'text-embedding-3-small',
+      correlationId,
     });
   }
+
+  logger.info(
+    {
+      event: 'ingestion.completed',
+      outcome: 'success',
+      documentId,
+      sourceId,
+      correlationId,
+      chunkCount: chunks.length,
+    },
+    'Ingestion completed',
+  );
 }

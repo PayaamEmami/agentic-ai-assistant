@@ -1,6 +1,7 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
+import { getLogger } from '@aaa/observability';
 import type {
   McpServerConfig,
   UnifiedToolDescriptor,
@@ -22,6 +23,10 @@ export class McpClient {
     if (this.client) {
       return;
     }
+    const logger = getLogger({
+      component: 'mcp-client',
+      mcpServerId: this.serverId,
+    });
 
     const client = new Client(
       {
@@ -35,13 +40,34 @@ export class McpClient {
 
     client.onerror = () => {
       this.client = null;
+      logger.warn(
+        {
+          event: 'mcp.connection.error',
+          outcome: 'failure',
+        },
+        'MCP client encountered an error',
+      );
     };
     client.onclose = () => {
       this.client = null;
+      logger.info(
+        {
+          event: 'mcp.connection.closed',
+          outcome: 'success',
+        },
+        'MCP client connection closed',
+      );
     };
 
     await client.connect(this.createTransport());
     this.client = client;
+    logger.info(
+      {
+        event: 'mcp.connection.opened',
+        outcome: 'success',
+      },
+      'MCP client connected',
+    );
   }
 
   async disconnect(): Promise<void> {
@@ -56,6 +82,10 @@ export class McpClient {
 
   async listTools(): Promise<UnifiedToolDescriptor[]> {
     const client = await this.getClient();
+    const logger = getLogger({
+      component: 'mcp-client',
+      mcpServerId: this.serverId,
+    });
     const tools: UnifiedToolDescriptor[] = [];
     let cursor: string | undefined;
 
@@ -65,10 +95,22 @@ export class McpClient {
       cursor = result.nextCursor;
     } while (cursor);
 
+    logger.info(
+      {
+        event: 'mcp.tools.listed',
+        outcome: 'success',
+        toolCount: tools.length,
+      },
+      'MCP tools listed',
+    );
     return tools;
   }
 
   async executeTool(input: ToolExecutionInput): Promise<ToolExecutionOutput> {
+    const logger = getLogger({
+      component: 'mcp-client',
+      mcpServerId: this.serverId,
+    });
     try {
       const client = await this.getClient();
       const result = await client.callTool({
@@ -78,6 +120,14 @@ export class McpClient {
 
       const normalized = normalizeCallToolResult(result);
       if (result.isError) {
+        logger.warn(
+          {
+            event: 'mcp.tool.completed',
+            outcome: 'failure',
+            toolName: input.toolName,
+          },
+          'MCP tool returned an error result',
+        );
         return {
           success: false,
           result: normalized,
@@ -85,11 +135,28 @@ export class McpClient {
         };
       }
 
+      logger.info(
+        {
+          event: 'mcp.tool.completed',
+          outcome: 'success',
+          toolName: input.toolName,
+        },
+        'MCP tool executed successfully',
+      );
       return {
         success: true,
         result: normalized,
       };
     } catch (error) {
+      logger.error(
+        {
+          event: 'mcp.tool.completed',
+          outcome: 'failure',
+          toolName: input.toolName,
+          error,
+        },
+        'MCP tool execution failed',
+      );
       return {
         success: false,
         result: null,

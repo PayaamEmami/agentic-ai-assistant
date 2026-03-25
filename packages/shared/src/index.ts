@@ -89,6 +89,10 @@ export {
   UpdateMemoryRequest,
   MemoryMutationResponse,
   DeleteMemoryResponse,
+  ClientLogLevelDto,
+  ClientLogPayload,
+  ClientLogRequest,
+  ClientLogResponse,
 } from './dto.js';
 
 export type { RealtimeEvent } from './events.js';

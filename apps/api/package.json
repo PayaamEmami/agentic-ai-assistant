@@ -16,6 +16,7 @@
     "@aaa/db": "workspace:*",
     "@aaa/memory": "workspace:*",
     "@aaa/mcp": "workspace:*",
+    "@aaa/observability": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",
     "@fastify/cors": "^10.0.0",

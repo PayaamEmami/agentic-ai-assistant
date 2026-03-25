@@ -1,5 +1,5 @@
 {
-  "name": "@aaa/connectors",
+  "name": "@aaa/observability",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
@@ -10,10 +10,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@aaa/observability": "workspace:*"
+    "pino": "^9.0.0"
   },
   "devDependencies": {
-    "typescript": "^5.5.0",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "typescript": "^5.5.0"
   }
 }

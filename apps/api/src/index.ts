@@ -20,7 +20,15 @@ async function main() {
     }
     shuttingDown = true;
 
-    logger.info({ signal }, 'Shutting down API server');
+    logger.info(
+      {
+        event: 'api.stopping',
+        outcome: 'stop',
+        signal,
+        component: 'api-main',
+      },
+      'Shutting down API server',
+    );
 
     try {
       await server.close();
@@ -29,9 +37,24 @@ async function main() {
       await closeConfiguredToolRegistry();
       await stopToolEventRelay();
       await closePool();
-      logger.info('Shutdown complete');
+      logger.info(
+        {
+          event: 'api.stopped',
+          outcome: 'success',
+          component: 'api-main',
+        },
+        'Shutdown complete',
+      );
     } catch (err) {
-      logger.error(err, 'Shutdown failed');
+      logger.error(
+        {
+          event: 'api.stop_failed',
+          outcome: 'failure',
+          component: 'api-main',
+          error: err,
+        },
+        'Shutdown failed',
+      );
     } finally {
       process.exit(0);
     }
@@ -47,9 +70,26 @@ async function main() {
 
   try {
     await server.listen({ host: config.host, port: config.port });
-    logger.info(`Server listening on ${config.host}:${config.port}`);
+    logger.info(
+      {
+        event: 'api.started',
+        outcome: 'success',
+        component: 'api-main',
+        host: config.host,
+        port: config.port,
+      },
+      'Server listening',
+    );
   } catch (err) {
-    logger.error(err, 'Failed to start server');
+    logger.error(
+      {
+        event: 'api.start_failed',
+        outcome: 'failure',
+        component: 'api-main',
+        error: err,
+      },
+      'Failed to start server',
+    );
     await closeToolExecutionQueue();
     await closeConnectorSyncQueue();
     await closeConfiguredToolRegistry();

@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { getLogger } from '@aaa/observability';
 import type { ModelProvider } from './model-provider.js';
 import type {
   ChatContentPart,
@@ -28,7 +29,9 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
+    const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const preparedTools = this.prepareTools(request.tools);
+    const startedAt = Date.now();
     const completion = await this.client.chat.completions.create({
       model: request.model ?? this.defaultModel,
       messages: this.mapMessages(request.messages),
@@ -42,7 +45,7 @@ export class OpenAIProvider implements ModelProvider {
       throw new Error('OpenAI returned no completion choices');
     }
 
-    return {
+    const response = {
       messageId: completion.id,
       content: this.extractTextContent(choice.message.content),
       toolCalls: this.mapToolCalls(choice.message.tool_calls, preparedTools.aliasToOriginal),
@@ -53,10 +56,26 @@ export class OpenAIProvider implements ModelProvider {
         totalTokens: completion.usage?.total_tokens ?? 0,
       },
     };
+
+    logger.info(
+      {
+        event: 'openai.chat.completed',
+        outcome: 'success',
+        model: request.model ?? this.defaultModel,
+        toolCount: request.tools?.length ?? 0,
+        durationMs: Date.now() - startedAt,
+        totalTokens: response.usage.totalTokens,
+      },
+      'OpenAI chat completion finished',
+    );
+
+    return response;
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
+    const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const preparedTools = this.prepareTools(request.tools);
+    const startedAt = Date.now();
     const stream = await this.client.chat.completions.create({
       model: request.model ?? this.defaultModel,
       messages: this.mapMessages(request.messages),
@@ -110,16 +129,28 @@ export class OpenAIProvider implements ModelProvider {
       }
     }
 
+    logger.info(
+      {
+        event: 'openai.chat_stream.completed',
+        outcome: 'success',
+        model: request.model ?? this.defaultModel,
+        durationMs: Date.now() - startedAt,
+      },
+      'OpenAI streaming completion finished',
+    );
+
     yield { type: 'done', finishReason: finishReason ?? 'stop' };
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
+    const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
+    const startedAt = Date.now();
     const result = await this.client.embeddings.create({
       model: request.model ?? this.defaultEmbeddingModel,
       input: request.input,
     });
 
-    return {
+    const response = {
       embeddings: result.data.map((entry) => entry.embedding),
       model: result.model,
       usage: {
@@ -127,9 +158,25 @@ export class OpenAIProvider implements ModelProvider {
         totalTokens: result.usage.total_tokens,
       },
     };
+
+    logger.info(
+      {
+        event: 'openai.embedding.completed',
+        outcome: 'success',
+        model: response.model,
+        inputCount: request.input.length,
+        durationMs: Date.now() - startedAt,
+        totalTokens: response.usage.totalTokens,
+      },
+      'OpenAI embedding request finished',
+    );
+
+    return response;
   }
 
   async transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse> {
+    const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
+    const startedAt = Date.now();
     const file = new File([request.audio], request.fileName, {
       type: request.mimeType,
     });
@@ -138,13 +185,28 @@ export class OpenAIProvider implements ModelProvider {
       model: request.model ?? 'gpt-4o-mini-transcribe',
     });
 
-    return {
+    const response = {
       text: transcription.text.trim(),
     };
+
+    logger.info(
+      {
+        event: 'openai.transcription.completed',
+        outcome: 'success',
+        model: request.model ?? 'gpt-4o-mini-transcribe',
+        durationMs: Date.now() - startedAt,
+        transcriptLength: response.text.length,
+      },
+      'OpenAI transcription finished',
+    );
+
+    return response;
   }
 
   async synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse> {
+    const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const format = request.format ?? 'mp3';
+    const startedAt = Date.now();
     const response = await this.client.audio.speech.create({
       model: request.model ?? 'gpt-4o-mini-tts',
       voice: request.voice ?? 'marin',
@@ -152,10 +214,24 @@ export class OpenAIProvider implements ModelProvider {
       response_format: format,
     });
 
-    return {
+    const result = {
       audio: Buffer.from(await response.arrayBuffer()),
       contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
     };
+
+    logger.info(
+      {
+        event: 'openai.tts.completed',
+        outcome: 'success',
+        model: request.model ?? 'gpt-4o-mini-tts',
+        voice: request.voice ?? 'marin',
+        durationMs: Date.now() - startedAt,
+        audioBytes: result.audio.byteLength,
+      },
+      'OpenAI speech synthesis finished',
+    );
+
+    return result;
   }
 
   private mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {

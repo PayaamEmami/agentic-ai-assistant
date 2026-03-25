@@ -9,6 +9,7 @@ export interface ToolExecutionJobData {
   toolName: string;
   input: Record<string, unknown>;
   conversationId: string;
+  correlationId: string;
 }
 
 const TOOL_EVENT_CHANNEL = 'tool_execution_events';
@@ -82,12 +83,32 @@ async function executeTool(
 }
 
 export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promise<void> {
-  const { toolExecutionId, toolName, conversationId } = job.data;
-  logger.info({ toolExecutionId, toolName, conversationId, jobId: job.id }, 'Processing tool execution job');
+  const { toolExecutionId, toolName, conversationId, correlationId } = job.data;
+  logger.info(
+    {
+      event: 'tool.execution.started',
+      outcome: 'start',
+      toolExecutionId,
+      toolName,
+      conversationId,
+      jobId: job.id,
+      correlationId,
+    },
+    'Processing tool execution job',
+  );
 
   const execution = await toolExecutionRepository.findById(toolExecutionId);
   if (!execution) {
-    logger.warn({ toolExecutionId, conversationId }, 'Tool execution row not found');
+    logger.warn(
+      {
+        event: 'tool.execution.skipped',
+        outcome: 'failure',
+        toolExecutionId,
+        conversationId,
+        correlationId,
+      },
+      'Tool execution row not found',
+    );
     return;
   }
 
@@ -133,6 +154,17 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
       status: 'completed',
     };
     await publishToolEvent(doneEvent);
+    logger.info(
+      {
+        event: 'tool.execution.completed',
+        outcome: 'success',
+        toolExecutionId,
+        toolName,
+        conversationId,
+        correlationId,
+      },
+      'Tool execution completed',
+    );
     return;
   }
 
@@ -157,4 +189,16 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     status: 'failed',
   };
   await publishToolEvent(doneEvent);
+  logger.warn(
+    {
+      event: 'tool.execution.completed',
+      outcome: 'failure',
+      toolExecutionId,
+      toolName,
+      conversationId,
+      correlationId,
+      error: result.error,
+    },
+    'Tool execution failed',
+  );
 }

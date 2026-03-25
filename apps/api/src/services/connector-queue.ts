@@ -1,9 +1,11 @@
 import { Queue } from 'bullmq';
+import { getLogContext, getLogger } from '@aaa/observability';
 
 export interface ConnectorSyncJobData {
   connectorConfigId: string;
   userId: string;
   connectorKind: 'github' | 'google_docs';
+  correlationId: string;
 }
 
 let queue: Queue<ConnectorSyncJobData> | null = null;
@@ -27,11 +29,29 @@ function getQueue(): Queue<ConnectorSyncJobData> {
 }
 
 export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promise<void> {
-  await getQueue().add('sync-connector', job, {
+  const correlationId = job.correlationId || getLogContext().correlationId || `connector-${job.connectorConfigId}`;
+  const payload = {
+    ...job,
+    correlationId,
+  };
+
+  await getQueue().add('sync-connector', payload, {
     jobId: `connector-sync:${job.connectorConfigId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
+  getLogger({
+    component: 'connector-queue',
+    connectorKind: job.connectorKind,
+    connectorConfigId: job.connectorConfigId,
+    correlationId,
+  }).info(
+    {
+      event: 'connector.sync.enqueued',
+      outcome: 'accepted',
+    },
+    'Connector sync job enqueued',
+  );
 }
 
 export async function closeConnectorSyncQueue(): Promise<void> {

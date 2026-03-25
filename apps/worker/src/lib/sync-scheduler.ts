@@ -22,18 +22,33 @@ async function scheduleDueConnectorSyncs(): Promise<void> {
       connectorConfigId: config.id,
       connectorKind: config.kind,
       userId: config.userId,
+      correlationId: `scheduled-${config.id}-${now}`,
     });
   }
 }
 
 export function startConnectorSyncScheduler(): NodeJS.Timeout {
   void scheduleDueConnectorSyncs().catch((error) => {
-    logger.error({ error }, 'Initial connector sync scheduling failed');
+    logger.error(
+      {
+        event: 'connector.sync_schedule.failed',
+        outcome: 'failure',
+        error,
+      },
+      'Initial connector sync scheduling failed',
+    );
   });
 
   return setInterval(() => {
     void scheduleDueConnectorSyncs().catch((error) => {
-      logger.error({ error }, 'Connector sync scheduling failed');
+      logger.error(
+        {
+          event: 'connector.sync_schedule.failed',
+          outcome: 'failure',
+          error,
+        },
+        'Connector sync scheduling failed',
+      );
     });
   }, REFRESH_INTERVAL_MS);
 }

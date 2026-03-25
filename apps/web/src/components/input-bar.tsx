@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
+import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
 
 const INDEXABLE_MIME_TYPES = new Set([
@@ -67,7 +68,17 @@ export function InputBar() {
         });
         setAttachments((previous) => [...previous, attachment]);
       } catch (error) {
-        console.error('Attachment upload failed', error);
+        void reportClientError({
+          event: 'client.upload.failed',
+          component: 'input-bar',
+          message: 'Attachment upload failed',
+          error,
+          context: {
+            fileName: file.name,
+            mimeType: file.type,
+            sizeBytes: file.size,
+          },
+        });
       }
     }
 

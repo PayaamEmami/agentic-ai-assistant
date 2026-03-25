@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { API_BASE, getStoredAuthToken, api } from './api-client';
+import { API_BASE, ApiError, getStoredAuthToken, api } from './api-client';
+import { reportClientError } from './client-logging';
 
 type VoicePhase =
   | 'idle'
@@ -34,6 +35,7 @@ function parseEvent(raw: string): { type?: string; [key: string]: unknown } | nu
 }
 
 async function requestSdpAnswerFallback(
+  sessionId: string,
   conversationId: string,
   sdp: string,
 ): Promise<string> {
@@ -48,15 +50,18 @@ async function requestSdpAnswerFallback(
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,
     },
-    body: JSON.stringify({ conversationId, sdp }),
+    body: JSON.stringify({ conversationId, sdp, sessionId }),
   });
 
   if (!response.ok) {
     const body = await response.json().catch(() => ({}));
-    throw new Error(
+    throw new ApiError(
+      response.status,
       typeof body?.error?.message === 'string'
         ? body.error.message
         : 'Failed to connect live voice session.',
+      typeof body?.error?.code === 'string' ? body.error.code : undefined,
+      response.headers.get('x-request-id') ?? undefined,
     );
   }
 
@@ -78,6 +83,7 @@ export function useLiveVoiceSession({
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
   const conversationIdRef = useRef<string | null>(null);
+  const sessionIdRef = useRef<string | null>(null);
   const pendingUserTranscriptRef = useRef('');
   const pendingAssistantTranscriptRef = useRef('');
   const responseDoneRef = useRef(false);
@@ -108,6 +114,14 @@ export function useLiveVoiceSession({
       await syncConversation(conversationId);
       resetPendingTurn();
     } catch (persistError) {
+      void reportClientError({
+        event: 'client.voice.persist_failed',
+        component: 'use-live-voice-session',
+        message: 'Failed to save the live voice turn',
+        error: persistError,
+        conversationId,
+        voiceSessionId: sessionIdRef.current ?? undefined,
+      });
       setError(
         persistError instanceof Error
           ? persistError.message
@@ -161,6 +175,7 @@ export function useLiveVoiceSession({
     }
 
     resetPendingTurn();
+    sessionIdRef.current = null;
     setUserCaption('');
     setAssistantCaption('');
     setConnectionLabel('Voice mode is off.');
@@ -237,6 +252,14 @@ export function useLiveVoiceSession({
           typeof event.error.message === 'string'
             ? event.error.message
             : 'Live voice mode ran into an error.';
+        void reportClientError({
+          event: 'client.voice.realtime_error',
+          component: 'use-live-voice-session',
+          message,
+          conversationId: conversationIdRef.current ?? undefined,
+          voiceSessionId: sessionIdRef.current ?? undefined,
+          context: { event },
+        });
         setError(message);
         setPhase('error');
         setConnectionLabel(message);
@@ -258,6 +281,11 @@ export function useLiveVoiceSession({
       typeof RTCPeerConnection === 'undefined' ||
       !navigator.mediaDevices?.getUserMedia
     ) {
+      void reportClientError({
+        event: 'client.voice.unsupported',
+        component: 'use-live-voice-session',
+        message: 'Live voice mode is not supported in this browser.',
+      });
       setError('Live voice mode is not supported in this browser.');
       setPhase('error');
       setConnectionLabel('Live voice mode is not supported in this browser.');
@@ -273,6 +301,7 @@ export function useLiveVoiceSession({
     try {
       const session = await startSession();
       conversationIdRef.current = session.conversationId;
+      sessionIdRef.current = session.sessionId;
 
       const pc = new RTCPeerConnection();
       peerConnectionRef.current = pc;
@@ -304,7 +333,11 @@ export function useLiveVoiceSession({
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      const answerSdp = await requestSdpAnswerFallback(session.conversationId, offer.sdp ?? '');
+      const answerSdp = await requestSdpAnswerFallback(
+        session.sessionId,
+        session.conversationId,
+        offer.sdp ?? '',
+      );
 
       await pc.setRemoteDescription({
         type: 'answer',
@@ -314,7 +347,18 @@ export function useLiveVoiceSession({
       setPhase('listening');
       setConnectionLabel('Connected. Start speaking when you are ready.');
     } catch (startError) {
+      const voiceSessionId = sessionIdRef.current ?? undefined;
       teardown();
+      const apiError = startError instanceof ApiError ? startError : null;
+      void reportClientError({
+        event: 'client.voice.start_failed',
+        component: 'use-live-voice-session',
+        message: 'Failed to start live voice mode',
+        error: startError,
+        requestId: apiError?.requestId,
+        conversationId: conversationIdRef.current ?? undefined,
+        voiceSessionId,
+      });
       const message =
         startError instanceof Error
           ? startError.message

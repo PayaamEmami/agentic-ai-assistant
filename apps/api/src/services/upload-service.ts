@@ -165,6 +165,9 @@ export class UploadService {
 
     logger.info(
       {
+        event: 'upload.indexed',
+        outcome: 'success',
+        component: 'upload-service',
         userId,
         attachmentId,
         documentId: document.id,
@@ -181,7 +184,15 @@ export class UploadService {
     getPool();
 
     logger.info(
-      { fileName: file.filename, mimeType: file.mimetype, userId, indexForRag: options?.indexForRag ?? false },
+      {
+        event: 'upload.started',
+        outcome: 'start',
+        component: 'upload-service',
+        fileName: file.filename,
+        mimeType: file.mimetype,
+        userId,
+        indexForRag: options?.indexForRag ?? false,
+      },
       'Processing upload',
     );
 

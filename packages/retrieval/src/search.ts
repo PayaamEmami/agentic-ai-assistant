@@ -1,3 +1,4 @@
+import { getLogger } from '@aaa/observability';
 import type { SearchFilters, SearchQuery, SearchResult } from './types.js';
 
 export interface SearchService {
@@ -25,6 +26,7 @@ export class VectorSearchService implements SearchService {
   constructor(private readonly dependencies?: VectorSearchDependencies) {}
 
   async search(query: SearchQuery): Promise<SearchResult[]> {
+    const logger = getLogger({ component: 'vector-search' });
     const text = query.text.trim();
     if (!text || !this.dependencies) {
       return [];
@@ -36,6 +38,18 @@ export class VectorSearchService implements SearchService {
       return [];
     }
 
-    return this.dependencies.searchByVector(queryEmbedding, limit, query.filters);
+    const results = await this.dependencies.searchByVector(queryEmbedding, limit, query.filters);
+    logger.debug(
+      {
+        event: 'retrieval.vector_search.completed',
+        outcome: 'success',
+        queryLength: text.length,
+        limit,
+        resultCount: results.length,
+        hasFilters: Boolean(query.filters),
+      },
+      'Vector search completed',
+    );
+    return results;
   }
 }

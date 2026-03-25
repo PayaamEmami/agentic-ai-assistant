@@ -68,7 +68,15 @@ export async function wsHandler(app: FastifyInstance) {
         extractBearerToken(request.headers.authorization);
 
       if (!token) {
-        logger.warn('Rejected unauthenticated WebSocket connection');
+        logger.warn(
+          {
+            event: 'ws.connection.rejected',
+            outcome: 'failure',
+            component: 'ws-handler',
+            reason: 'missing_token',
+          },
+          'Rejected unauthenticated WebSocket connection',
+        );
         socket.close(1008, 'Authentication required');
         return;
       }
@@ -78,14 +86,27 @@ export async function wsHandler(app: FastifyInstance) {
         user = await authenticateToken(token);
       } catch (error) {
         logger.warn(
-          { error: error instanceof Error ? error.message : String(error) },
+          {
+            event: 'ws.connection.rejected',
+            outcome: 'failure',
+            component: 'ws-handler',
+            error,
+          },
           'Rejected invalid WebSocket token',
         );
         socket.close(1008, 'Authentication failed');
         return;
       }
 
-      logger.info({ userId: user.id }, 'WebSocket client connected');
+      logger.info(
+        {
+          event: 'ws.connection.accepted',
+          outcome: 'success',
+          component: 'ws-handler',
+          userId: user.id,
+        },
+        'WebSocket client connected',
+      );
       const subscribedConversations = new Set<string>();
 
       socket.on('message', (rawData) => {
@@ -96,20 +117,43 @@ export async function wsHandler(app: FastifyInstance) {
           try {
             parsed = JSON.parse(messageText) as IncomingWsMessage;
           } catch {
-            logger.warn({ messageText }, 'Invalid WebSocket message JSON');
+            logger.warn(
+              {
+                event: 'ws.message.rejected',
+                outcome: 'failure',
+                component: 'ws-handler',
+                userId: user.id,
+              },
+              'Invalid WebSocket message JSON',
+            );
             return;
           }
 
           if (parsed.type === 'subscribe') {
             if (!parsed.conversationId) {
-              logger.warn({ messageText }, 'Missing conversationId in subscribe message');
+              logger.warn(
+                {
+                  event: 'ws.subscription.rejected',
+                  outcome: 'failure',
+                  component: 'ws-handler',
+                  userId: user.id,
+                  reason: 'missing_conversation_id',
+                },
+                'Missing conversationId in subscribe message',
+              );
               return;
             }
 
             const allowed = await canSubscribeToConversation(user, parsed.conversationId);
             if (!allowed) {
               logger.warn(
-                { userId: user.id, conversationId: parsed.conversationId },
+                {
+                  event: 'ws.subscription.rejected',
+                  outcome: 'failure',
+                  component: 'ws-handler',
+                  userId: user.id,
+                  conversationId: parsed.conversationId,
+                },
                 'Rejected unauthorized WebSocket subscription',
               );
               sendSocketError(socket, 'FORBIDDEN', 'Conversation access denied');
@@ -123,16 +167,37 @@ export async function wsHandler(app: FastifyInstance) {
               conversationId: parsed.conversationId,
             });
             logger.debug(
-              { userId: user.id, conversationId: parsed.conversationId },
+              {
+                event: 'ws.subscription.accepted',
+                outcome: 'success',
+                component: 'ws-handler',
+                userId: user.id,
+                conversationId: parsed.conversationId,
+              },
               'WebSocket subscribed to conversation',
             );
             return;
           }
 
-          logger.debug({ parsed }, 'Ignoring unsupported WebSocket event message');
+          logger.debug(
+            {
+              event: 'ws.message.ignored',
+              outcome: 'success',
+              component: 'ws-handler',
+              userId: user.id,
+              messageType: parsed.type,
+            },
+            'Ignoring unsupported WebSocket event message',
+          );
         })().catch((error) => {
           logger.warn(
-            { error: error instanceof Error ? error.message : String(error) },
+            {
+              event: 'ws.message.failed',
+              outcome: 'failure',
+              component: 'ws-handler',
+              userId: user.id,
+              error,
+            },
             'Failed to process WebSocket message',
           );
         });
@@ -142,7 +207,15 @@ export async function wsHandler(app: FastifyInstance) {
         for (const conversationId of subscribedConversations) {
           unsubscribe(conversationId, socket);
         }
-        logger.info({ userId: user.id }, 'WebSocket client disconnected');
+        logger.info(
+          {
+            event: 'ws.connection.closed',
+            outcome: 'success',
+            component: 'ws-handler',
+            userId: user.id,
+          },
+          'WebSocket client disconnected',
+        );
       });
     },
   );

@@ -1,7 +1,7 @@
 import { approvalRepository, messageRepository, toolExecutionRepository } from '@aaa/db';
+import { getLogContext, getLogger } from '@aaa/observability';
 import type { ApprovalResolvedEvent, ToolDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
-import { logger } from '../lib/logger.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
@@ -47,6 +47,8 @@ export class ApprovalService {
         toolName: toolExecution.toolName,
         input: toRecord(toolExecution.input),
         conversationId: toolExecution.conversationId,
+        correlationId:
+          getLogContext().correlationId ?? `approval-${approval.id}-${toolExecution.id}`,
       });
     } else {
       const rejectionOutput = { error: 'Rejected by user approval' };
@@ -84,6 +86,19 @@ export class ApprovalService {
     };
     broadcast(approval.conversationId, event);
 
-    logger.info({ approvalId, userId, status }, 'Approval decision');
+    getLogger({
+      component: 'approval-service',
+      approvalId,
+      userId,
+      conversationId: approval.conversationId,
+      toolExecutionId: toolExecution.id,
+    }).info(
+      {
+        event: 'approval.resolved',
+        outcome: status === 'approved' ? 'success' : 'rejected',
+        status,
+      },
+      'Approval decision recorded',
+    );
   }
 }

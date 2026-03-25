@@ -8,6 +8,7 @@ import {
   type ConnectorSummary,
   type GitHubRepositorySummary,
 } from '@/lib/api-client';
+import { reportClientError } from '@/lib/client-logging';
 
 function formatSyncTimestamp(value: string | null): string {
   if (!value) {
@@ -133,6 +134,12 @@ export function ConnectorManager() {
         setSelectedRepoIds([]);
       }
     } catch (error) {
+      void reportClientError({
+        event: 'client.connectors.load_failed',
+        component: 'connector-manager',
+        message: 'Failed to load connectors',
+        error,
+      });
       setActionError(error instanceof Error ? error.message : 'Failed to load connectors');
     } finally {
       if (showLoading) {
@@ -159,6 +166,12 @@ export function ConnectorManager() {
       const response = await api.connectors.start(kind);
       window.location.href = response.authorizationUrl;
     } catch (error) {
+      void reportClientError({
+        event: 'client.connectors.start_failed',
+        component: 'connector-manager',
+        message: `Failed to start ${kind} connector flow`,
+        error,
+      });
       setActionError(error instanceof Error ? error.message : 'Failed to start connector flow');
     }
   };
@@ -169,6 +182,12 @@ export function ConnectorManager() {
       await api.connectors.sync(kind);
       await load(false);
     } catch (error) {
+      void reportClientError({
+        event: 'client.connectors.sync_failed',
+        component: 'connector-manager',
+        message: `Failed to queue ${kind} sync`,
+        error,
+      });
       setActionError(error instanceof Error ? error.message : 'Failed to queue sync');
     }
   };
@@ -185,6 +204,12 @@ export function ConnectorManager() {
       setConnectors(connectorResponse.connectors);
       setGitHubRepos(repoResponse.repositories);
     } catch (error) {
+      void reportClientError({
+        event: 'client.connectors.save_repos_failed',
+        component: 'connector-manager',
+        message: 'Failed to save GitHub repository selection',
+        error,
+      });
       setActionError(error instanceof Error ? error.message : 'Failed to save repository selection');
     } finally {
       setSavingRepos(false);
@@ -210,6 +235,12 @@ export function ConnectorManager() {
         setSelectedRepoIds([]);
       }
     } catch (error) {
+      void reportClientError({
+        event: 'client.connectors.disconnect_failed',
+        component: 'connector-manager',
+        message: `Failed to disconnect ${kind} connector`,
+        error,
+      });
       setActionError(error instanceof Error ? error.message : 'Failed to disconnect connector');
     } finally {
       setDisconnectingKind(null);

@@ -9,14 +9,34 @@ import { logger } from '../lib/logger.js';
 export interface EmbeddingJobData {
   chunkIds: string[];
   model: string;
+  correlationId: string;
 }
 
 export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void> {
-  const { chunkIds, model } = job.data;
-  logger.info({ chunkCount: chunkIds.length, model, jobId: job.id }, 'Processing embedding job');
+  const { chunkIds, model, correlationId } = job.data;
+  logger.info(
+    {
+      event: 'embedding.started',
+      outcome: 'start',
+      chunkCount: chunkIds.length,
+      model,
+      jobId: job.id,
+      correlationId,
+    },
+    'Processing embedding job',
+  );
 
   const chunks = await chunkRepository.listByIds(chunkIds);
   if (chunks.length === 0) {
+    logger.warn(
+      {
+        event: 'embedding.skipped',
+        outcome: 'failure',
+        chunkCount: 0,
+        correlationId,
+      },
+      'No chunks found for embedding job',
+    );
     return;
   }
 
@@ -41,5 +61,16 @@ export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void>
 
       await embeddingRepository.create(chunk.id, vector, result.model);
     }),
+  );
+
+  logger.info(
+    {
+      event: 'embedding.completed',
+      outcome: 'success',
+      chunkCount: chunks.length,
+      model: result.model,
+      correlationId,
+    },
+    'Embedding job completed',
   );
 }

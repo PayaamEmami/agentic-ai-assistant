@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { getLogger } from '@aaa/observability';
 import {
   ConnectorKindDto,
   GitHubRepoSelectionRequest,
@@ -8,10 +9,20 @@ import { ConnectorService } from '../services/connector-service.js';
 
 export async function connectorRoutes(app: FastifyInstance) {
   const connectorService = new ConnectorService();
+  const logger = getLogger({ component: 'connector-routes' });
 
   app.get('/connectors/google-docs/callback', async (request, reply) => {
     const query = request.query as { code?: string; state?: string; error?: string };
     if (query.error) {
+      logger.warn(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'google_docs',
+          reason: query.error,
+        },
+        'Google Docs callback returned an error',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           `/chat?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
@@ -19,6 +30,15 @@ export async function connectorRoutes(app: FastifyInstance) {
     }
 
     if (!query.code || !query.state) {
+      logger.warn(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'google_docs',
+          reason: 'missing_callback_parameters',
+        },
+        'Google Docs callback missing required parameters',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           '/chat?connector=google_docs&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
@@ -30,6 +50,15 @@ export async function connectorRoutes(app: FastifyInstance) {
       return reply.redirect(redirectUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Google Docs connection failed';
+      logger.error(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'google_docs',
+          error,
+        },
+        'Google Docs callback failed',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           `/chat?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
@@ -40,6 +69,15 @@ export async function connectorRoutes(app: FastifyInstance) {
   app.get('/connectors/github/callback', async (request, reply) => {
     const query = request.query as { code?: string; state?: string; error?: string };
     if (query.error) {
+      logger.warn(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'github',
+          reason: query.error,
+        },
+        'GitHub callback returned an error',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           `/chat?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
@@ -47,6 +85,15 @@ export async function connectorRoutes(app: FastifyInstance) {
     }
 
     if (!query.code || !query.state) {
+      logger.warn(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'github',
+          reason: 'missing_callback_parameters',
+        },
+        'GitHub callback missing required parameters',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           '/chat?connector=github&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
@@ -58,6 +105,15 @@ export async function connectorRoutes(app: FastifyInstance) {
       return reply.redirect(redirectUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'GitHub connection failed';
+      logger.error(
+        {
+          event: 'connector.oauth.callback_failed',
+          outcome: 'failure',
+          connectorKind: 'github',
+          error,
+        },
+        'GitHub callback failed',
+      );
       return reply.redirect(
         (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
           `/chat?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,

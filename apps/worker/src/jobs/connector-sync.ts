@@ -15,15 +15,36 @@ export interface ConnectorSyncJobData {
   connectorConfigId: string;
   userId: string;
   connectorKind: 'github' | 'google_docs';
+  correlationId: string;
 }
 
 export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promise<void> {
-  const { connectorConfigId, userId, connectorKind } = job.data;
-  logger.info({ userId, connectorKind, connectorConfigId, jobId: job.id }, 'Processing connector sync job');
+  const { connectorConfigId, userId, connectorKind, correlationId } = job.data;
+  logger.info(
+    {
+      event: 'connector.sync.started',
+      outcome: 'start',
+      userId,
+      connectorKind,
+      connectorConfigId,
+      jobId: job.id,
+      correlationId,
+    },
+    'Processing connector sync job',
+  );
 
   const config = await connectorConfigRepository.findById(connectorConfigId);
   if (!config) {
-    logger.warn({ connectorConfigId, jobId: job.id }, 'Connector config not found');
+    logger.warn(
+      {
+        event: 'connector.sync.skipped',
+        outcome: 'failure',
+        connectorConfigId,
+        jobId: job.id,
+        correlationId,
+      },
+      'Connector config not found',
+    );
     return;
   }
 
@@ -105,6 +126,7 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
         sourceId: source.id,
         userId,
         externalId: item.externalId,
+        correlationId,
       });
     }
 
@@ -127,6 +149,20 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       errorCount: result.errors.length,
       errorSummary,
     });
+    logger.info(
+      {
+        event: 'connector.sync.completed',
+        outcome: result.errors.length > 0 ? 'failure' : 'success',
+        connectorConfigId,
+        connectorKind,
+        correlationId,
+        itemsDiscovered: result.items.length,
+        itemsQueued,
+        itemsDeleted,
+        errorCount: result.errors.length,
+      },
+      'Connector sync finished',
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await connectorConfigRepository.updateStatus(connectorConfigId, 'failed', message);
@@ -143,6 +179,17 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       errorCount: 1,
       errorSummary: message,
     });
+    logger.error(
+      {
+        event: 'connector.sync.failed',
+        outcome: 'failure',
+        connectorConfigId,
+        connectorKind,
+        correlationId,
+        error,
+      },
+      'Connector sync failed',
+    );
     throw error;
   }
 }

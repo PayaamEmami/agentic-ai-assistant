@@ -10,12 +10,14 @@ import {
   encryptConnectorCredentials,
   decryptConnectorCredentials,
 } from '@aaa/connectors';
+import { addLogContext, getLogContext, getLogger } from '@aaa/observability';
 import { AppError } from '../lib/errors.js';
 import { enqueueConnectorSyncJob } from './connector-queue.js';
 
 type SupportedConnectorKind = 'github' | 'google_docs';
 
 interface OAuthStatePayload {
+  flowId: string;
   userId: string;
   kind: SupportedConnectorKind;
   issuedAt: number;
@@ -99,6 +101,9 @@ function verifyOAuthState(state: string): OAuthStatePayload {
   }
 
   const payload = JSON.parse(Buffer.from(encodedPayload, 'base64url').toString('utf8')) as OAuthStatePayload;
+  if (typeof payload.flowId !== 'string' || payload.flowId.trim().length === 0) {
+    throw new AppError(400, 'Connector state is missing flow context', 'CONNECTOR_INVALID_STATE');
+  }
   if (payload.expiresAt < Date.now()) {
     throw new AppError(400, 'Connector state has expired', 'CONNECTOR_STATE_EXPIRED');
   }
@@ -121,6 +126,7 @@ function buildConnectorRedirect(kind: SupportedConnectorKind, status: 'connected
 }
 
 async function exchangeGoogleCode(code: string) {
+  const logger = getLogger({ component: 'connector-service', provider: 'google' });
   const clientId = requireEnv('GOOGLE_CLIENT_ID');
   const clientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
   const redirectUri = requireEnv('GOOGLE_REDIRECT_URI');
@@ -141,8 +147,27 @@ async function exchangeGoogleCode(code: string) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
+    logger.error(
+      {
+        event: 'connector.oauth.token_exchange_failed',
+        outcome: 'failure',
+        provider: 'google',
+        statusCode: response.status,
+        detail: body.slice(0, 500),
+      },
+      'Google token exchange failed',
+    );
     throw new AppError(502, `Google token exchange failed: ${body || response.statusText}`, 'GOOGLE_TOKEN_EXCHANGE_FAILED');
   }
+
+  logger.info(
+    {
+      event: 'connector.oauth.token_exchanged',
+      outcome: 'success',
+      provider: 'google',
+    },
+    'Google token exchange succeeded',
+  );
 
   return response.json() as Promise<{
     access_token: string;
@@ -152,6 +177,7 @@ async function exchangeGoogleCode(code: string) {
 }
 
 async function exchangeGitHubCode(code: string) {
+  const logger = getLogger({ component: 'connector-service', provider: 'github' });
   const clientId = requireEnv('GITHUB_CLIENT_ID');
   const clientSecret = requireEnv('GITHUB_CLIENT_SECRET');
   const redirectUri = requireEnv('GITHUB_REDIRECT_URI');
@@ -172,6 +198,16 @@ async function exchangeGitHubCode(code: string) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
+    logger.error(
+      {
+        event: 'connector.oauth.token_exchange_failed',
+        outcome: 'failure',
+        provider: 'github',
+        statusCode: response.status,
+        detail: body.slice(0, 500),
+      },
+      'GitHub token exchange failed',
+    );
     throw new AppError(502, `GitHub token exchange failed: ${body || response.statusText}`, 'GITHUB_TOKEN_EXCHANGE_FAILED');
   }
 
@@ -181,16 +217,34 @@ async function exchangeGitHubCode(code: string) {
     error_description?: string;
   };
   if (!result.access_token) {
+    logger.error(
+      {
+        event: 'connector.oauth.token_exchange_failed',
+        outcome: 'failure',
+        provider: 'github',
+        detail: result.error_description ?? result.error ?? 'No access token returned',
+      },
+      'GitHub token exchange did not return an access token',
+    );
     throw new AppError(
       502,
       result.error_description ?? result.error ?? 'GitHub did not return an access token',
       'GITHUB_TOKEN_EXCHANGE_FAILED',
     );
   }
+  logger.info(
+    {
+      event: 'connector.oauth.token_exchanged',
+      outcome: 'success',
+      provider: 'github',
+    },
+    'GitHub token exchange succeeded',
+  );
   return result.access_token;
 }
 
 async function fetchGitHubAccount(accessToken: string) {
+  const logger = getLogger({ component: 'connector-service', provider: 'github' });
   const response = await fetch('https://api.github.com/user', {
     headers: {
       Accept: 'application/vnd.github+json',
@@ -202,9 +256,27 @@ async function fetchGitHubAccount(accessToken: string) {
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
+    logger.error(
+      {
+        event: 'connector.account_lookup.failed',
+        outcome: 'failure',
+        provider: 'github',
+        statusCode: response.status,
+        detail: body.slice(0, 500),
+      },
+      'GitHub account lookup failed',
+    );
     throw new AppError(502, `GitHub account lookup failed: ${body || response.statusText}`, 'GITHUB_ACCOUNT_LOOKUP_FAILED');
   }
 
+  logger.info(
+    {
+      event: 'connector.account_lookup.completed',
+      outcome: 'success',
+      provider: 'github',
+    },
+    'GitHub account lookup succeeded',
+  );
   return response.json() as Promise<{ login: string; id: number }>;
 }
 
@@ -274,12 +346,26 @@ export class ConnectorService {
   }
 
   async createAuthorizationUrl(userId: string, kind: SupportedConnectorKind): Promise<string> {
+    const flowId = crypto.randomUUID();
     const state = signOAuthState({
+      flowId,
       userId,
       kind,
       issuedAt: Date.now(),
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
+    getLogger({
+      component: 'connector-service',
+      userId,
+      connectorKind: kind,
+      correlationId: flowId,
+    }).info(
+      {
+        event: 'connector.oauth.started',
+        outcome: 'start',
+      },
+      'Connector authorization flow started',
+    );
 
     if (kind === 'google_docs') {
       const params = new URLSearchParams({
@@ -305,6 +391,11 @@ export class ConnectorService {
 
   async handleGoogleCallback(code: string, state: string): Promise<string> {
     const payload = verifyOAuthState(state);
+    addLogContext({
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'google_docs',
+    });
     const token = await exchangeGoogleCode(code);
     const existing = await connectorConfigRepository.findByUserAndKind(payload.userId, 'google_docs');
     const credentials = {
@@ -319,12 +410,29 @@ export class ConnectorService {
       encryptConnectorCredentials(credentials),
       existing?.settings ?? {},
     );
+    getLogger({
+      component: 'connector-service',
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'google_docs',
+    }).info(
+      {
+        event: 'connector.oauth.callback_completed',
+        outcome: 'success',
+      },
+      'Google Docs connector callback completed',
+    );
 
     return buildConnectorRedirect('google_docs', 'connected');
   }
 
   async handleGitHubCallback(code: string, state: string): Promise<string> {
     const payload = verifyOAuthState(state);
+    addLogContext({
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'github',
+    });
     const accessToken = await exchangeGitHubCode(code);
     const account = await fetchGitHubAccount(accessToken);
     const existing = await connectorConfigRepository.findByUserAndKind(payload.userId, 'github');
@@ -340,6 +448,18 @@ export class ConnectorService {
       encryptConnectorCredentials(credentials),
       existing?.settings ?? {},
     );
+    getLogger({
+      component: 'connector-service',
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'github',
+    }).info(
+      {
+        event: 'connector.oauth.callback_completed',
+        outcome: 'success',
+      },
+      'GitHub connector callback completed',
+    );
 
     return buildConnectorRedirect('github', 'connected');
   }
@@ -350,11 +470,26 @@ export class ConnectorService {
       throw new AppError(404, 'Connector is not connected', 'CONNECTOR_NOT_FOUND');
     }
 
+    const correlationId = getLogContext().correlationId ?? crypto.randomUUID();
     await enqueueConnectorSyncJob({
       connectorConfigId: config.id,
       connectorKind: kind,
       userId,
+      correlationId,
     });
+    getLogger({
+      component: 'connector-service',
+      userId,
+      connectorKind: kind,
+      connectorConfigId: config.id,
+      correlationId,
+    }).info(
+      {
+        event: 'connector.sync.requested',
+        outcome: 'accepted',
+      },
+      'Connector sync requested',
+    );
   }
 
   async disconnect(userId: string, kind: SupportedConnectorKind): Promise<{ ok: true }> {
@@ -381,9 +516,33 @@ export class ConnectorService {
         throw new AppError(404, 'Connector is not connected', 'CONNECTOR_NOT_FOUND');
       }
       await client.query('COMMIT');
+      getLogger({
+        component: 'connector-service',
+        userId,
+        connectorKind: kind,
+        connectorConfigId: config.id,
+      }).info(
+        {
+          event: 'connector.disconnected',
+          outcome: 'success',
+        },
+        'Connector disconnected',
+      );
       return { ok: true };
     } catch (error) {
       await client.query('ROLLBACK');
+      getLogger({
+        component: 'connector-service',
+        userId,
+        connectorKind: kind,
+      }).error(
+        {
+          event: 'connector.disconnect_failed',
+          outcome: 'failure',
+          error,
+        },
+        'Connector disconnect failed',
+      );
       throw error;
     } finally {
       client.release();
@@ -412,6 +571,19 @@ export class ConnectorService {
     );
 
     const repositories = await connector.listRepositories();
+    getLogger({
+      component: 'connector-service',
+      userId,
+      connectorKind: 'github',
+      connectorConfigId: config.id,
+    }).info(
+      {
+        event: 'connector.repositories_listed',
+        outcome: 'success',
+        repositoryCount: repositories.length,
+      },
+      'GitHub repositories listed',
+    );
     return repositories.map((repo) => ({
       ...repo,
       selected: selectedIds.has(repo.id),
@@ -436,5 +608,18 @@ export class ConnectorService {
       ...config.settings,
       selectedRepos: selected,
     });
+    getLogger({
+      component: 'connector-service',
+      userId,
+      connectorKind: 'github',
+      connectorConfigId: config.id,
+    }).info(
+      {
+        event: 'connector.repositories_saved',
+        outcome: 'success',
+        selectedRepoCount: selected.length,
+      },
+      'GitHub repositories saved',
+    );
   }
 }

@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { useAuthContext } from './auth-context';
 import { api, buildWebSocketUrl, type ConversationSummaryResponse } from './api-client';
+import { reportClientError } from './client-logging';
 
 export type ChatRole = 'user' | 'assistant' | 'system' | 'tool';
 
@@ -537,7 +538,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             setMessages(nextMessages);
           }
         } catch (detailError) {
-          console.error('Failed to refresh conversation after send', detailError);
+          void reportClientError({
+            event: 'client.chat.refresh_failed',
+            component: 'chat-context',
+            message: 'Failed to refresh conversation after send',
+            error: detailError,
+            conversationId: response.conversationId,
+          });
         }
 
         if (!hasAssistantMessage) {

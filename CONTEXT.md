@@ -120,8 +120,32 @@ Optional but useful depending on the feature area:
 - Google OAuth values
 - `MCP_SERVERS_CONFIG_PATH`
 - S3 / MinIO settings
+- `LOG_FORMAT` (`pretty` for local readability, `json` when you want machine-friendly output)
 
 See `.env.example` for the full template.
+
+## Logging Notes
+
+The repo uses a shared observability layer with structured logs across API, worker, connector HTTP calls, MCP, retrieval, OpenAI boundaries, and selected browser failures.
+
+Local logging defaults:
+
+- Console output is pretty-printed in development
+- NDJSON log files are written under `.logs/`
+- API logs go to `.logs/api.ndjson`
+- Worker logs go to `.logs/worker.ndjson`
+
+Useful fields to grep for:
+
+- `requestId`: one HTTP request
+- `correlationId`: one cross-boundary flow across API, queues, worker, and package calls
+- `voiceSessionId`: live voice session lifecycle
+- `connectorConfigId`, `connectorKind`, `conversationId`, `toolExecutionId`, `jobId`
+- `event`, `component`, `outcome`
+
+Important safety rule:
+
+- Logs are structured and sanitized by default. Do not intentionally add raw bearer tokens, OAuth codes, connector credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads to log objects.
 
 ## Change Routing Guide
 

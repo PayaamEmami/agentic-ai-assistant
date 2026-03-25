@@ -15,6 +15,7 @@
     "@aaa/connectors": "workspace:*",
     "@aaa/db": "workspace:*",
     "@aaa/mcp": "workspace:*",
+    "@aaa/observability": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",
     "bullmq": "^5.0.0",

@@ -148,7 +148,10 @@ export class RetrievalBridge {
     } catch (error) {
       logger.warn(
         {
-          error: error instanceof Error ? error.message : String(error),
+          event: 'retrieval.search_failed',
+          outcome: 'failure',
+          component: 'retrieval-bridge',
+          error,
           queryLength: trimmedQuery.length,
         },
         'Retrieval search failed',

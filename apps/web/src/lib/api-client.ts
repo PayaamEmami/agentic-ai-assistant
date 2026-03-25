@@ -57,7 +57,12 @@ async function requestPublic<T>(path: string, options?: RequestInit): Promise<T>
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body?.error?.message ?? 'Request failed', body?.error?.code);
+    throw new ApiError(
+      res.status,
+      body?.error?.message ?? 'Request failed',
+      body?.error?.code,
+      res.headers.get('x-request-id') ?? undefined,
+    );
   }
 
   return res.json() as Promise<T>;
@@ -77,7 +82,12 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiError(res.status, body?.error?.message ?? 'Request failed', body?.error?.code);
+    throw new ApiError(
+      res.status,
+      body?.error?.message ?? 'Request failed',
+      body?.error?.code,
+      res.headers.get('x-request-id') ?? undefined,
+    );
   }
 
   return res.json() as Promise<T>;
@@ -88,6 +98,7 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public code?: string,
+    public requestId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -249,7 +260,14 @@ export const api = {
           Authorization: `Bearer ${token}`,
         },
       });
-      if (!res.ok) throw new ApiError(res.status, 'Upload failed');
+      if (!res.ok) {
+        throw new ApiError(
+          res.status,
+          'Upload failed',
+          undefined,
+          res.headers.get('x-request-id') ?? undefined,
+        );
+      }
       return res.json() as Promise<{
         attachmentId: string;
         fileName: string;

@@ -30,7 +30,7 @@ export async function voiceRoutes(app: FastifyInstance) {
   app.post('/voice/session/answer', async (request, reply) => {
     const body =
       typeof request.body === 'object' && request.body !== null
-        ? (request.body as { conversationId?: unknown; sdp?: unknown })
+        ? (request.body as { conversationId?: unknown; sdp?: unknown; sessionId?: unknown })
         : null;
     if (
       !body ||
@@ -48,6 +48,9 @@ export async function voiceRoutes(app: FastifyInstance) {
       request.user!.id,
       body.conversationId,
       body.sdp,
+      typeof body.sessionId === 'string' && body.sessionId.trim().length > 0
+        ? body.sessionId
+        : undefined,
     );
 
     return reply.status(200).type('application/sdp').send(answer);

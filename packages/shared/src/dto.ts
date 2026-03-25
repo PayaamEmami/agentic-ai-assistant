@@ -292,3 +292,32 @@ export const DeleteMemoryResponse = z.object({
   ok: z.literal(true),
 });
 export type DeleteMemoryResponse = z.infer<typeof DeleteMemoryResponse>;
+
+export const ClientLogLevelDto = z.enum(['warn', 'error']);
+export type ClientLogLevelDto = z.infer<typeof ClientLogLevelDto>;
+
+export const ClientLogPayload = z.object({
+  level: ClientLogLevelDto,
+  event: z.string().min(1).max(120),
+  component: z.string().min(1).max(120),
+  message: z.string().min(1).max(4000),
+  requestId: z.string().max(120).optional(),
+  correlationId: z.string().max(120).optional(),
+  conversationId: z.string().uuid().optional(),
+  voiceSessionId: z.string().max(120).optional(),
+  context: z.record(z.unknown()).default({}),
+  url: z.string().max(2000).optional(),
+  userAgent: z.string().max(1000).optional(),
+  timestamp: z.string().datetime(),
+});
+export type ClientLogPayload = z.infer<typeof ClientLogPayload>;
+
+export const ClientLogRequest = z.object({
+  logs: z.array(ClientLogPayload).min(1).max(20),
+});
+export type ClientLogRequest = z.infer<typeof ClientLogRequest>;
+
+export const ClientLogResponse = z.object({
+  accepted: z.boolean(),
+});
+export type ClientLogResponse = z.infer<typeof ClientLogResponse>;

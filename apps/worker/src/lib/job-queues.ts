@@ -1,9 +1,11 @@
 import { Queue } from 'bullmq';
+import { getLogContext, getLogger } from '@aaa/observability';
 
 export interface ConnectorSyncJobData {
   connectorConfigId: string;
   userId: string;
   connectorKind: 'github' | 'google_docs';
+  correlationId: string;
 }
 
 export interface IngestionJobData {
@@ -12,11 +14,13 @@ export interface IngestionJobData {
   sourceId: string;
   userId: string;
   externalId: string;
+  correlationId: string;
 }
 
 export interface EmbeddingJobData {
   chunkIds: string[];
   model: string;
+  correlationId: string;
 }
 
 let connectorSyncQueue: Queue<ConnectorSyncJobData> | null = null;
@@ -60,26 +64,84 @@ function getEmbeddingQueue(): Queue<EmbeddingJobData> {
 }
 
 export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promise<void> {
-  await getConnectorSyncQueue().add('sync-connector', job, {
+  const correlationId =
+    job.correlationId || getLogContext().correlationId || `connector-${job.connectorConfigId}`;
+  const payload = {
+    ...job,
+    correlationId,
+  };
+
+  await getConnectorSyncQueue().add('sync-connector', payload, {
     jobId: `connector-sync:${job.connectorConfigId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
+  getLogger({
+    component: 'worker-job-queues',
+    connectorConfigId: job.connectorConfigId,
+    correlationId,
+  }).info(
+    {
+      event: 'connector.sync.enqueued',
+      outcome: 'accepted',
+      connectorKind: job.connectorKind,
+    },
+    'Connector sync job enqueued',
+  );
 }
 
 export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> {
-  await getIngestionQueue().add('ingest-document', job, {
+  const correlationId =
+    job.correlationId || getLogContext().correlationId || `ingestion-${job.documentId}`;
+  const payload = {
+    ...job,
+    correlationId,
+  };
+
+  await getIngestionQueue().add('ingest-document', payload, {
     jobId: `ingestion:${job.documentId}:${job.externalId}`,
     removeOnComplete: 100,
     removeOnFail: 500,
   });
+  getLogger({
+    component: 'worker-job-queues',
+    correlationId,
+    documentId: job.documentId,
+  }).info(
+    {
+      event: 'ingestion.enqueued',
+      outcome: 'accepted',
+      sourceId: job.sourceId,
+      externalId: job.externalId,
+    },
+    'Ingestion job enqueued',
+  );
 }
 
 export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> {
-  await getEmbeddingQueue().add('embed-chunks', job, {
+  const correlationId =
+    job.correlationId || getLogContext().correlationId || `embedding-${job.chunkIds[0] ?? 'batch'}`;
+  const payload = {
+    ...job,
+    correlationId,
+  };
+
+  await getEmbeddingQueue().add('embed-chunks', payload, {
     removeOnComplete: 100,
     removeOnFail: 500,
   });
+  getLogger({
+    component: 'worker-job-queues',
+    correlationId,
+  }).info(
+    {
+      event: 'embedding.enqueued',
+      outcome: 'accepted',
+      chunkCount: job.chunkIds.length,
+      model: job.model,
+    },
+    'Embedding job enqueued',
+  );
 }
 
 export async function closeJobQueues(): Promise<void> {

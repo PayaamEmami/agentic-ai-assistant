@@ -17,6 +17,7 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
+import { getLogContext } from '@aaa/observability';
 import { getConfiguredToolRegistry, type UnifiedToolDescriptor } from '@aaa/mcp';
 import {
   NATIVE_TOOL_DEFINITIONS,
@@ -479,8 +480,10 @@ export class ChatService {
     } catch (error) {
       logger.error(
         {
+          event: 'chat.generation_failed',
+          outcome: 'failure',
           conversationId: conversation.id,
-          error: error instanceof Error ? error.message : String(error),
+          error,
         },
         'Assistant generation failed',
       );
@@ -539,6 +542,8 @@ export class ChatService {
           toolName: toolCall.name,
           input: toolInput,
           conversationId: conversation.id,
+          correlationId:
+            getLogContext().correlationId ?? `chat-${conversation.id}-${toolExecution.id}`,
         });
 
         toolResultBlocks.push({
@@ -594,6 +599,8 @@ export class ChatService {
     if (verificationIssues.length > 0) {
       logger.warn(
         {
+          event: 'chat.verification_flagged',
+          outcome: 'failure',
           conversationId: conversation.id,
           verificationStatus,
           verificationIssues,
@@ -602,9 +609,19 @@ export class ChatService {
       );
     }
 
-    logger.info({ userId, conversationId: conversation.id }, 'Processing chat message');
+    logger.info(
+      {
+        event: 'chat.message_completed',
+        outcome: 'success',
+        userId,
+        conversationId: conversation.id,
+      },
+      'Processing chat message',
+    );
     logger.debug(
       {
+        event: 'chat.message_processed',
+        outcome: 'success',
         conversationId: conversation.id,
         historySize: recentMessages.length,
         attachmentCount: attachments.length,

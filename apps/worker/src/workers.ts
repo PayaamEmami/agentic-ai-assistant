@@ -1,5 +1,6 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
+import { withLogContext } from '@aaa/observability';
 import { handleIngestion } from './jobs/ingestion.js';
 import { handleEmbedding } from './jobs/embedding.js';
 import { handleConnectorSync } from './jobs/connector-sync.js';
@@ -19,18 +20,76 @@ export function createWorkers(redisUrl: string): Worker[] {
   const connection = parseRedisUrl(redisUrl);
 
   const workers = [
-    new Worker('ingestion', handleIngestion, { connection }),
-    new Worker('embedding', handleEmbedding, { connection }),
-    new Worker('connector-sync', handleConnectorSync, { connection }),
-    new Worker('tool-execution', handleToolExecution, { connection }),
+    new Worker('ingestion', (job) =>
+      withLogContext(
+        {
+          queue: job.queueName,
+          jobId: job.id ?? undefined,
+          correlationId: job.data.correlationId,
+          component: 'ingestion-worker',
+        },
+        () => handleIngestion(job),
+      ), { connection }),
+    new Worker('embedding', (job) =>
+      withLogContext(
+        {
+          queue: job.queueName,
+          jobId: job.id ?? undefined,
+          correlationId: job.data.correlationId,
+          component: 'embedding-worker',
+        },
+        () => handleEmbedding(job),
+      ), { connection }),
+    new Worker('connector-sync', (job) =>
+      withLogContext(
+        {
+          queue: job.queueName,
+          jobId: job.id ?? undefined,
+          correlationId: job.data.correlationId,
+          connectorKind: job.data.connectorKind,
+          component: 'connector-sync-worker',
+        },
+        () => handleConnectorSync(job),
+      ), { connection }),
+    new Worker('tool-execution', (job) =>
+      withLogContext(
+        {
+          queue: job.queueName,
+          jobId: job.id ?? undefined,
+          correlationId: job.data.correlationId,
+          conversationId: job.data.conversationId,
+          toolExecutionId: job.data.toolExecutionId,
+          component: 'tool-execution-worker',
+        },
+        () => handleToolExecution(job),
+      ), { connection }),
   ];
 
   for (const worker of workers) {
     worker.on('completed', (job) => {
-      logger.info({ jobId: job.id, queue: job.queueName }, 'Job completed');
+      logger.info(
+        {
+          event: 'worker.job.completed',
+          outcome: 'success',
+          jobId: job.id,
+          queue: job.queueName,
+          correlationId: job.data.correlationId,
+        },
+        'Job completed',
+      );
     });
     worker.on('failed', (job, err) => {
-      logger.error({ jobId: job?.id, queue: job?.queueName, error: err.message }, 'Job failed');
+      logger.error(
+        {
+          event: 'worker.job.failed',
+          outcome: 'failure',
+          jobId: job?.id,
+          queue: job?.queueName,
+          correlationId: job?.data?.correlationId,
+          error: err,
+        },
+        'Job failed',
+      );
     });
   }
 

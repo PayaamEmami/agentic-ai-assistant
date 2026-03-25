@@ -72,8 +72,10 @@ export async function startToolEventRelay(): Promise<void> {
     } catch (error) {
       logger.warn(
         {
-          error: error instanceof Error ? error.message : String(error),
-          payload: message.payload,
+          event: 'tool.event_relay.notification_failed',
+          outcome: 'failure',
+          component: 'tool-event-relay',
+          error,
         },
         'Failed to process tool event notification',
       );
@@ -81,7 +83,14 @@ export async function startToolEventRelay(): Promise<void> {
   });
 
   listenerClient = client;
-  logger.info('Tool event relay started');
+  logger.info(
+    {
+      event: 'tool.event_relay.started',
+      outcome: 'success',
+      component: 'tool-event-relay',
+    },
+    'Tool event relay started',
+  );
 }
 
 export async function stopToolEventRelay(): Promise<void> {
@@ -95,6 +104,13 @@ export async function stopToolEventRelay(): Promise<void> {
     listenerClient.removeAllListeners('notification');
     listenerClient.release();
     listenerClient = null;
-    logger.info('Tool event relay stopped');
+    logger.info(
+      {
+        event: 'tool.event_relay.stopped',
+        outcome: 'success',
+        component: 'tool-event-relay',
+      },
+      'Tool event relay stopped',
+    );
   }
 }
