@@ -8,14 +8,14 @@ services:
       POSTGRES_USER: aaa
       POSTGRES_PASSWORD: aaa_dev_password
     ports:
-      - "5432:5432"
+      - "${LOCAL_POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      - "${LOCAL_REDIS_PORT:-6379}:6379"
     volumes:
       - redisdata:/data
 
