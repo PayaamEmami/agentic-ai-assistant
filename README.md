@@ -2,31 +2,6 @@
 
 A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, MCP-based tool integration, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
 
-## Repository Structure
-
-```
-├── apps/
-│   ├── web/                  # Next.js frontend (App Router, React, Tailwind)
-│   ├── api/                  # Fastify backend (REST + WebSocket)
-│   └── worker/               # Background job processor (BullMQ)
-├── packages/
-│   ├── shared/               # Domain types, DTOs, event schemas, enums
-│   ├── ai/                   # Model gateway, prompts, agent orchestration
-│   ├── mcp/                  # MCP client adapter and tool registry
-│   ├── retrieval/            # Chunking, embeddings, indexing, search
-│   ├── connectors/           # GitHub and Google Docs connectors
-│   ├── memory/               # Preferences, personalization, memory
-│   ├── db/                   # Database schema, migrations, repositories
-│   └── config/               # Environment parsing, constants
-├── infra/
-│   ├── terraform/            # AWS infrastructure (VPC, RDS, ElastiCache, S3)
-│   └── kubernetes/           # K8s manifests (deployments, services, ingress)
-├── docker/                   # Dockerfiles and docker-compose for local dev
-├── .env.example              # Environment variable template
-├── pnpm-workspace.yaml       # pnpm workspace definition
-└── tsconfig.base.json        # Shared TypeScript configuration
-```
-
 ## Tech Stack
 
 | Layer | Technology |
@@ -36,146 +11,10 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 | Database | PostgreSQL 16 with pgvector |
 | Cache/Queue | Redis 7, BullMQ |
 | Storage | AWS S3 |
-| AI | OpenAI API (GPT-4o, text-embedding-3-small) |
+| AI | OpenAI API |
 | Tools | MCP (Model Context Protocol) |
 | Infrastructure | AWS, Terraform, Docker, Kubernetes |
 | Monorepo | pnpm workspaces |
-
-## Prerequisites
-
-- **Node.js** >= 20
-- **pnpm** >= 9 (`corepack enable && corepack prepare pnpm@9.15.4 --activate`)
-- **Docker** and **Docker Compose** (for local services)
-- **OpenAI API key**
-- **WSL or Git Bash on Windows** recommended for local app startup
-
-## Quick Start
-
-1. Copy `.env.example` to `.env`
-2. Add your real local values to `.env`
-3. Run:
-
-```bash
-pnpm dev:local
-```
-
-That command handles the local startup flow for you.
-
-Then open:
-- **Web**: http://localhost:3000
-- **API health**: http://localhost:3001/health
-
-For local testing, you can use the built-in **development login** from the home page when `NODE_ENV` is not `production`.
-
-## Local Development Setup
-
-### What You Need Installed
-
-- `OPENAI_API_KEY`
-- `JWT_SECRET`
-- `CONNECTOR_CREDENTIALS_SECRET`
-- GitHub and Google OAuth values if you want connectors locally
-
-### One-Time Setup
-
-```bash
-git clone https://github.com/your-org/agentic-ai-assistant.git
-cd agentic-ai-assistant
-cp .env.example .env
-# Edit .env and add your real values
-
-corepack enable
-corepack prepare pnpm@9.15.4 --activate
-pnpm install
-```
-
-Optional connector values:
-- `GITHUB_CLIENT_ID`
-- `GITHUB_CLIENT_SECRET`
-- `GITHUB_REDIRECT_URI`
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
-
-### Start The App
-
-```bash
-pnpm dev:local
-```
-
-### Verify It’s Working
-
-- Open `http://localhost:3000`
-- Use development login or create an account
-- Send a test message
-- Optionally upload a text or markdown file with RAG indexing enabled
-
-## Required Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `OPENAI_API_KEY` | Yes | OpenAI API key |
-| `REDIS_URL` | No | Redis connection string (default: `redis://localhost:6379`) |
-| `API_HOST` | No | API bind host (default: `0.0.0.0`) |
-| `API_PORT` | No | API port (default: `3001`) |
-| `S3_BUCKET` | No | S3 bucket name (default: `aaa-uploads`) |
-| `S3_REGION` | No | AWS region (default: `us-east-1`) |
-| `S3_ENDPOINT` | No | S3 endpoint override (for local MinIO) |
-| `OPENAI_MODEL` | No | Chat model (default: `gpt-5-mini`) |
-| `OPENAI_EMBEDDING_MODEL` | No | Embedding model (default: `text-embedding-3-small`) |
-| `OPENAI_REALTIME_MODEL` | No | Realtime speech-to-speech model for live voice mode (default: `gpt-realtime-1.5`) |
-| `OPENAI_REALTIME_VOICE` | No | Voice preset for live voice mode (default: `marin`) |
-| `MCP_SERVERS_CONFIG_PATH` | No | Path to MCP server config JSON |
-| `WEB_BASE_URL` | No | Frontend base URL for OAuth callback redirects (default: `http://localhost:3000`) |
-| `CONNECTOR_CREDENTIALS_SECRET` | No | Secret used to encrypt persisted connector credentials |
-| `GITHUB_CLIENT_ID` | No | GitHub OAuth app client ID |
-| `GITHUB_CLIENT_SECRET` | No | GitHub OAuth app client secret |
-| `GITHUB_REDIRECT_URI` | No | GitHub OAuth callback URL |
-| `GOOGLE_CLIENT_ID` | No | Google OAuth client ID |
-| `GOOGLE_CLIENT_SECRET` | No | Google OAuth client secret |
-| `GOOGLE_REDIRECT_URI` | No | Google OAuth callback URL |
-
-See `.env.example` for the full template.
-
-## Infrastructure
-
-### Terraform (`infra/terraform/`)
-
-AWS infrastructure definitions using modular Terraform:
-
-- **networking** — VPC with public/private subnets across two AZs
-- **database** — RDS PostgreSQL 16 with encryption
-- **cache** — ElastiCache Redis 7
-- **storage** — S3 bucket with versioning and encryption
-
-To plan infrastructure:
-
-```bash
-cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
-terraform init
-terraform plan
-```
-
-### Kubernetes (`infra/kubernetes/`)
-
-Deployment manifests for:
-
-- API (2 replicas, health probes)
-- Web frontend (2 replicas)
-- Worker (1 replica)
-- ConfigMap for non-sensitive configuration
-- Secrets template (use sealed-secrets or external-secrets-operator in production)
-- Nginx ingress routing
-
-Apply to a cluster:
-
-```bash
-kubectl apply -f infra/kubernetes/namespace.yaml
-kubectl apply -f infra/kubernetes/
-```
 
 ## Architecture Overview
 
@@ -223,6 +62,118 @@ Current live voice behavior:
 - Automatic turn detection and interruption are enabled
 - Live voice is conversational-only in v1
 - Tools, approvals, MCP actions, and retrieval stay available in text chat
+
+## Infrastructure
+
+### Terraform (`infra/terraform/`)
+
+AWS infrastructure definitions using modular Terraform:
+
+- **networking** — VPC with public/private subnets across two AZs
+- **database** — RDS PostgreSQL 16 with encryption
+- **cache** — ElastiCache Redis 7
+- **storage** — S3 bucket with versioning and encryption
+
+To plan infrastructure:
+
+```bash
+cd infra/terraform
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values
+terraform init
+terraform plan
+```
+
+### Kubernetes (`infra/kubernetes/`)
+
+Deployment manifests for:
+
+- API (2 replicas, health probes)
+- Web frontend (2 replicas)
+- Worker (1 replica)
+- ConfigMap for non-sensitive configuration
+- Secrets template (use sealed-secrets or external-secrets-operator in production)
+- Nginx ingress routing
+
+Apply to a cluster:
+
+```bash
+kubectl apply -f infra/kubernetes/namespace.yaml
+kubectl apply -f infra/kubernetes/
+```
+
+## Repository Structure
+
+```
+├── apps/
+│   ├── web/                  # Next.js frontend (App Router, React, Tailwind)
+│   ├── api/                  # Fastify backend (REST + WebSocket)
+│   └── worker/               # Background job processor (BullMQ)
+├── packages/
+│   ├── shared/               # Domain types, DTOs, event schemas, enums
+│   ├── ai/                   # Model gateway, prompts, agent orchestration
+│   ├── mcp/                  # MCP client adapter and tool registry
+│   ├── retrieval/            # Chunking, embeddings, indexing, search
+│   ├── connectors/           # GitHub and Google Docs connectors
+│   ├── memory/               # Preferences, personalization, memory
+│   ├── db/                   # Database schema, migrations, repositories
+│   └── config/               # Environment parsing, constants
+├── infra/
+│   ├── terraform/            # AWS infrastructure (VPC, RDS, ElastiCache, S3)
+│   └── kubernetes/           # K8s manifests (deployments, services, ingress)
+├── docker/                   # Dockerfiles and docker-compose for local dev
+├── .env.example              # Environment variable template
+├── pnpm-workspace.yaml       # pnpm workspace definition
+└── tsconfig.base.json        # Shared TypeScript configuration
+```
+
+## Local Development Setup
+
+### Prerequisites
+
+- **Node.js** >= 20
+- **pnpm** >= 9 (`corepack enable && corepack prepare pnpm@9.15.4 --activate`)
+- **Docker** and **Docker Compose** (for local services)
+- **OpenAI API key**
+- **WSL or Git Bash on Windows** recommended for local app startup
+
+### Clone The Repository
+
+```bash
+git clone https://github.com/your-org/agentic-ai-assistant.git
+cd agentic-ai-assistant
+```
+
+### Configure The Environment
+
+```bash
+cp .env.example .env
+# Edit .env and add your real values
+```
+
+See `.env.example` for the full template.
+
+### Install Dependencies
+
+```bash
+corepack enable
+corepack prepare pnpm@9.15.4 --activate
+pnpm install
+```
+
+### Start The App
+
+```bash
+pnpm dev:local
+```
+
+That command handles the local startup flow for you.
+
+### Verify It’s Working
+
+- Open `http://localhost:3000`
+- Check API health at `http://localhost:3001/health`
+- Use development login from the home page when `NODE_ENV` is not `production`
 
 ## License
 
