@@ -14,7 +14,6 @@ import { PersonalizationService } from './personalization-service.js';
 
 const HISTORY_LIMIT = 12;
 const MAX_HISTORY_CHARS = 1_800;
-const MAX_OUTPUT_TOKENS = 700;
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 
@@ -122,7 +121,6 @@ function buildRealtimeSessionConfig(
     model,
     instructions,
     tool_choice: 'none',
-    max_response_output_tokens: MAX_OUTPUT_TOKENS,
     audio: {
       input: {
         noise_reduction: {

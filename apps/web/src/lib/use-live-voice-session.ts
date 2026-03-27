@@ -88,6 +88,12 @@ export function useLiveVoiceSession({
   const pendingAssistantTranscriptRef = useRef('');
   const responseDoneRef = useRef(false);
   const isPersistingTurnRef = useRef(false);
+  const phaseRef = useRef<VoicePhase>('idle');
+
+  const setVoicePhase = (nextPhase: VoicePhase) => {
+    phaseRef.current = nextPhase;
+    setPhase(nextPhase);
+  };
 
   const resetPendingTurn = () => {
     pendingUserTranscriptRef.current = '';
@@ -141,7 +147,14 @@ export function useLiveVoiceSession({
     channel.send(JSON.stringify(event));
   };
 
+  const canInterruptAssistant = () =>
+    phaseRef.current === 'thinking' || phaseRef.current === 'speaking';
+
   const interruptAssistant = () => {
+    if (!canInterruptAssistant()) {
+      return;
+    }
+
     sendRealtimeEvent({ type: 'response.cancel' });
     sendRealtimeEvent({ type: 'output_audio_buffer.clear' });
     pendingAssistantTranscriptRef.current = '';
@@ -151,7 +164,9 @@ export function useLiveVoiceSession({
 
   const teardown = () => {
     try {
-      interruptAssistant();
+      if (canInterruptAssistant()) {
+        interruptAssistant();
+      }
     } catch {
       // Ignore teardown-time realtime errors.
     }
@@ -179,7 +194,7 @@ export function useLiveVoiceSession({
     setUserCaption('');
     setAssistantCaption('');
     setConnectionLabel('Voice mode is off.');
-    setPhase('idle');
+    setVoicePhase('idle');
   };
 
   useEffect(() => teardown, []);
@@ -189,16 +204,18 @@ export function useLiveVoiceSession({
       case 'session.created':
       case 'session.updated':
         setConnectionLabel('Connected. Start speaking when you are ready.');
-        setPhase('listening');
+        setVoicePhase('listening');
         return;
       case 'input_audio_buffer.speech_started':
-        interruptAssistant();
-        setPhase('listening');
+        if (canInterruptAssistant()) {
+          interruptAssistant();
+        }
+        setVoicePhase('listening');
         setConnectionLabel('Listening...');
         setUserCaption('');
         return;
       case 'input_audio_buffer.speech_stopped':
-        setPhase('thinking');
+        setVoicePhase('thinking');
         setConnectionLabel('Thinking...');
         return;
       case 'conversation.item.input_audio_transcription.delta': {
@@ -219,7 +236,7 @@ export function useLiveVoiceSession({
       case 'response.audio_transcript.delta': {
         const delta = typeof event.delta === 'string' ? event.delta : '';
         if (delta) {
-          setPhase('speaking');
+          setVoicePhase('speaking');
           setConnectionLabel('Assistant is speaking...');
           setAssistantCaption((previous) => previous + delta);
         }
@@ -236,12 +253,12 @@ export function useLiveVoiceSession({
       }
       case 'response.done':
         responseDoneRef.current = true;
-        setPhase('listening');
+        setVoicePhase('listening');
         setConnectionLabel('Listening...');
         await maybePersistTurn();
         return;
       case 'output_audio_buffer.cleared':
-        setPhase('listening');
+        setVoicePhase('listening');
         setConnectionLabel('Listening...');
         return;
       case 'error': {
@@ -252,6 +269,11 @@ export function useLiveVoiceSession({
           typeof event.error.message === 'string'
             ? event.error.message
             : 'Live voice mode ran into an error.';
+
+        if (message === 'Cancellation failed: no active response found') {
+          return;
+        }
+
         void reportClientError({
           event: 'client.voice.realtime_error',
           component: 'use-live-voice-session',
@@ -261,7 +283,7 @@ export function useLiveVoiceSession({
           context: { event },
         });
         setError(message);
-        setPhase('error');
+        setVoicePhase('error');
         setConnectionLabel(message);
         return;
       }
@@ -287,7 +309,7 @@ export function useLiveVoiceSession({
         message: 'Live voice mode is not supported in this browser.',
       });
       setError('Live voice mode is not supported in this browser.');
-      setPhase('error');
+      setVoicePhase('error');
       setConnectionLabel('Live voice mode is not supported in this browser.');
       return;
     }
@@ -295,7 +317,7 @@ export function useLiveVoiceSession({
     setError(null);
     setUserCaption('');
     setAssistantCaption('');
-    setPhase('connecting');
+    setVoicePhase('connecting');
     setConnectionLabel('Connecting live voice...');
 
     try {
@@ -344,7 +366,7 @@ export function useLiveVoiceSession({
         sdp: answerSdp,
       });
 
-      setPhase('listening');
+      setVoicePhase('listening');
       setConnectionLabel('Connected. Start speaking when you are ready.');
     } catch (startError) {
       const voiceSessionId = sessionIdRef.current ?? undefined;
@@ -364,7 +386,7 @@ export function useLiveVoiceSession({
           ? startError.message
           : 'Failed to start live voice mode.';
       setError(message);
-      setPhase('error');
+      setVoicePhase('error');
       setConnectionLabel(message);
     }
   };
