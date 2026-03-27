@@ -86,8 +86,7 @@ if ! docker info >/dev/null 2>&1; then
 fi
 
 if ! command -v pnpm >/dev/null 2>&1; then
-  echo "pnpm is required. Run:"
-  echo "  corepack enable && corepack prepare pnpm@9.15.4 --activate"
+  echo "pnpm is required. Install it, then re-run this command."
   exit 1
 fi
 

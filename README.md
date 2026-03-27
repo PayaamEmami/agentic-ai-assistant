@@ -132,7 +132,7 @@ kubectl apply -f infra/kubernetes/
 ### Prerequisites
 
 - **Node.js** >= 20
-- **pnpm** >= 9 (`corepack enable && corepack prepare pnpm@9.15.4 --activate`)
+- **pnpm** >= 9
 - **Docker** and **Docker Compose** (for local services)
 - **OpenAI API key**
 - **WSL or Git Bash on Windows** recommended for local app startup
@@ -156,8 +156,6 @@ See `.env.example` for the full template.
 ### Install Dependencies
 
 ```bash
-corepack enable
-corepack prepare pnpm@9.15.4 --activate
 pnpm install
 ```
 

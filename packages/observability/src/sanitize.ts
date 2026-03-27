@@ -33,6 +33,10 @@ function sanitizeString(value: string): string {
   return value;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 export function sanitizeForLogs<T>(value: T, depth = 0): T {
   if (depth > 4) {
     return '[Truncated]' as T;
@@ -76,6 +80,45 @@ export function sanitizeForLogs<T>(value: T, depth = 0): T {
 
 export function serializeError(error: unknown): SerializedError {
   if (!(error instanceof Error)) {
+    if (isRecord(error)) {
+      const name =
+        typeof error.name === 'string' && error.name.trim().length > 0
+          ? sanitizeString(error.name)
+          : 'UnknownError';
+      const message =
+        typeof error.message === 'string' && error.message.trim().length > 0
+          ? sanitizeString(error.message)
+          : 'Non-Error value thrown';
+
+      const result: SerializedError = { name, message };
+
+      if (typeof error.code === 'string') {
+        result.code = sanitizeString(error.code);
+      }
+
+      if (typeof error.statusCode === 'number') {
+        result.statusCode = error.statusCode;
+      }
+
+      if (typeof error.stack === 'string') {
+        result.stack = sanitizeString(error.stack);
+      }
+
+      if (typeof error.cause !== 'undefined') {
+        result.cause = serializeError(error.cause);
+      }
+
+      const details = Object.fromEntries(
+        Object.entries(error).filter(([key]) => !['name', 'message', 'code', 'statusCode', 'stack', 'cause'].includes(key)),
+      );
+
+      if (Object.keys(details).length > 0) {
+        result.details = sanitizeForLogs(details);
+      }
+
+      return result;
+    }
+
     return {
       name: 'UnknownError',
       message: typeof error === 'string' ? sanitizeString(error) : String(error),
@@ -94,6 +137,11 @@ export function serializeError(error: unknown): SerializedError {
   const maybeCode = (error as { code?: unknown }).code;
   if (typeof maybeCode === 'string') {
     result.code = maybeCode;
+  }
+
+  const maybeStatusCode = (error as { statusCode?: unknown }).statusCode;
+  if (typeof maybeStatusCode === 'number') {
+    result.statusCode = maybeStatusCode;
   }
 
   const maybeCause = (error as { cause?: unknown }).cause;

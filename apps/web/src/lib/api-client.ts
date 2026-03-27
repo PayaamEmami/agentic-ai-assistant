@@ -45,14 +45,25 @@ async function getAuthToken(): Promise<string> {
   return token;
 }
 
+function buildHeaders(options?: RequestInit, authToken?: string): Headers {
+  const headers = new Headers(options?.headers);
+
+  if (authToken) {
+    headers.set('Authorization', `Bearer ${authToken}`);
+  }
+
+  if (options?.body != null && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+
+  return headers;
+}
+
 async function requestPublic<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
+    headers: buildHeaders(options),
   });
 
   if (!res.ok) {
@@ -73,11 +84,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
   const res = await fetch(url, {
     ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-      ...options?.headers,
-    },
+    headers: buildHeaders(options, token),
   });
 
   if (!res.ok) {

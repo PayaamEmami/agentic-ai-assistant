@@ -34,7 +34,9 @@ export interface SerializedError {
   message: string;
   stack?: string;
   code?: string;
+  statusCode?: number;
   cause?: SerializedError;
+  details?: Record<string, unknown>;
 }
 
 export interface LogStore {
