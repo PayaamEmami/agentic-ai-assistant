@@ -69,7 +69,7 @@ export function loadConfig(): AppConfig {
     openaiRealtimeVoice: process.env.OPENAI_REALTIME_VOICE ?? 'marin',
     jwtSecret,
     s3Bucket: process.env.S3_BUCKET ?? 'aaa-uploads',
-    s3Region: process.env.S3_REGION ?? 'us-east-1',
+    s3Region: process.env.S3_REGION ?? 'us-west-1',
     s3Endpoint: process.env.S3_ENDPOINT,
     webBaseUrl: process.env.WEB_BASE_URL ?? 'http://localhost:3000',
     connectorCredentialsSecret:

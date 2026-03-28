@@ -11,7 +11,7 @@ data:
   API_PORT: "3001"
   API_URL: "http://aaa-api"
   S3_BUCKET: "aaa-uploads"
-  S3_REGION: "us-east-1"
+  S3_REGION: "us-west-1"
   OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
   OTEL_SERVICE_NAMESPACE: "aaa"
   WORKER_OBSERVABILITY_HOST: "0.0.0.0"

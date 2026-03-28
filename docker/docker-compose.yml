@@ -37,7 +37,7 @@ services:
       LOG_FILE_ENABLED: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
       S3_BUCKET: aaa-uploads
-      S3_REGION: us-east-1
+      S3_REGION: us-west-1
     depends_on:
       - postgres
       - redis

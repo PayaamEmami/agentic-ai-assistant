@@ -11,7 +11,7 @@ terraform {
   backend "s3" {
     bucket = "aaa-terraform-state"
     key    = "infra/terraform.tfstate"
-    region = "us-east-1"
+    region = "us-west-1"
     # TODO: enable DynamoDB locking for production
   }
 }
