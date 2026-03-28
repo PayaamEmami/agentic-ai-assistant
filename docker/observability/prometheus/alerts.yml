@@ -1,0 +1,34 @@
+groups:
+  - name: aaa-alerts
+    rules:
+      - alert: ApiReadinessFailed
+        expr: aaa_api_readiness_state{dependency="database"} == 0 or aaa_api_readiness_state{dependency="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: API readiness failed
+
+      - alert: WorkerReadinessFailed
+        expr: aaa_worker_readiness_state{dependency="database"} == 0 or aaa_worker_readiness_state{dependency="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker readiness failed
+
+      - alert: WorkerHeartbeatStalled
+        expr: time() - aaa_worker_heartbeat_timestamp_seconds > 90
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: Worker heartbeat stalled
+
+      - alert: ApiHigh5xxRate
+        expr: sum(rate(aaa_api_http_requests_total{outcome="failure",status_class="5xx"}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: API 5xx rate elevated

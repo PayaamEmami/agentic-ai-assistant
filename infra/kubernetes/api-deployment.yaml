@@ -14,6 +14,10 @@ spec:
     metadata:
       labels:
         app: aaa-api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "3001"
     spec:
       containers:
         - name: api
@@ -34,13 +38,13 @@ spec:
               cpu: "500m"
           readinessProbe:
             httpGet:
-              path: /health
+              path: /health/ready
               port: 3001
             initialDelaySeconds: 5
             periodSeconds: 10
           livenessProbe:
             httpGet:
-              path: /health
+              path: /health/live
               port: 3001
             initialDelaySeconds: 15
             periodSeconds: 20

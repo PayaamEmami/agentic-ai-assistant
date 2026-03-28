@@ -1,14 +1,17 @@
 import { closePool, getPool } from '@aaa/db';
 import { closeConfiguredToolRegistry } from '@aaa/mcp';
+import { shutdownTracing } from '@aaa/observability';
 import { buildServer } from './server.js';
 import { loadConfig } from './config.js';
 import { logger } from './lib/logger.js';
+import { initializeApiTelemetry } from './lib/telemetry.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
 import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
 import { closeConnectorSyncQueue } from './services/connector-queue.js';
 
 async function main() {
   const config = loadConfig();
+  await initializeApiTelemetry();
   getPool();
   await startToolEventRelay();
   const server = await buildServer(config);
@@ -37,6 +40,7 @@ async function main() {
       await closeConfiguredToolRegistry();
       await stopToolEventRelay();
       await closePool();
+      await shutdownTracing();
       logger.info(
         {
           event: 'api.stopped',
@@ -95,6 +99,7 @@ async function main() {
     await closeConfiguredToolRegistry();
     await stopToolEventRelay();
     await closePool();
+    await shutdownTracing();
     process.exit(1);
   }
 }

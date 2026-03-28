@@ -5,7 +5,7 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "pnpm -r --parallel --filter './apps/*' run dev",
+    "dev": "pnpm --parallel --filter @aaa/api --filter @aaa/web --filter @aaa/worker run dev",
     "dev:local": "bash ./scripts/dev-local.sh",
     "build": "pnpm -r run build",
     "lint": "eslint .",

@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getLogContext, getLogger } from '@aaa/observability';
+import { getLogContext, getLogger, withSpan } from '@aaa/observability';
 
 export interface ConnectorSyncJobData {
   connectorConfigId: string;
@@ -71,11 +71,19 @@ export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promis
     correlationId,
   };
 
-  await getConnectorSyncQueue().add('sync-connector', payload, {
-    jobId: `connector-sync:${job.connectorConfigId}`,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await withSpan(
+    'queue.connector_sync.enqueue',
+    {
+      'aaa.queue.name': 'connector-sync',
+      'aaa.connector_config.id': job.connectorConfigId,
+    },
+    () =>
+      getConnectorSyncQueue().add('sync-connector', payload, {
+        jobId: `connector-sync:${job.connectorConfigId}`,
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      }),
+  );
   getLogger({
     component: 'worker-job-queues',
     connectorConfigId: job.connectorConfigId,
@@ -98,11 +106,19 @@ export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> 
     correlationId,
   };
 
-  await getIngestionQueue().add('ingest-document', payload, {
-    jobId: `ingestion:${job.documentId}:${job.externalId}`,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await withSpan(
+    'queue.ingestion.enqueue',
+    {
+      'aaa.queue.name': 'ingestion',
+      'aaa.document.id': job.documentId,
+    },
+    () =>
+      getIngestionQueue().add('ingest-document', payload, {
+        jobId: `ingestion:${job.documentId}:${job.externalId}`,
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      }),
+  );
   getLogger({
     component: 'worker-job-queues',
     correlationId,
@@ -126,10 +142,17 @@ export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> 
     correlationId,
   };
 
-  await getEmbeddingQueue().add('embed-chunks', payload, {
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await withSpan(
+    'queue.embedding.enqueue',
+    {
+      'aaa.queue.name': 'embedding',
+    },
+    () =>
+      getEmbeddingQueue().add('embed-chunks', payload, {
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      }),
+  );
   getLogger({
     component: 'worker-job-queues',
     correlationId,

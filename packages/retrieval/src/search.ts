@@ -1,4 +1,4 @@
-import { getLogger } from '@aaa/observability';
+import { getLogger, withSpan } from '@aaa/observability';
 import type { SearchFilters, SearchQuery, SearchResult } from './types.js';
 
 export interface SearchService {
@@ -32,13 +32,21 @@ export class VectorSearchService implements SearchService {
       return [];
     }
 
+    const dependencies = this.dependencies;
     const limit = normalizeLimit(query.limit);
-    const queryEmbedding = await this.dependencies.embedQuery(text);
+    const queryEmbedding = await dependencies.embedQuery(text);
     if (queryEmbedding.length === 0) {
       return [];
     }
 
-    const results = await this.dependencies.searchByVector(queryEmbedding, limit, query.filters);
+    const results = await withSpan(
+      'retrieval.vector_search',
+      {
+        'aaa.retrieval.limit': limit,
+        'aaa.retrieval.query_length': text.length,
+      },
+      () => dependencies.searchByVector(queryEmbedding, limit, query.filters),
+    );
     logger.debug(
       {
         event: 'retrieval.vector_search.completed',

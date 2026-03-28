@@ -4,6 +4,7 @@ import { Writable } from 'node:stream';
 import pino, { multistream, type Logger } from 'pino';
 import { sanitizeForLogs, serializeError } from './sanitize.js';
 import { setDefaultLogger } from './context.js';
+import { getActiveTraceMetadata } from './tracing.js';
 import type { ServiceLoggerOptions } from './types.js';
 
 const REDACT_PATHS = [
@@ -33,6 +34,15 @@ function resolveFormat(format?: 'pretty' | 'json'): 'pretty' | 'json' {
   }
 
   return process.env.NODE_ENV === 'development' ? 'pretty' : 'json';
+}
+
+function isFileLoggingEnabled(): boolean {
+  const raw = process.env['LOG_FILE_ENABLED'];
+  if (typeof raw === 'string') {
+    return raw === '1' || raw.toLowerCase() === 'true';
+  }
+
+  return process.env.NODE_ENV !== 'production';
 }
 
 function levelLabel(level: unknown): string {
@@ -67,6 +77,8 @@ function formatPrettyLine(raw: string): string {
       typeof parsed.outcome === 'string' ? `outcome=${parsed.outcome}` : null,
       typeof parsed.requestId === 'string' ? `requestId=${parsed.requestId}` : null,
       typeof parsed.correlationId === 'string' ? `correlationId=${parsed.correlationId}` : null,
+      typeof parsed.traceId === 'string' ? `traceId=${parsed.traceId}` : null,
+      typeof parsed.spanId === 'string' ? `spanId=${parsed.spanId}` : null,
       typeof parsed.userId === 'string' ? `userId=${parsed.userId}` : null,
       typeof parsed.jobId === 'string' ? `jobId=${parsed.jobId}` : null,
     ].filter((entry): entry is string => entry !== null);
@@ -83,6 +95,8 @@ function formatPrettyLine(raw: string): string {
     delete rest.outcome;
     delete rest.requestId;
     delete rest.correlationId;
+    delete rest.traceId;
+    delete rest.spanId;
     delete rest.userId;
     delete rest.jobId;
 
@@ -110,22 +124,23 @@ class PrettyConsoleStream extends Writable {
 }
 
 function createLoggerDestination(service: string, format: 'pretty' | 'json', logDirectory: string) {
-  fs.mkdirSync(logDirectory, { recursive: true });
-  const fileStream = fs.createWriteStream(path.join(logDirectory, `${service}.ndjson`), {
-    flags: 'a',
-  });
+  const streams: Array<{ stream: Writable | NodeJS.WriteStream }> = [];
 
   if (format === 'json') {
-    return multistream([
-      { stream: process.stdout },
-      { stream: fileStream },
-    ]);
+    streams.push({ stream: process.stdout });
+  } else {
+    streams.push({ stream: new PrettyConsoleStream() });
   }
 
-  return multistream([
-    { stream: new PrettyConsoleStream() },
-    { stream: fileStream },
-  ]);
+  if (isFileLoggingEnabled()) {
+    fs.mkdirSync(logDirectory, { recursive: true });
+    const fileStream = fs.createWriteStream(path.join(logDirectory, `${service}.ndjson`), {
+      flags: 'a',
+    });
+    streams.push({ stream: fileStream });
+  }
+
+  return multistream(streams);
 }
 
 export function createServiceLogger(options: ServiceLoggerOptions): Logger {
@@ -151,7 +166,11 @@ export function createServiceLogger(options: ServiceLoggerOptions): Logger {
       hooks: {
         logMethod(args, method) {
           if (args.length > 0 && typeof args[0] === 'object' && args[0] !== null) {
-            args[0] = sanitizeForLogs(args[0]);
+            const traceMetadata = getActiveTraceMetadata();
+            args[0] = sanitizeForLogs({
+              ...args[0],
+              ...(traceMetadata.traceId ? traceMetadata : {}),
+            });
           }
           method.apply(this, args);
         },

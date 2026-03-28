@@ -173,6 +173,26 @@ That command handles the local startup flow for you.
 - Check API health at `http://localhost:3001/health`
 - Use development login from the home page when `NODE_ENV` is not `production`
 
+### Local Observability
+
+`pnpm dev:local` also starts the local observability stack. Once it is up, you can inspect it here:
+
+- App UI: `http://localhost:3000`
+- API: `http://localhost:3001`
+- API health: `http://localhost:3001/health`
+- API liveness: `http://localhost:3001/health/live`
+- API readiness: `http://localhost:3001/health/ready`
+- API metrics: `http://localhost:3001/metrics`
+- Worker liveness: `http://localhost:9464/health/live`
+- Worker readiness: `http://localhost:9464/health/ready`
+- Worker metrics: `http://localhost:9464/metrics`
+- Grafana dashboards: `http://localhost:3005`
+- Prometheus: `http://localhost:9090`
+- Loki: `http://localhost:3100`
+- Tempo: `http://localhost:3200`
+
+Grafana is provisioned with the local Prometheus, Loki, and Tempo datasources plus the repo dashboards under `docker/observability/grafana/dashboards/`.
+
 ## License
 
 See [LICENSE](./LICENSE).

@@ -1,5 +1,13 @@
 import OpenAI from 'openai';
-import { getLogger } from '@aaa/observability';
+import {
+  estimateOpenAiCost,
+  getLogger,
+  openAiDurationMs,
+  openAiEstimatedCostUsd,
+  openAiRequestCounter,
+  openAiTokens,
+  withSpan,
+} from '@aaa/observability';
 import type { ModelProvider } from './model-provider.js';
 import type {
   ChatContentPart,
@@ -32,123 +40,200 @@ export class OpenAIProvider implements ModelProvider {
     const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const preparedTools = this.prepareTools(request.tools);
     const startedAt = Date.now();
-    const completion = await this.client.chat.completions.create({
-      model: request.model ?? this.defaultModel,
-      messages: this.mapMessages(request.messages),
-      temperature: request.temperature,
-      max_tokens: request.maxTokens,
-      tools: preparedTools.tools,
-    });
+    const model = request.model ?? this.defaultModel;
+    try {
+      const completion = await withSpan(
+        'openai.chat.complete',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'chat_complete',
+        },
+        () =>
+          this.client.chat.completions.create({
+            model,
+            messages: this.mapMessages(request.messages),
+            temperature: request.temperature,
+            max_tokens: request.maxTokens,
+            tools: preparedTools.tools,
+          }),
+      );
 
-    const choice = completion.choices[0];
-    if (!choice) {
-      throw new Error('OpenAI returned no completion choices');
+      const choice = completion.choices[0];
+      if (!choice) {
+        throw new Error('OpenAI returned no completion choices');
+      }
+
+      const response = {
+        messageId: completion.id,
+        content: this.extractTextContent(choice.message.content),
+        toolCalls: this.mapToolCalls(choice.message.tool_calls, preparedTools.aliasToOriginal),
+        finishReason: this.mapFinishReason(choice.finish_reason),
+        usage: {
+          promptTokens: completion.usage?.prompt_tokens ?? 0,
+          completionTokens: completion.usage?.completion_tokens ?? 0,
+          totalTokens: completion.usage?.total_tokens ?? 0,
+        },
+      };
+
+      logger.info(
+        {
+          event: 'openai.chat.completed',
+          outcome: 'success',
+          model,
+          toolCount: request.tools?.length ?? 0,
+          durationMs: Date.now() - startedAt,
+          totalTokens: response.usage.totalTokens,
+          estimatedCostUsd: estimateOpenAiCost({
+            model,
+            promptTokens: response.usage.promptTokens,
+            completionTokens: response.usage.completionTokens,
+          }),
+        },
+        'OpenAI chat completion finished',
+      );
+      openAiRequestCounter.inc({ operation: 'chat_complete', model, outcome: 'success' });
+      openAiDurationMs.observe({ operation: 'chat_complete', model, outcome: 'success' }, Date.now() - startedAt);
+      openAiTokens.inc({ operation: 'chat_complete', model, token_type: 'prompt' }, response.usage.promptTokens);
+      openAiTokens.inc({ operation: 'chat_complete', model, token_type: 'completion' }, response.usage.completionTokens);
+      openAiEstimatedCostUsd.inc(
+        { operation: 'chat_complete', model },
+        estimateOpenAiCost({
+          model,
+          promptTokens: response.usage.promptTokens,
+          completionTokens: response.usage.completionTokens,
+        }),
+      );
+
+      return response;
+    } catch (error) {
+      openAiRequestCounter.inc({ operation: 'chat_complete', model, outcome: 'failure' });
+      openAiDurationMs.observe({ operation: 'chat_complete', model, outcome: 'failure' }, Date.now() - startedAt);
+      logger.error(
+        {
+          event: 'openai.chat.completed',
+          outcome: 'failure',
+          model,
+          error,
+        },
+        'OpenAI chat completion failed',
+      );
+      throw error;
     }
-
-    const response = {
-      messageId: completion.id,
-      content: this.extractTextContent(choice.message.content),
-      toolCalls: this.mapToolCalls(choice.message.tool_calls, preparedTools.aliasToOriginal),
-      finishReason: this.mapFinishReason(choice.finish_reason),
-      usage: {
-        promptTokens: completion.usage?.prompt_tokens ?? 0,
-        completionTokens: completion.usage?.completion_tokens ?? 0,
-        totalTokens: completion.usage?.total_tokens ?? 0,
-      },
-    };
-
-    logger.info(
-      {
-        event: 'openai.chat.completed',
-        outcome: 'success',
-        model: request.model ?? this.defaultModel,
-        toolCount: request.tools?.length ?? 0,
-        durationMs: Date.now() - startedAt,
-        totalTokens: response.usage.totalTokens,
-      },
-      'OpenAI chat completion finished',
-    );
-
-    return response;
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
     const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const preparedTools = this.prepareTools(request.tools);
     const startedAt = Date.now();
-    const stream = await this.client.chat.completions.create({
-      model: request.model ?? this.defaultModel,
-      messages: this.mapMessages(request.messages),
-      temperature: request.temperature,
-      max_tokens: request.maxTokens,
-      tools: preparedTools.tools,
-      stream: true,
-    });
+    const model = request.model ?? this.defaultModel;
+    try {
+      const stream = await withSpan(
+        'openai.chat.stream',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'chat_stream',
+        },
+        () =>
+          this.client.chat.completions.create({
+            model,
+            messages: this.mapMessages(request.messages),
+            temperature: request.temperature,
+            max_tokens: request.maxTokens,
+            tools: preparedTools.tools,
+            stream: true,
+          }),
+      );
 
     const toolCallState = new Map<number, ToolCall>();
     let finishReason: CompletionResponse['finishReason'] | undefined;
 
-    for await (const chunk of stream) {
-      for (const choice of chunk.choices) {
-        if (choice.delta.content) {
-          yield { type: 'text', text: choice.delta.content };
-        }
-
-        for (const toolCallDelta of choice.delta.tool_calls ?? []) {
-          const current = toolCallState.get(toolCallDelta.index) ?? {
-            id: toolCallDelta.id ?? `tool_call_${toolCallDelta.index}`,
-            name: '',
-            arguments: '',
-          };
-
-          if (toolCallDelta.id) {
-            current.id = toolCallDelta.id;
-          }
-          if (toolCallDelta.function?.name) {
-            current.name = toolCallDelta.function.name;
-          }
-          if (toolCallDelta.function?.arguments) {
-            current.arguments += toolCallDelta.function.arguments;
+      for await (const chunk of stream) {
+        for (const choice of chunk.choices) {
+          if (choice.delta.content) {
+            yield { type: 'text', text: choice.delta.content };
           }
 
-          toolCallState.set(toolCallDelta.index, current);
-          if (current.name) {
-            yield {
-              type: 'tool_call',
-              toolCall: {
-                ...current,
-                name: preparedTools.aliasToOriginal.get(current.name) ?? current.name,
-              },
+          for (const toolCallDelta of choice.delta.tool_calls ?? []) {
+            const current = toolCallState.get(toolCallDelta.index) ?? {
+              id: toolCallDelta.id ?? `tool_call_${toolCallDelta.index}`,
+              name: '',
+              arguments: '',
             };
-          }
-        }
 
-        if (choice.finish_reason) {
-          finishReason = this.mapFinishReason(choice.finish_reason);
+            if (toolCallDelta.id) {
+              current.id = toolCallDelta.id;
+            }
+            if (toolCallDelta.function?.name) {
+              current.name = toolCallDelta.function.name;
+            }
+            if (toolCallDelta.function?.arguments) {
+              current.arguments += toolCallDelta.function.arguments;
+            }
+
+            toolCallState.set(toolCallDelta.index, current);
+            if (current.name) {
+              yield {
+                type: 'tool_call',
+                toolCall: {
+                  ...current,
+                  name: preparedTools.aliasToOriginal.get(current.name) ?? current.name,
+                },
+              };
+            }
+          }
+
+          if (choice.finish_reason) {
+            finishReason = this.mapFinishReason(choice.finish_reason);
+          }
         }
       }
+
+      logger.info(
+        {
+          event: 'openai.chat_stream.completed',
+          outcome: 'success',
+          model,
+          durationMs: Date.now() - startedAt,
+        },
+        'OpenAI streaming completion finished',
+      );
+      openAiRequestCounter.inc({ operation: 'chat_stream', model, outcome: 'success' });
+      openAiDurationMs.observe({ operation: 'chat_stream', model, outcome: 'success' }, Date.now() - startedAt);
+
+      yield { type: 'done', finishReason: finishReason ?? 'stop' };
+    } catch (error) {
+      openAiRequestCounter.inc({ operation: 'chat_stream', model, outcome: 'failure' });
+      openAiDurationMs.observe({ operation: 'chat_stream', model, outcome: 'failure' }, Date.now() - startedAt);
+      logger.error(
+        {
+          event: 'openai.chat_stream.completed',
+          outcome: 'failure',
+          model,
+          error,
+        },
+        'OpenAI streaming completion failed',
+      );
+      throw error;
     }
-
-    logger.info(
-      {
-        event: 'openai.chat_stream.completed',
-        outcome: 'success',
-        model: request.model ?? this.defaultModel,
-        durationMs: Date.now() - startedAt,
-      },
-      'OpenAI streaming completion finished',
-    );
-
-    yield { type: 'done', finishReason: finishReason ?? 'stop' };
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
     const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const startedAt = Date.now();
-    const result = await this.client.embeddings.create({
-      model: request.model ?? this.defaultEmbeddingModel,
-      input: request.input,
-    });
+    const model = request.model ?? this.defaultEmbeddingModel;
+    try {
+      const result = await withSpan(
+        'openai.embedding.create',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'embedding',
+        },
+        () =>
+          this.client.embeddings.create({
+            model,
+            input: request.input,
+          }),
+      );
 
     const response = {
       embeddings: result.data.map((entry) => entry.embedding),
@@ -159,79 +244,159 @@ export class OpenAIProvider implements ModelProvider {
       },
     };
 
-    logger.info(
-      {
-        event: 'openai.embedding.completed',
-        outcome: 'success',
-        model: response.model,
-        inputCount: request.input.length,
-        durationMs: Date.now() - startedAt,
-        totalTokens: response.usage.totalTokens,
-      },
-      'OpenAI embedding request finished',
-    );
+      logger.info(
+        {
+          event: 'openai.embedding.completed',
+          outcome: 'success',
+          model,
+          inputCount: request.input.length,
+          durationMs: Date.now() - startedAt,
+          totalTokens: response.usage.totalTokens,
+          estimatedCostUsd: estimateOpenAiCost({
+            model,
+            inputTokens: response.usage.totalTokens,
+          }),
+        },
+        'OpenAI embedding request finished',
+      );
+      openAiRequestCounter.inc({ operation: 'embedding', model, outcome: 'success' });
+      openAiDurationMs.observe({ operation: 'embedding', model, outcome: 'success' }, Date.now() - startedAt);
+      openAiTokens.inc({ operation: 'embedding', model, token_type: 'input' }, response.usage.totalTokens);
+      openAiEstimatedCostUsd.inc(
+        { operation: 'embedding', model },
+        estimateOpenAiCost({
+          model,
+          inputTokens: response.usage.totalTokens,
+        }),
+      );
 
-    return response;
+      return response;
+    } catch (error) {
+      openAiRequestCounter.inc({ operation: 'embedding', model, outcome: 'failure' });
+      openAiDurationMs.observe({ operation: 'embedding', model, outcome: 'failure' }, Date.now() - startedAt);
+      logger.error(
+        {
+          event: 'openai.embedding.completed',
+          outcome: 'failure',
+          model,
+          error,
+        },
+        'OpenAI embedding request failed',
+      );
+      throw error;
+    }
   }
 
   async transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse> {
     const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const startedAt = Date.now();
+    const model = request.model ?? 'gpt-4o-mini-transcribe';
     const file = new File([request.audio], request.fileName, {
       type: request.mimeType,
     });
-    const transcription = await this.client.audio.transcriptions.create({
-      file,
-      model: request.model ?? 'gpt-4o-mini-transcribe',
-    });
+    try {
+      const transcription = await withSpan(
+        'openai.audio.transcription',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'transcription',
+        },
+        () =>
+          this.client.audio.transcriptions.create({
+            file,
+            model,
+          }),
+      );
 
     const response = {
       text: transcription.text.trim(),
     };
 
-    logger.info(
-      {
-        event: 'openai.transcription.completed',
-        outcome: 'success',
-        model: request.model ?? 'gpt-4o-mini-transcribe',
-        durationMs: Date.now() - startedAt,
-        transcriptLength: response.text.length,
-      },
-      'OpenAI transcription finished',
-    );
+      logger.info(
+        {
+          event: 'openai.transcription.completed',
+          outcome: 'success',
+          model,
+          durationMs: Date.now() - startedAt,
+          transcriptLength: response.text.length,
+        },
+        'OpenAI transcription finished',
+      );
+      openAiRequestCounter.inc({ operation: 'transcription', model, outcome: 'success' });
+      openAiDurationMs.observe({ operation: 'transcription', model, outcome: 'success' }, Date.now() - startedAt);
 
-    return response;
+      return response;
+    } catch (error) {
+      openAiRequestCounter.inc({ operation: 'transcription', model, outcome: 'failure' });
+      openAiDurationMs.observe({ operation: 'transcription', model, outcome: 'failure' }, Date.now() - startedAt);
+      logger.error(
+        {
+          event: 'openai.transcription.completed',
+          outcome: 'failure',
+          model,
+          error,
+        },
+        'OpenAI transcription failed',
+      );
+      throw error;
+    }
   }
 
   async synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse> {
     const logger = getLogger({ component: 'openai-provider', provider: 'openai' });
     const format = request.format ?? 'mp3';
     const startedAt = Date.now();
-    const response = await this.client.audio.speech.create({
-      model: request.model ?? 'gpt-4o-mini-tts',
-      voice: request.voice ?? 'marin',
-      input: request.input,
-      response_format: format,
-    });
+    const model = request.model ?? 'gpt-4o-mini-tts';
+    try {
+      const response = await withSpan(
+        'openai.audio.speech',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'speech',
+        },
+        () =>
+          this.client.audio.speech.create({
+            model,
+            voice: request.voice ?? 'marin',
+            input: request.input,
+            response_format: format,
+          }),
+      );
 
     const result = {
       audio: Buffer.from(await response.arrayBuffer()),
       contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
     };
 
-    logger.info(
-      {
-        event: 'openai.tts.completed',
-        outcome: 'success',
-        model: request.model ?? 'gpt-4o-mini-tts',
-        voice: request.voice ?? 'marin',
-        durationMs: Date.now() - startedAt,
-        audioBytes: result.audio.byteLength,
-      },
-      'OpenAI speech synthesis finished',
-    );
+      logger.info(
+        {
+          event: 'openai.tts.completed',
+          outcome: 'success',
+          model,
+          voice: request.voice ?? 'marin',
+          durationMs: Date.now() - startedAt,
+          audioBytes: result.audio.byteLength,
+        },
+        'OpenAI speech synthesis finished',
+      );
+      openAiRequestCounter.inc({ operation: 'speech', model, outcome: 'success' });
+      openAiDurationMs.observe({ operation: 'speech', model, outcome: 'success' }, Date.now() - startedAt);
 
-    return result;
+      return result;
+    } catch (error) {
+      openAiRequestCounter.inc({ operation: 'speech', model, outcome: 'failure' });
+      openAiDurationMs.observe({ operation: 'speech', model, outcome: 'failure' }, Date.now() - startedAt);
+      logger.error(
+        {
+          event: 'openai.tts.completed',
+          outcome: 'failure',
+          model,
+          error,
+        },
+        'OpenAI speech synthesis failed',
+      );
+      throw error;
+    }
   }
 
   private mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {

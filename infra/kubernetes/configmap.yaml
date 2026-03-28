@@ -6,8 +6,13 @@ metadata:
 data:
   NODE_ENV: "production"
   LOG_LEVEL: "info"
+  LOG_FILE_ENABLED: "false"
   API_HOST: "0.0.0.0"
   API_PORT: "3001"
   API_URL: "http://aaa-api"
   S3_BUCKET: "aaa-uploads"
   S3_REGION: "us-east-1"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://otel-collector:4318"
+  OTEL_SERVICE_NAMESPACE: "aaa"
+  WORKER_OBSERVABILITY_HOST: "0.0.0.0"
+  WORKER_OBSERVABILITY_PORT: "9464"

@@ -1,6 +1,8 @@
 'use client';
 
 import { API_BASE, ApiError, getStoredAuthToken } from './api-client';
+import { getClientSessionId } from './client-observability';
+import type { Metric } from 'web-vitals';
 
 type ClientLogLevel = 'warn' | 'error';
 
@@ -11,6 +13,7 @@ interface ClientLogEntry {
   message: string;
   requestId?: string;
   correlationId?: string;
+  clientSessionId?: string;
   conversationId?: string;
   voiceSessionId?: string;
   context?: Record<string, unknown>;
@@ -44,6 +47,7 @@ function sanitizeValue(value: unknown, depth = 0): unknown {
       name: value.name,
       message: value.message,
       requestId: apiError?.requestId,
+      correlationId: apiError?.correlationId,
     };
   }
 
@@ -90,6 +94,7 @@ function buildPayload(entry: ClientLogEntry) {
         message: entry.message,
         requestId: entry.requestId,
         correlationId: entry.correlationId,
+        clientSessionId: entry.clientSessionId ?? getClientSessionId(),
         conversationId: entry.conversationId,
         voiceSessionId: entry.voiceSessionId,
         context: sanitizeValue(entry.context ?? {}) as Record<string, unknown>,
@@ -140,6 +145,7 @@ export async function reportClientError(input: {
   error?: unknown;
   requestId?: string;
   correlationId?: string;
+  clientSessionId?: string;
   conversationId?: string;
   voiceSessionId?: string;
   context?: Record<string, unknown>;
@@ -151,6 +157,7 @@ export async function reportClientError(input: {
     message: input.message,
     requestId: input.requestId,
     correlationId: input.correlationId,
+    clientSessionId: input.clientSessionId ?? getClientSessionId(),
     conversationId: input.conversationId,
     voiceSessionId: input.voiceSessionId,
     context: {
@@ -158,6 +165,41 @@ export async function reportClientError(input: {
       error: input.error,
     },
   });
+}
+
+export async function reportWebVital(metric: Metric): Promise<void> {
+  if (typeof window === 'undefined') {
+    return;
+  }
+
+  const payload = {
+    metrics: [
+      {
+        name: metric.name,
+        value: metric.value,
+        rating: metric.rating,
+        id: metric.id,
+        clientSessionId: getClientSessionId(),
+        route: window.location.pathname,
+        url: window.location.href,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+
+  try {
+    await fetch(`${API_BASE}/api/client-telemetry`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } catch {
+    // Telemetry failures must never break the user flow.
+  }
 }
 
 let installedGlobalHandlers = false;

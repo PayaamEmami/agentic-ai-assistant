@@ -7,6 +7,23 @@ cd "$ROOT_DIR"
 
 DOCKER_START_TIMEOUT_SECONDS="${DOCKER_START_TIMEOUT_SECONDS:-60}"
 
+check_port_available() {
+  local port="$1"
+  local label="$2"
+
+  if ! node -e "const net = require('node:net'); const server = net.createServer(); server.once('error', () => process.exit(1)); server.once('listening', () => server.close(() => process.exit(0))); server.listen(${port}, '0.0.0.0');" >/dev/null 2>&1; then
+    cat <<EOF
+Cannot start local app stack because ${label} port ${port} is already in use.
+
+Update the matching port in \`.env\` and re-run \`pnpm dev:local\`.
+- Web uses \`3000\`
+- API uses \`API_PORT\`
+- Worker observability uses \`WORKER_OBSERVABILITY_PORT\`
+EOF
+    exit 1
+  fi
+}
+
 wait_for_docker() {
   local timeout="${1:-60}"
   local elapsed=0
@@ -94,21 +111,39 @@ set -a
 source .env
 set +a
 
+API_PORT="${API_PORT:-3001}"
+WORKER_OBSERVABILITY_PORT="${WORKER_OBSERVABILITY_PORT:-9464}"
+
 if [[ ! -d node_modules ]]; then
   echo "Installing dependencies..."
   pnpm install
 fi
 
-echo "Starting postgres and redis..."
-docker compose -f docker/docker-compose.yml up -d postgres redis
+echo "Starting local infrastructure..."
+docker compose -f docker/docker-compose.yml up -d \
+  postgres \
+  redis \
+  prometheus \
+  loki \
+  tempo \
+  otel-collector \
+  promtail \
+  grafana
 
 echo "Running database migrations..."
 pnpm --filter @aaa/db migrate:up
+
+check_port_available 3000 "web"
+check_port_available "$API_PORT" "api"
+check_port_available "$WORKER_OBSERVABILITY_PORT" "worker observability"
 
 echo "Starting local app stack..."
 echo "Web:  http://localhost:3000"
 echo "API:  http://localhost:3001"
 echo "Health: http://localhost:3001/health"
+echo "Worker metrics: http://localhost:${WORKER_OBSERVABILITY_PORT}/metrics"
+echo "Grafana: http://localhost:3005"
+echo "Prometheus: http://localhost:9090"
 echo
 
 pnpm dev

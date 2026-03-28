@@ -93,6 +93,10 @@ export {
   ClientLogPayload,
   ClientLogRequest,
   ClientLogResponse,
+  ClientTelemetryMetricNameDto,
+  ClientTelemetryMetricPayload,
+  ClientTelemetryRequest,
+  ClientTelemetryResponse,
 } from './dto.js';
 
 export type { RealtimeEvent } from './events.js';

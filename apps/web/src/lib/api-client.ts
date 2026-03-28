@@ -1,3 +1,5 @@
+import { createCorrelationId } from './client-observability';
+
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const TOKEN_STORAGE_KEY = 'aaa_auth_token';
 
@@ -61,9 +63,12 @@ function buildHeaders(options?: RequestInit, authToken?: string): Headers {
 
 async function requestPublic<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
+  const correlationId = createCorrelationId('http');
+  const headers = buildHeaders(options);
+  headers.set('x-correlation-id', correlationId);
   const res = await fetch(url, {
     ...options,
-    headers: buildHeaders(options),
+    headers,
   });
 
   if (!res.ok) {
@@ -73,6 +78,7 @@ async function requestPublic<T>(path: string, options?: RequestInit): Promise<T>
       body?.error?.message ?? 'Request failed',
       body?.error?.code,
       res.headers.get('x-request-id') ?? undefined,
+      res.headers.get('x-correlation-id') ?? correlationId,
     );
   }
 
@@ -82,9 +88,12 @@ async function requestPublic<T>(path: string, options?: RequestInit): Promise<T>
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const token = await getAuthToken();
   const url = `${API_BASE}${path}`;
+  const correlationId = createCorrelationId('http');
+  const headers = buildHeaders(options, token);
+  headers.set('x-correlation-id', correlationId);
   const res = await fetch(url, {
     ...options,
-    headers: buildHeaders(options, token),
+    headers,
   });
 
   if (!res.ok) {
@@ -94,6 +103,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       body?.error?.message ?? 'Request failed',
       body?.error?.code,
       res.headers.get('x-request-id') ?? undefined,
+      res.headers.get('x-correlation-id') ?? correlationId,
     );
   }
 
@@ -106,6 +116,7 @@ export class ApiError extends Error {
     message: string,
     public code?: string,
     public requestId?: string,
+    public correlationId?: string,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -194,11 +205,12 @@ export interface ConversationSummaryResponse {
   updatedAt: string;
 }
 
-export function buildWebSocketUrl(token: string): string {
+export function buildWebSocketUrl(token: string, correlationId = createCorrelationId('ws')): string {
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/ws/events';
   base.searchParams.set('token', token);
+  base.searchParams.set('correlationId', correlationId);
   return base.toString();
 }
 
@@ -265,6 +277,7 @@ export const api = {
         body: formData,
         headers: {
           Authorization: `Bearer ${token}`,
+          'x-correlation-id': createCorrelationId('upload'),
         },
       });
       if (!res.ok) {
@@ -273,6 +286,7 @@ export const api = {
           'Upload failed',
           undefined,
           res.headers.get('x-request-id') ?? undefined,
+          res.headers.get('x-correlation-id') ?? undefined,
         );
       }
       return res.json() as Promise<{

@@ -32,6 +32,9 @@ services:
       API_PORT: "3001"
       DATABASE_URL: postgresql://aaa:aaa_dev_password@postgres:5432/aaa
       REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAMESPACE: aaa
+      LOG_FILE_ENABLED: "false"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
       S3_BUCKET: aaa-uploads
       S3_REGION: us-east-1
@@ -48,6 +51,11 @@ services:
       LOG_LEVEL: debug
       DATABASE_URL: postgresql://aaa:aaa_dev_password@postgres:5432/aaa
       REDIS_URL: redis://redis:6379
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAMESPACE: aaa
+      LOG_FILE_ENABLED: "false"
+      WORKER_OBSERVABILITY_HOST: 0.0.0.0
+      WORKER_OBSERVABILITY_PORT: "9464"
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
     depends_on:
       - postgres
@@ -63,6 +71,61 @@ services:
       NEXT_PUBLIC_API_URL: http://api:3001
     depends_on:
       - api
+
+  prometheus:
+    image: prom/prometheus:v3.4.2
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+
+  loki:
+    image: grafana/loki:3.2.1
+    ports:
+      - "3100:3100"
+    command: ["-config.file=/etc/loki/config.yml"]
+    volumes:
+      - ./observability/loki/config.yml:/etc/loki/config.yml:ro
+
+  tempo:
+    image: grafana/tempo:2.7.1
+    ports:
+      - "3200:3200"
+    command: ["-config.file=/etc/tempo/config.yml"]
+    volumes:
+      - ./observability/tempo/config.yml:/etc/tempo/config.yml:ro
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.120.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    ports:
+      - "${LOCAL_OTEL_HTTP_PORT:-4318}:4318"
+    depends_on:
+      - tempo
+    volumes:
+      - ./observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
+
+  promtail:
+    image: grafana/promtail:3.2.1
+    command: ["-config.file=/etc/promtail/config.yml"]
+    depends_on:
+      - loki
+    volumes:
+      - ./observability/promtail/config.yml:/etc/promtail/config.yml:ro
+      - ../.logs:/workspace/.logs
+
+  grafana:
+    image: grafana/grafana:11.4.0
+    ports:
+      - "3005:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - tempo
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
   pgdata:

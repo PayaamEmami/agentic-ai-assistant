@@ -32,6 +32,7 @@ export async function clientLogRoutes(app: FastifyInstance) {
           component: entry.component,
           requestId: entry.requestId,
           correlationId: entry.correlationId ?? entry.voiceSessionId,
+          clientSessionId: entry.clientSessionId,
           conversationId: entry.conversationId,
           voiceSessionId: entry.voiceSessionId,
           clientUrl: entry.url,

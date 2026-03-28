@@ -1,4 +1,4 @@
-import { getLogger } from '@aaa/observability';
+import { fetchWithTelemetry } from '@aaa/observability';
 
 function toUrlString(input: string | URL | Request): string {
   if (typeof input === 'string') {
@@ -26,53 +26,16 @@ function inferProvider(hostname: string): string {
 
 async function performRequest(input: string, init?: RequestInit): Promise<Response> {
   const url = new URL(input);
-  const method = init?.method ?? 'GET';
-  const logger = getLogger({
+  const response = await fetchWithTelemetry(input, init, {
     component: 'connector-http',
     provider: inferProvider(url.hostname),
+    eventPrefix: 'connector.http',
+    logResponseBodyOnFailure: false,
   });
-  const startedAt = Date.now();
-
-  logger.debug(
-    {
-      event: 'connector.http.started',
-      outcome: 'start',
-      method,
-      endpoint: url.pathname,
-    },
-    'Connector HTTP request started',
-  );
-
-  const response = await fetch(input, init);
-  const durationMs = Date.now() - startedAt;
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    logger.warn(
-      {
-        event: 'connector.http.failed',
-        outcome: 'failure',
-        method,
-        endpoint: url.pathname,
-        statusCode: response.status,
-        durationMs,
-        detail: body.slice(0, 500),
-      },
-      'Connector HTTP request failed',
-    );
-    throw new Error(`HTTP ${response.status}: ${body || response.statusText}`);
+    throw new Error(`HTTP ${response.status}: ${response.statusText || (body ? 'Request failed' : 'Request failed')}`);
   }
-
-  logger.debug(
-    {
-      event: 'connector.http.completed',
-      outcome: 'success',
-      method,
-      endpoint: url.pathname,
-      statusCode: response.status,
-      durationMs,
-    },
-    'Connector HTTP request completed',
-  );
 
   return response;
 }

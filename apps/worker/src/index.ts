@@ -5,14 +5,20 @@ import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
 import { closeJobQueues } from './lib/job-queues.js';
 import { startConnectorSyncScheduler } from './lib/sync-scheduler.js';
+import { initializeWorkerTelemetry, startWorkerObservabilityServer } from './lib/telemetry.js';
+import { shutdownTracing } from '@aaa/observability';
 
 async function main() {
   const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+  await initializeWorkerTelemetry();
+  const observability = await startWorkerObservabilityServer(redisUrl);
+  const redisTarget = new URL(redisUrl);
   logger.info(
     {
       event: 'worker.starting',
       outcome: 'start',
-      redisUrl,
+      redisHost: redisTarget.hostname,
+      redisPort: redisTarget.port || '6379',
       component: 'worker-main',
     },
     'Starting worker service',
@@ -40,10 +46,21 @@ async function main() {
       'Shutting down workers',
     );
     clearInterval(syncScheduler);
+    observability.stopPolling();
+    await new Promise<void>((resolve, reject) => {
+      observability.server.close((error) => {
+        if (error) {
+          reject(error);
+          return;
+        }
+        resolve();
+      });
+    });
     await Promise.all(workers.map(w => w.close()));
     await closeJobQueues();
     await closeConfiguredToolRegistry();
     await closePool();
+    await shutdownTracing();
     logger.info(
       {
         event: 'worker.stopped',

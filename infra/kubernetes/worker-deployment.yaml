@@ -14,10 +14,16 @@ spec:
     metadata:
       labels:
         app: aaa-worker
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/metrics"
+        prometheus.io/port: "9464"
     spec:
       containers:
         - name: worker
           image: aaa-worker:latest
+          ports:
+            - containerPort: 9464
           envFrom:
             - secretRef:
                 name: aaa-secrets
@@ -30,3 +36,15 @@ spec:
             limits:
               memory: "512Mi"
               cpu: "500m"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9464
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9464
+            initialDelaySeconds: 15
+            periodSeconds: 20

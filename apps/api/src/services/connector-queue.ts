@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getLogContext, getLogger } from '@aaa/observability';
+import { getLogContext, getLogger, withSpan } from '@aaa/observability';
 
 export interface ConnectorSyncJobData {
   connectorConfigId: string;
@@ -35,11 +35,19 @@ export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promis
     correlationId,
   };
 
-  await getQueue().add('sync-connector', payload, {
-    jobId: `connector-sync:${job.connectorConfigId}`,
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await withSpan(
+    'queue.connector_sync.enqueue',
+    {
+      'aaa.queue.name': 'connector-sync',
+      'aaa.connector_config.id': job.connectorConfigId,
+    },
+    () =>
+      getQueue().add('sync-connector', payload, {
+        jobId: `connector-sync:${job.connectorConfigId}`,
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      }),
+  );
   getLogger({
     component: 'connector-queue',
     connectorKind: job.connectorKind,

@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { getLogger, serializeError } from '@aaa/observability';
+import { getLogger, serializeError, SpanStatusCode } from '@aaa/observability';
 
 export class AppError extends Error {
   constructor(
@@ -17,6 +17,7 @@ export function errorHandler(
   request: FastifyRequest,
   reply: FastifyReply,
 ) {
+  request.observabilitySpan?.recordException(error);
   const componentLogger = getLogger({
     component: 'http',
     route: request.routeOptions.url,
@@ -34,6 +35,10 @@ export function errorHandler(
       },
       'Request failed with application error',
     );
+    request.observabilitySpan?.setStatus({
+      code: SpanStatusCode.ERROR,
+      message: error.message,
+    });
     return reply.status(error.statusCode).send({
       error: { code: error.code ?? 'APP_ERROR', message: error.message },
     });
@@ -48,6 +53,10 @@ export function errorHandler(
     },
     'Unhandled error',
   );
+  request.observabilitySpan?.setStatus({
+    code: SpanStatusCode.ERROR,
+    message: error.message,
+  });
   return reply.status(500).send({
     error: { code: 'INTERNAL_ERROR', message: 'Internal server error' },
   });

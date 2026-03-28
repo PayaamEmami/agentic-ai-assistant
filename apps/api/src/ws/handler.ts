@@ -1,8 +1,15 @@
+import crypto from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
+import { withLogContext, withSpan } from '@aaa/observability';
 import { conversationRepository } from '@aaa/db';
 import type { RealtimeEvent } from '@aaa/shared';
 import type { WebSocket } from 'ws';
 import { logger } from '../lib/logger.js';
+import {
+  websocketConnections,
+  websocketMessagesTotal,
+  websocketSubscriptionsTotal,
+} from '../lib/telemetry.js';
 import { extractBearerToken, authenticateToken, type AuthUser } from '../middleware/auth.js';
 import { subscribe, unsubscribe } from './connections.js';
 
@@ -18,13 +25,18 @@ interface EventMessage {
 
 type IncomingWsMessage = SubscribeMessage | EventMessage;
 
-function getQueryToken(rawUrl: string | undefined): string | null {
+function getQueryParams(rawUrl: string | undefined): URLSearchParams | null {
   if (!rawUrl) {
     return null;
   }
 
   const url = new URL(rawUrl, 'http://localhost');
-  const token = url.searchParams.get('token');
+  return url.searchParams;
+}
+
+function getQueryToken(rawUrl: string | undefined): string | null {
+  const params = getQueryParams(rawUrl);
+  const token = params?.get('token');
   return token && token.trim().length > 0 ? token.trim() : null;
 }
 
@@ -63,6 +75,9 @@ export async function wsHandler(app: FastifyInstance) {
     '/events',
     { websocket: true },
     async (socket: WebSocket, request) => {
+      const wsConnectionId = crypto.randomUUID();
+      const queryParams = getQueryParams(request.raw.url);
+      const correlationId = queryParams?.get('correlationId')?.trim() || request.id;
       const token =
         getQueryToken(request.raw.url) ??
         extractBearerToken(request.headers.authorization);
@@ -103,98 +118,117 @@ export async function wsHandler(app: FastifyInstance) {
           event: 'ws.connection.accepted',
           outcome: 'success',
           component: 'ws-handler',
+          correlationId,
+          wsConnectionId,
           userId: user.id,
         },
         'WebSocket client connected',
       );
+      websocketConnections.inc({ state: 'open' });
       const subscribedConversations = new Set<string>();
 
       socket.on('message', (rawData) => {
         const messageText = rawData.toString();
-        void (async () => {
-          let parsed: IncomingWsMessage;
-
-          try {
-            parsed = JSON.parse(messageText) as IncomingWsMessage;
-          } catch {
-            logger.warn(
+        void withLogContext(
+          {
+            component: 'ws-handler',
+            correlationId,
+            wsConnectionId,
+            userId: user.id,
+          },
+          () =>
+            withSpan(
+              'ws.message.process',
               {
-                event: 'ws.message.rejected',
-                outcome: 'failure',
-                component: 'ws-handler',
-                userId: user.id,
+                'aaa.ws.connection_id': wsConnectionId,
+                'aaa.correlation_id': correlationId,
+                'enduser.id': user.id,
               },
-              'Invalid WebSocket message JSON',
-            );
-            return;
-          }
+              async () => {
+                websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'received' });
+                let parsed: IncomingWsMessage;
 
-          if (parsed.type === 'subscribe') {
-            if (!parsed.conversationId) {
-              logger.warn(
-                {
-                  event: 'ws.subscription.rejected',
-                  outcome: 'failure',
-                  component: 'ws-handler',
-                  userId: user.id,
-                  reason: 'missing_conversation_id',
-                },
-                'Missing conversationId in subscribe message',
-              );
-              return;
-            }
+                try {
+                  parsed = JSON.parse(messageText) as IncomingWsMessage;
+                } catch {
+                  websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'rejected' });
+                  logger.warn(
+                    {
+                      event: 'ws.message.rejected',
+                      outcome: 'failure',
+                    },
+                    'Invalid WebSocket message JSON',
+                  );
+                  return;
+                }
 
-            const allowed = await canSubscribeToConversation(user, parsed.conversationId);
-            if (!allowed) {
-              logger.warn(
-                {
-                  event: 'ws.subscription.rejected',
-                  outcome: 'failure',
-                  component: 'ws-handler',
-                  userId: user.id,
-                  conversationId: parsed.conversationId,
-                },
-                'Rejected unauthorized WebSocket subscription',
-              );
-              sendSocketError(socket, 'FORBIDDEN', 'Conversation access denied');
-              return;
-            }
+                if (parsed.type === 'subscribe') {
+                  if (!parsed.conversationId) {
+                    websocketSubscriptionsTotal.inc({ outcome: 'rejected' });
+                    logger.warn(
+                      {
+                        event: 'ws.subscription.rejected',
+                        outcome: 'failure',
+                        reason: 'missing_conversation_id',
+                      },
+                      'Missing conversationId in subscribe message',
+                    );
+                    return;
+                  }
 
-            subscribe(parsed.conversationId, socket);
-            subscribedConversations.add(parsed.conversationId);
-            sendSocketMessage(socket, {
-              type: 'subscribed',
-              conversationId: parsed.conversationId,
-            });
-            logger.debug(
-              {
-                event: 'ws.subscription.accepted',
-                outcome: 'success',
-                component: 'ws-handler',
-                userId: user.id,
-                conversationId: parsed.conversationId,
+                  const allowed = await canSubscribeToConversation(user, parsed.conversationId);
+                  if (!allowed) {
+                    websocketSubscriptionsTotal.inc({ outcome: 'rejected' });
+                    logger.warn(
+                      {
+                        event: 'ws.subscription.rejected',
+                        outcome: 'failure',
+                        conversationId: parsed.conversationId,
+                      },
+                      'Rejected unauthorized WebSocket subscription',
+                    );
+                    sendSocketError(socket, 'FORBIDDEN', 'Conversation access denied');
+                    return;
+                  }
+
+                  subscribe(parsed.conversationId, socket);
+                  subscribedConversations.add(parsed.conversationId);
+                  sendSocketMessage(socket, {
+                    type: 'subscribed',
+                    conversationId: parsed.conversationId,
+                  });
+                  websocketSubscriptionsTotal.inc({ outcome: 'accepted' });
+                  websocketMessagesTotal.inc({ direction: 'outbound', outcome: 'sent' });
+                  logger.debug(
+                    {
+                      event: 'ws.subscription.accepted',
+                      outcome: 'success',
+                      conversationId: parsed.conversationId,
+                    },
+                    'WebSocket subscribed to conversation',
+                  );
+                  return;
+                }
+
+                logger.debug(
+                  {
+                    event: 'ws.message.ignored',
+                    outcome: 'success',
+                    messageType: parsed.type,
+                  },
+                  'Ignoring unsupported WebSocket event message',
+                );
               },
-              'WebSocket subscribed to conversation',
-            );
-            return;
-          }
-
-          logger.debug(
-            {
-              event: 'ws.message.ignored',
-              outcome: 'success',
-              component: 'ws-handler',
-              userId: user.id,
-              messageType: parsed.type,
-            },
-            'Ignoring unsupported WebSocket event message',
-          );
-        })().catch((error) => {
+            ),
+        ).catch((error) => {
+          websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'failed' });
           logger.warn(
             {
               event: 'ws.message.failed',
               outcome: 'failure',
               component: 'ws-handler',
+              correlationId,
+              wsConnectionId,
               userId: user.id,
               error,
             },
@@ -207,11 +241,14 @@ export async function wsHandler(app: FastifyInstance) {
         for (const conversationId of subscribedConversations) {
           unsubscribe(conversationId, socket);
         }
+        websocketConnections.dec({ state: 'open' });
         logger.info(
           {
             event: 'ws.connection.closed',
             outcome: 'success',
             component: 'ws-handler',
+            correlationId,
+            wsConnectionId,
             userId: user.id,
           },
           'WebSocket client disconnected',

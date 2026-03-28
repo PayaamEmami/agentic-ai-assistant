@@ -10,7 +10,7 @@ import {
   encryptConnectorCredentials,
   decryptConnectorCredentials,
 } from '@aaa/connectors';
-import { addLogContext, getLogContext, getLogger } from '@aaa/observability';
+import { addLogContext, fetchWithTelemetry, getLogContext, getLogger } from '@aaa/observability';
 import { AppError } from '../lib/errors.js';
 import { enqueueConnectorSyncJob } from './connector-queue.js';
 
@@ -131,19 +131,28 @@ async function exchangeGoogleCode(code: string) {
   const clientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
   const redirectUri = requireEnv('GOOGLE_REDIRECT_URI');
 
-  const response = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
+  const response = await fetchWithTelemetry(
+    'https://oauth2.googleapis.com/token',
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: new URLSearchParams({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        grant_type: 'authorization_code',
+        redirect_uri: redirectUri,
+      }),
     },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: redirectUri,
-    }),
-  });
+    {
+      component: 'connector-service',
+      provider: 'google',
+      eventPrefix: 'connector.oauth.token_exchange',
+      logResponseBodyOnFailure: false,
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -153,11 +162,11 @@ async function exchangeGoogleCode(code: string) {
         outcome: 'failure',
         provider: 'google',
         statusCode: response.status,
-        detail: body.slice(0, 500),
+        responseBodyLength: body.length,
       },
       'Google token exchange failed',
     );
-    throw new AppError(502, `Google token exchange failed: ${body || response.statusText}`, 'GOOGLE_TOKEN_EXCHANGE_FAILED');
+    throw new AppError(502, 'Google token exchange failed', 'GOOGLE_TOKEN_EXCHANGE_FAILED');
   }
 
   logger.info(
@@ -182,19 +191,28 @@ async function exchangeGitHubCode(code: string) {
   const clientSecret = requireEnv('GITHUB_CLIENT_SECRET');
   const redirectUri = requireEnv('GITHUB_REDIRECT_URI');
 
-  const response = await fetch('https://github.com/login/oauth/access_token', {
-    method: 'POST',
-    headers: {
-      Accept: 'application/json',
-      'Content-Type': 'application/json',
+  const response = await fetchWithTelemetry(
+    'https://github.com/login/oauth/access_token',
+    {
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        client_id: clientId,
+        client_secret: clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
     },
-    body: JSON.stringify({
-      client_id: clientId,
-      client_secret: clientSecret,
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
+    {
+      component: 'connector-service',
+      provider: 'github',
+      eventPrefix: 'connector.oauth.token_exchange',
+      logResponseBodyOnFailure: false,
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -204,11 +222,11 @@ async function exchangeGitHubCode(code: string) {
         outcome: 'failure',
         provider: 'github',
         statusCode: response.status,
-        detail: body.slice(0, 500),
+        responseBodyLength: body.length,
       },
       'GitHub token exchange failed',
     );
-    throw new AppError(502, `GitHub token exchange failed: ${body || response.statusText}`, 'GITHUB_TOKEN_EXCHANGE_FAILED');
+    throw new AppError(502, 'GitHub token exchange failed', 'GITHUB_TOKEN_EXCHANGE_FAILED');
   }
 
   const result = await response.json() as {
@@ -222,7 +240,7 @@ async function exchangeGitHubCode(code: string) {
         event: 'connector.oauth.token_exchange_failed',
         outcome: 'failure',
         provider: 'github',
-        detail: result.error_description ?? result.error ?? 'No access token returned',
+        errorCode: result.error ?? 'missing_access_token',
       },
       'GitHub token exchange did not return an access token',
     );
@@ -245,14 +263,23 @@ async function exchangeGitHubCode(code: string) {
 
 async function fetchGitHubAccount(accessToken: string) {
   const logger = getLogger({ component: 'connector-service', provider: 'github' });
-  const response = await fetch('https://api.github.com/user', {
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${accessToken}`,
-      'User-Agent': 'agentic-ai-assistant',
-      'X-GitHub-Api-Version': '2022-11-28',
+  const response = await fetchWithTelemetry(
+    'https://api.github.com/user',
+    {
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': 'agentic-ai-assistant',
+        'X-GitHub-Api-Version': '2022-11-28',
+      },
     },
-  });
+    {
+      component: 'connector-service',
+      provider: 'github',
+      eventPrefix: 'connector.account_lookup',
+      logResponseBodyOnFailure: false,
+    },
+  );
 
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -262,11 +289,11 @@ async function fetchGitHubAccount(accessToken: string) {
         outcome: 'failure',
         provider: 'github',
         statusCode: response.status,
-        detail: body.slice(0, 500),
+        responseBodyLength: body.length,
       },
       'GitHub account lookup failed',
     );
-    throw new AppError(502, `GitHub account lookup failed: ${body || response.statusText}`, 'GITHUB_ACCOUNT_LOOKUP_FAILED');
+    throw new AppError(502, 'GitHub account lookup failed', 'GITHUB_ACCOUNT_LOOKUP_FAILED');
   }
 
   logger.info(

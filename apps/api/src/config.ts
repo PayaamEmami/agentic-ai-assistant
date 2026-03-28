@@ -17,12 +17,22 @@ export interface AppConfig {
   s3Endpoint: string | undefined;
   webBaseUrl: string;
   connectorCredentialsSecret: string;
+  otlpEndpoint?: string;
+  otelServiceNamespace?: string;
+  otelResourceAttributes?: string;
+  logFileEnabled?: boolean;
   googleClientId?: string;
   googleClientSecret?: string;
   googleRedirectUri?: string;
   githubClientId?: string;
   githubClientSecret?: string;
   githubRedirectUri?: string;
+}
+
+declare module 'fastify' {
+  interface FastifyInstance {
+    config: AppConfig;
+  }
 }
 
 export function loadConfig(): AppConfig {
@@ -67,6 +77,13 @@ export function loadConfig(): AppConfig {
       (nodeEnv === 'production'
         ? required('CONNECTOR_CREDENTIALS_SECRET')
         : 'dev-connector-credentials-secret'),
+    otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+    otelServiceNamespace: process.env.OTEL_SERVICE_NAMESPACE,
+    otelResourceAttributes: process.env.OTEL_RESOURCE_ATTRIBUTES,
+    logFileEnabled:
+      typeof process.env.LOG_FILE_ENABLED === 'string'
+        ? process.env.LOG_FILE_ENABLED === '1' || process.env.LOG_FILE_ENABLED === 'true'
+        : undefined,
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
     googleRedirectUri: process.env.GOOGLE_REDIRECT_URI,

@@ -10,6 +10,9 @@ const SENSITIVE_SEGMENTS = [
   'accesskey',
   'clientsecret',
   'credentials',
+  'databaseurl',
+  'redisurl',
+  'connectionstring',
   'bearer',
   'sdp',
   'transcript',
@@ -28,6 +31,10 @@ function isSensitiveKey(key: string): boolean {
 function sanitizeString(value: string): string {
   if (/bearer\s+[a-z0-9._-]+/i.test(value)) {
     return value.replace(/bearer\s+[a-z0-9._-]+/gi, 'Bearer [Redacted]');
+  }
+
+  if (/^(postgres(ql)?|redis):\/\/[^/]+/i.test(value)) {
+    return '[Redacted Connection String]';
   }
 
   return value;

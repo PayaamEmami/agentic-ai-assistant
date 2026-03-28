@@ -4,6 +4,9 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   LOG_FORMAT: z.enum(['pretty', 'json']).default('pretty'),
+  LOG_FILE_ENABLED: z
+    .union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')])
+    .optional(),
 
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.coerce.number().default(3001),
@@ -12,6 +15,12 @@ const envSchema = z.object({
   DATABASE_POOL_SIZE: z.coerce.number().default(10),
 
   REDIS_URL: z.string().default('redis://localhost:6379'),
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
+  OTEL_SERVICE_NAMESPACE: z.string().optional(),
+  OTEL_RESOURCE_ATTRIBUTES: z.string().optional(),
+  WORKER_OBSERVABILITY_HOST: z.string().default('0.0.0.0'),
+  WORKER_OBSERVABILITY_PORT: z.coerce.number().default(9464),
+  OPENAI_PRICING_OVERRIDES_JSON: z.string().optional(),
 
   S3_BUCKET: z.string().default('aaa-uploads'),
   S3_REGION: z.string().default('us-east-1'),

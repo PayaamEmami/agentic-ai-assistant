@@ -6,7 +6,7 @@ import {
   getPool,
   messageRepository,
 } from '@aaa/db';
-import { addLogContext, getLogger } from '@aaa/observability';
+import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
 import type { AssistantTextDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { broadcast } from '../ws/connections.js';
@@ -243,16 +243,24 @@ export class VoiceService {
     formData.set('sdp', sdp);
     formData.set('session', JSON.stringify(sessionConfig));
 
-    const response = await fetch('https://api.openai.com/v1/realtime/calls', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env['OPENAI_API_KEY'] ?? ''}`,
+    const response = await fetchWithTelemetry(
+      'https://api.openai.com/v1/realtime/calls',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${process.env['OPENAI_API_KEY'] ?? ''}`,
+        },
+        body: formData,
       },
-      body: formData,
-    });
+      {
+        component: 'voice-service',
+        provider: 'openai',
+        eventPrefix: 'voice.sdp_exchange',
+        logResponseBodyOnFailure: false,
+      },
+    );
 
     if (!response.ok) {
-      const detail = await response.text();
       getLogger({
         component: 'voice-service',
         voiceSessionId: sessionId,
@@ -263,7 +271,6 @@ export class VoiceService {
           event: 'voice.sdp_exchange.failed',
           outcome: 'failure',
           status: response.status,
-          detail,
         },
         'Failed to proxy realtime SDP exchange',
       );

@@ -1,5 +1,5 @@
 import { Queue } from 'bullmq';
-import { getLogContext, getLogger } from '@aaa/observability';
+import { getLogContext, getLogger, withSpan } from '@aaa/observability';
 
 export interface ToolExecutionJobData {
   toolExecutionId: string;
@@ -37,10 +37,18 @@ export async function enqueueToolExecutionJob(job: ToolExecutionJobData): Promis
     correlationId,
   };
 
-  await getQueue().add('execute-tool', payload, {
-    removeOnComplete: 100,
-    removeOnFail: 500,
-  });
+  await withSpan(
+    'queue.tool_execution.enqueue',
+    {
+      'aaa.queue.name': 'tool-execution',
+      'aaa.tool_execution.id': job.toolExecutionId,
+    },
+    () =>
+      getQueue().add('execute-tool', payload, {
+        removeOnComplete: 100,
+        removeOnFail: 500,
+      }),
+  );
   getLogger({
     component: 'tool-execution-queue',
     toolExecutionId: job.toolExecutionId,

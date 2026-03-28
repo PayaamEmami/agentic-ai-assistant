@@ -14,8 +14,9 @@
     "migrate:create": "node-pg-migrate create"
   },
   "dependencies": {
-    "pg": "^8.13.0",
-    "node-pg-migrate": "^7.0.0"
+    "@aaa/observability": "workspace:*",
+    "node-pg-migrate": "^7.0.0",
+    "pg": "^8.13.0"
   },
   "devDependencies": {
     "@types/pg": "^8.11.0",

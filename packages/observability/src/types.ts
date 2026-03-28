@@ -3,6 +3,8 @@ import type { Logger } from 'pino';
 export interface LogContext {
   requestId?: string;
   correlationId?: string;
+  traceId?: string;
+  spanId?: string;
   userId?: string;
   conversationId?: string;
   connectorKind?: string;
@@ -20,6 +22,8 @@ export interface LogContext {
   method?: string;
   voiceSessionId?: string;
   mcpServerId?: string;
+  wsConnectionId?: string;
+  clientSessionId?: string;
 }
 
 export interface ServiceLoggerOptions {
@@ -43,4 +47,19 @@ export interface LogStore {
   context: LogContext;
   logger: Logger;
   baseLogger: Logger;
+}
+
+export interface TraceMetadata {
+  traceId?: string;
+  spanId?: string;
+}
+
+export interface ServiceRuntimeOptions {
+  service: string;
+  serviceVersion?: string;
+  environment?: string;
+  namespace?: string;
+  instanceId?: string;
+  otlpEndpoint?: string;
+  resourceAttributes?: Record<string, string>;
 }
