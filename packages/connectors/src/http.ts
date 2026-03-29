@@ -24,6 +24,42 @@ function inferProvider(hostname: string): string {
   return hostname;
 }
 
+function extractErrorDetail(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  try {
+    const parsed = JSON.parse(trimmed) as {
+      error?: string | { message?: string; status?: string };
+      error_description?: string;
+      message?: string;
+    };
+    if (typeof parsed.error === 'string' && parsed.error.length > 0) {
+      return parsed.error;
+    }
+    if (parsed.error && typeof parsed.error === 'object') {
+      if (typeof parsed.error.message === 'string' && parsed.error.message.length > 0) {
+        return parsed.error.message;
+      }
+      if (typeof parsed.error.status === 'string' && parsed.error.status.length > 0) {
+        return parsed.error.status;
+      }
+    }
+    if (typeof parsed.error_description === 'string' && parsed.error_description.length > 0) {
+      return parsed.error_description;
+    }
+    if (typeof parsed.message === 'string' && parsed.message.length > 0) {
+      return parsed.message;
+    }
+  } catch {
+    // Fall back to the raw response body when the provider does not return JSON.
+  }
+
+  return trimmed.replace(/\s+/g, ' ').slice(0, 300);
+}
+
 async function performRequest(input: string, init?: RequestInit): Promise<Response> {
   const url = new URL(input);
   const response = await fetchWithTelemetry(input, init, {
@@ -34,7 +70,12 @@ async function performRequest(input: string, init?: RequestInit): Promise<Respon
   });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
-    throw new Error(`HTTP ${response.status}: ${response.statusText || (body ? 'Request failed' : 'Request failed')}`);
+    const detail = extractErrorDetail(body);
+    throw new Error(
+      detail
+        ? `HTTP ${response.status}: ${response.statusText || 'Request failed'} - ${detail}`
+        : `HTTP ${response.status}: ${response.statusText || 'Request failed'}`,
+    );
   }
 
   return response;

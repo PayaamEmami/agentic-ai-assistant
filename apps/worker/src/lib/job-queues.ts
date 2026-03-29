@@ -27,6 +27,10 @@ let connectorSyncQueue: Queue<ConnectorSyncJobData> | null = null;
 let ingestionQueue: Queue<IngestionJobData> | null = null;
 let embeddingQueue: Queue<EmbeddingJobData> | null = null;
 
+function createSafeJobId(prefix: string, ...parts: string[]): string {
+  return [prefix, ...parts.map((part) => Buffer.from(part).toString('base64url'))].join('-');
+}
+
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);
   return {
@@ -79,7 +83,7 @@ export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promis
     },
     () =>
       getConnectorSyncQueue().add('sync-connector', payload, {
-        jobId: `connector-sync:${job.connectorConfigId}`,
+        jobId: createSafeJobId('connector-sync', job.connectorConfigId),
         removeOnComplete: 100,
         removeOnFail: 500,
       }),
@@ -114,7 +118,7 @@ export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> 
     },
     () =>
       getIngestionQueue().add('ingest-document', payload, {
-        jobId: `ingestion:${job.documentId}:${job.externalId}`,
+        jobId: createSafeJobId('ingestion', job.documentId, job.externalId),
         removeOnComplete: 100,
         removeOnFail: 500,
       }),

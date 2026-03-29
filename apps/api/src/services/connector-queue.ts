@@ -10,6 +10,10 @@ export interface ConnectorSyncJobData {
 
 let queue: Queue<ConnectorSyncJobData> | null = null;
 
+function createSafeJobId(prefix: string, ...parts: string[]): string {
+  return [prefix, ...parts.map((part) => Buffer.from(part).toString('base64url'))].join('-');
+}
+
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);
   return {
@@ -43,7 +47,7 @@ export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promis
     },
     () =>
       getQueue().add('sync-connector', payload, {
-        jobId: `connector-sync:${job.connectorConfigId}`,
+        jobId: createSafeJobId('connector-sync', job.connectorConfigId),
         removeOnComplete: 100,
         removeOnFail: 500,
       }),
