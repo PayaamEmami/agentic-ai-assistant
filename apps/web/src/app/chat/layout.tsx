@@ -1,5 +1,4 @@
-import { Sidebar } from '@/components/sidebar';
-import { RightPanel } from '@/components/right-panel';
+import { ChatShell } from '@/components/chat-shell';
 import { ChatAuthGate } from '@/components/chat-auth-gate';
 import { ChatProvider } from '@/lib/chat-context';
 
@@ -7,11 +6,7 @@ export default function ChatLayout({ children }: { children: React.ReactNode }) 
   return (
     <ChatAuthGate>
       <ChatProvider>
-        <div className="flex h-screen">
-          <Sidebar />
-          <main className="flex flex-1 flex-col bg-surface-elevated">{children}</main>
-          <RightPanel />
-        </div>
+        <ChatShell>{children}</ChatShell>
       </ChatProvider>
     </ChatAuthGate>
   );

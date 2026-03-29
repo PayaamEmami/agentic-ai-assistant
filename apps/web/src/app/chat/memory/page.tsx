@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   api,
   type PersonalizationMemory,
@@ -222,9 +223,17 @@ export default function MemoryPage() {
             <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
               Personalization
             </p>
-            <h1 className="mt-2 text-3xl font-semibold text-foreground">
-              Memory
-            </h1>
+            <div className="mt-2 flex items-center justify-between gap-4">
+              <h1 className="text-3xl font-semibold text-foreground">Memory</h1>
+              <Link
+                href="/chat"
+                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle bg-surface text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground"
+                aria-label="Close memory"
+                title="Close"
+              >
+                <CloseIcon />
+              </Link>
+            </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
               Manage the profile details and saved memories the assistant should
               use when it responds to you. This version is manual-first and only
@@ -490,5 +499,14 @@ export default function MemoryPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
+    </svg>
   );
 }

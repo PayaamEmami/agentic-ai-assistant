@@ -1,6 +1,10 @@
 'use client';
 
-import type { MessageContentBlock } from '@/lib/chat-context';
+import type {
+  CitationContentBlock,
+  MessageContentBlock,
+} from '@/lib/chat-context';
+import { CitationCard } from './citation-card';
 
 interface MessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -72,36 +76,38 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
             : 'File';
 
     return (
-      <div key={index} className="rounded border border-border bg-surface-input px-3 py-2 text-xs text-foreground-muted">
+      <div
+        key={index}
+        className="rounded border border-border bg-surface-input px-3 py-2 text-xs text-foreground-muted"
+      >
         [{label}] {block.fileName ?? block.attachmentId ?? 'attachment'}
-        {block.indexedForRag ? ' • indexed for RAG' : ''}
+        {block.indexedForRag ? ' - indexed for RAG' : ''}
       </div>
     );
   }
 
   if (block.type === 'tool_result') {
     return (
-      <div key={index} className="rounded border border-border bg-surface-input p-2">
+      <div
+        key={index}
+        className="rounded border border-border bg-surface-input p-2"
+      >
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-foreground">
             Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
           </p>
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(block.status)}`}>
+          <span
+            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(block.status)}`}
+          >
             {getToolStatusLabel(block.status)}
           </span>
         </div>
         {typeof block.output === 'undefined' ? null : (
-          <pre className="overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
+          <pre className="overflow-x-auto text-xs text-foreground">
+            {stringify(block.output)}
+          </pre>
         )}
       </div>
-    );
-  }
-
-  if (block.type === 'citation') {
-    return (
-      <blockquote key={index} className="border-l-2 border-border pl-3 text-xs italic text-foreground-muted">
-        {block.excerpt ?? 'Citation excerpt unavailable.'}
-      </blockquote>
     );
   }
 
@@ -122,14 +128,37 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
 export function Message({ role, content }: MessageProps) {
   const isUser = role === 'user';
+  const visibleContent = content.filter((block) => block.type !== 'citation');
+  const citations = content.filter(
+    (block): block is CitationContentBlock => block.type === 'citation',
+  );
   const bubbleClassName = `max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-    isUser ? 'bg-accent text-white' : 'bg-surface-overlay border border-border text-foreground'
+    isUser
+      ? 'bg-accent text-white'
+      : 'border border-border bg-surface-overlay text-foreground'
   } ${isUser ? '' : 'space-y-2'}`;
 
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
       <div className={bubbleClassName}>
-        {content.map(renderContentBlock)}
+        {visibleContent.map(renderContentBlock)}
+        {citations.length > 0 ? (
+          <details className="rounded-lg border border-border-subtle bg-surface-input/60">
+            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-foreground-muted">
+              Sources ({citations.length})
+            </summary>
+            <div className="space-y-2 px-3 pb-3">
+              {citations.map((citation, index) => (
+                <CitationCard
+                  key={`${citation.sourceId ?? citation.title ?? 'citation'}-${index}`}
+                  title={citation.title ?? citation.sourceId ?? 'Source'}
+                  excerpt={citation.excerpt ?? 'Citation excerpt unavailable.'}
+                  uri={citation.uri}
+                />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
     </div>
   );

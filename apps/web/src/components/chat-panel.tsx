@@ -2,11 +2,23 @@
 
 import { useEffect, useRef } from 'react';
 import { useChatContext } from '@/lib/chat-context';
+import { useAuthContext } from '@/lib/auth-context';
 import { Message } from './message';
+
+function getFirstName(displayName: string | undefined) {
+  const normalized = displayName?.trim();
+  if (!normalized) {
+    return null;
+  }
+
+  return normalized.split(/\s+/)[0] || null;
+}
 
 export function ChatPanel() {
   const { messages, loading } = useChatContext();
+  const { user } = useAuthContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const firstName = getFirstName(user?.displayName);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -20,7 +32,9 @@ export function ChatPanel() {
         </div>
       ) : messages.length === 0 ? (
         <div className="flex flex-1 items-center justify-center h-full">
-          <p className="text-foreground-muted">Start a conversation</p>
+          <p className="text-foreground-muted">
+            {firstName ? `What can I help you with, ${firstName}?` : 'What can I help you with today?'}
+          </p>
         </div>
       ) : (
         messages.map((message) => (

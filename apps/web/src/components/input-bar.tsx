@@ -32,7 +32,6 @@ export function InputBar() {
   } = useChatContext();
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
-  const [indexDocuments, setIndexDocuments] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const liveVoice = useLiveVoiceSession({
@@ -64,7 +63,7 @@ export function InputBar() {
     for (const file of files) {
       try {
         const attachment = await uploadAttachment(file, {
-          indexForRag: indexDocuments && isIndexableDocument(file),
+          indexForRag: isIndexableDocument(file),
         });
         setAttachments((previous) => [...previous, attachment]);
       } catch (error) {
@@ -136,7 +135,10 @@ export function InputBar() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-border bg-surface-elevated p-4">
+    <form
+      onSubmit={handleSubmit}
+      className="flex min-h-[75px] flex-col justify-center border-t border-border bg-surface-elevated p-4"
+    >
       <input
         ref={fileInputRef}
         type="file"
@@ -206,18 +208,6 @@ export function InputBar() {
       {liveVoice.error ? (
         <p className="mt-3 text-xs text-error">{liveVoice.error}</p>
       ) : null}
-      <label className="mt-3 flex items-center gap-2 text-xs text-foreground-muted">
-        <input
-          type="checkbox"
-          checked={indexDocuments}
-          onChange={(e) => setIndexDocuments(e.target.checked)}
-          className="rounded border-border-subtle bg-surface-input text-accent focus:ring-accent"
-        />
-        Index text documents for RAG when possible
-      </label>
-      <p className="mt-2 text-[11px] text-foreground-inactive">
-        Live voice is AI-generated and saved back into this conversation when each turn finishes.
-      </p>
     </form>
   );
 }
