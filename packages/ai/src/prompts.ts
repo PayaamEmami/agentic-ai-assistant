@@ -78,6 +78,7 @@ Role instructions (verifier):
 - Flag mistakes, unsafe operations, missing approvals, and unsupported claims.
 - Return JSON only with this shape:
   {"status":"approved"|"revise","response":"string","issues":["string"]}
+- Return a single JSON object only, with no prose, markdown, or code fences before or after it.
 - Set "status" to "revise" when the prior output needs correction.
 - Put the final user-facing assistant message in "response".
 - Keep "issues" concise and only include concrete problems you found.

@@ -317,7 +317,7 @@ export class VoiceService {
     }
 
     const userMessage = await messageRepository.create(conversation.id, 'user', [
-      { type: 'transcript', text: trimmedUserTranscript, durationMs: 0 },
+      { type: 'text', text: trimmedUserTranscript },
     ]);
     const assistantMessage = await messageRepository.create(conversation.id, 'assistant', [
       { type: 'text', text: trimmedAssistantTranscript },

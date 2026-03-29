@@ -137,6 +137,7 @@ interface ChatContextValue {
     model: string;
     voice: string;
   }>;
+  appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
   syncConversationState: (conversationId: string) => Promise<void>;
 }
 
@@ -413,6 +414,20 @@ function createFallbackAssistantMessage(messageId: string): ChatMessage {
   };
 }
 
+function createOptimisticVoiceMessage(role: 'user' | 'assistant', text: string): ChatMessage {
+  return {
+    id: `local-voice-${role}-${crypto.randomUUID()}`,
+    role,
+    content: [
+      {
+        type: 'text',
+        text,
+      },
+    ],
+    createdAt: new Date().toISOString(),
+  };
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuthContext();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -624,6 +639,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return session;
   }, [currentConversationId, syncConversationState]);
 
+  const appendVoiceMessage = useCallback(
+    (conversationId: string, role: 'user' | 'assistant', text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) {
+        return;
+      }
+
+      setCurrentConversationId(conversationId);
+      setMessages((previous) => [...previous, createOptimisticVoiceMessage(role, trimmed)]);
+      setConversations((previous) => {
+        const existing = previous.find((conversation) => conversation.id === conversationId);
+        const timestamp = new Date().toISOString();
+
+        return upsertConversation(previous, {
+          id: conversationId,
+          title: existing?.title ?? (role === 'user' ? buildConversationTitle(trimmed) : 'Untitled conversation'),
+          createdAt: existing?.createdAt ?? timestamp,
+          updatedAt: timestamp,
+        });
+      });
+    },
+    [],
+  );
+
   const renameConversation = useCallback(async (conversationId: string, title: string) => {
     setError(null);
     try {
@@ -779,6 +818,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       approveAction,
       rejectAction,
       startLiveVoiceSession,
+      appendVoiceMessage,
       syncConversationState,
     }),
     [
@@ -797,6 +837,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       selectConversation,
       sendMessage,
       startLiveVoiceSession,
+      appendVoiceMessage,
       syncConversationState,
       toolActivities,
       uploadAttachment,

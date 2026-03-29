@@ -27,6 +27,7 @@ export function InputBar() {
     sendMessage,
     uploadAttachment,
     startLiveVoiceSession,
+    appendVoiceMessage,
     syncConversationState,
     loading,
   } = useChatContext();
@@ -36,6 +37,7 @@ export function InputBar() {
 
   const liveVoice = useLiveVoiceSession({
     startSession: startLiveVoiceSession,
+    appendVoiceMessage,
     syncConversation: syncConversationState,
   });
 

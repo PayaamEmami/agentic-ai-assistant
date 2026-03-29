@@ -23,6 +23,7 @@ interface SessionInit {
 
 interface UseLiveVoiceSessionOptions {
   startSession: () => Promise<SessionInit>;
+  appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
   syncConversation: (conversationId: string) => Promise<void>;
 }
 
@@ -70,6 +71,7 @@ async function requestSdpAnswerFallback(
 
 export function useLiveVoiceSession({
   startSession,
+  appendVoiceMessage,
   syncConversation,
 }: UseLiveVoiceSessionOptions) {
   const [phase, setPhase] = useState<VoicePhase>('idle');
@@ -89,6 +91,9 @@ export function useLiveVoiceSession({
   const responseDoneRef = useRef(false);
   const isPersistingTurnRef = useRef(false);
   const phaseRef = useRef<VoicePhase>('idle');
+  const userMessageAddedRef = useRef(false);
+  const assistantMessageAddedRef = useRef(false);
+  const assistantCaptionSourceRef = useRef<'audio_transcript' | 'output_text' | null>(null);
 
   const setVoicePhase = (nextPhase: VoicePhase) => {
     phaseRef.current = nextPhase;
@@ -99,6 +104,78 @@ export function useLiveVoiceSession({
     pendingUserTranscriptRef.current = '';
     pendingAssistantTranscriptRef.current = '';
     responseDoneRef.current = false;
+    userMessageAddedRef.current = false;
+    assistantMessageAddedRef.current = false;
+    assistantCaptionSourceRef.current = null;
+  };
+
+  const addVoiceMessageToChat = (role: 'user' | 'assistant', text: string) => {
+    const conversationId = conversationIdRef.current;
+    if (!conversationId) {
+      return;
+    }
+
+    appendVoiceMessage(conversationId, role, text);
+  };
+
+  const finalizeUserTranscript = (transcript: string) => {
+    const trimmed = transcript.trim();
+    if (!trimmed) {
+      return;
+    }
+
+    pendingUserTranscriptRef.current = trimmed;
+    setUserCaption(trimmed);
+
+    if (!userMessageAddedRef.current) {
+      addVoiceMessageToChat('user', trimmed);
+      userMessageAddedRef.current = true;
+    }
+  };
+
+  const selectAssistantCaptionSource = (source: 'audio_transcript' | 'output_text') => {
+    const current = assistantCaptionSourceRef.current;
+    if (current === source) {
+      return true;
+    }
+
+    if (current === null) {
+      assistantCaptionSourceRef.current = source;
+      return true;
+    }
+
+    if (current === 'output_text' && source === 'audio_transcript') {
+      assistantCaptionSourceRef.current = source;
+      setAssistantCaption('');
+      return true;
+    }
+
+    return false;
+  };
+
+  const updateAssistantCaption = (
+    source: 'audio_transcript' | 'output_text',
+    value: string,
+    mode: 'append' | 'replace',
+  ) => {
+    const normalized = value.trim();
+    if (!normalized && mode === 'replace') {
+      return;
+    }
+
+    if (!selectAssistantCaptionSource(source)) {
+      return;
+    }
+
+    setVoicePhase('speaking');
+    setConnectionLabel('Assistant is speaking...');
+    if (mode === 'append') {
+      setAssistantCaption((previous) => previous + value);
+      return;
+    }
+
+    pendingAssistantTranscriptRef.current = normalized;
+    setAssistantCaption(normalized);
   };
 
   const maybePersistTurn = async () => {
@@ -228,31 +305,47 @@ export function useLiveVoiceSession({
       case 'conversation.item.input_audio_transcription.completed': {
         const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : '';
         if (transcript) {
-          pendingUserTranscriptRef.current = transcript;
-          setUserCaption(transcript);
+          finalizeUserTranscript(transcript);
         }
         return;
       }
+      case 'response.output_audio_transcript.delta':
       case 'response.audio_transcript.delta': {
         const delta = typeof event.delta === 'string' ? event.delta : '';
         if (delta) {
-          setVoicePhase('speaking');
-          setConnectionLabel('Assistant is speaking...');
-          setAssistantCaption((previous) => previous + delta);
+          updateAssistantCaption('audio_transcript', delta, 'append');
         }
         return;
       }
+      case 'response.output_audio_transcript.done':
       case 'response.audio_transcript.done': {
         const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : '';
         if (transcript) {
-          pendingAssistantTranscriptRef.current = transcript;
-          setAssistantCaption(transcript);
+          updateAssistantCaption('audio_transcript', transcript, 'replace');
         }
         await maybePersistTurn();
         return;
       }
+      case 'response.output_text.delta': {
+        const delta = typeof event.delta === 'string' ? event.delta : '';
+        if (delta) {
+          updateAssistantCaption('output_text', delta, 'append');
+        }
+        return;
+      }
+      case 'response.output_text.done': {
+        const text = typeof event.text === 'string' ? event.text.trim() : '';
+        if (text) {
+          updateAssistantCaption('output_text', text, 'replace');
+        }
+        return;
+      }
       case 'response.done':
         responseDoneRef.current = true;
+        if (pendingAssistantTranscriptRef.current && !assistantMessageAddedRef.current) {
+          addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current);
+          assistantMessageAddedRef.current = true;
+        }
         setVoicePhase('listening');
         setConnectionLabel('Listening...');
         await maybePersistTurn();

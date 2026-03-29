@@ -32,9 +32,21 @@ export class VerifierAgent implements Agent {
     });
 
     const verified = parseVerificationContent(completion.content, context.previousResult);
+    if (!verified.valid) {
+      return {
+        response: context.previousResult.response,
+        toolCalls: context.previousResult.toolCalls,
+        delegateTo: null,
+        requiresApproval: context.previousResult.requiresApproval,
+        verification: context.previousResult.verification,
+      };
+    }
+
+    const response =
+      verified.status === 'revise' ? verified.response : context.previousResult.response;
 
     return {
-      response: verified.response,
+      response,
       toolCalls: context.previousResult.toolCalls,
       delegateTo: null,
       requiresApproval: context.previousResult.requiresApproval,
@@ -66,8 +78,9 @@ function buildPreviousResultMessage(context: AgentContext): ChatMessage {
 function parseVerificationContent(
   content: string | null,
   previousResult: AgentResult,
-): { status: 'approved' | 'revise'; response: string | null; issues: string[] } {
+): { valid: boolean; status: 'approved' | 'revise'; response: string | null; issues: string[] } {
   const fallback = {
+    valid: false,
     status: 'approved' as const,
     response: previousResult.response,
     issues: [] as string[],
@@ -79,11 +92,7 @@ function parseVerificationContent(
 
   const parsed = parseJsonObject(content);
   if (!parsed) {
-    return {
-      status: 'revise',
-      response: content.trim() || previousResult.response,
-      issues: [],
-    };
+    return fallback;
   }
 
   const status = parsed.status === 'revise' ? 'revise' : 'approved';
@@ -93,6 +102,7 @@ function parseVerificationContent(
       : previousResult.response;
 
   return {
+    valid: true,
     status,
     response,
     issues: Array.isArray(parsed.issues)
