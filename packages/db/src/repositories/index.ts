@@ -20,7 +20,7 @@ export { embeddingRepository } from './embeddings.js';
 export type { Embedding, EmbeddingRepository } from './embeddings.js';
 
 export { sourceRepository } from './sources.js';
-export type { Source, SourceRepository } from './sources.js';
+export type { ConnectorSourceStats, IndexedSourceSummary, Source, SourceRepository } from './sources.js';
 
 export { toolExecutionRepository } from './tool-executions.js';
 export type { ToolExecution, ToolExecutionRepository } from './tool-executions.js';

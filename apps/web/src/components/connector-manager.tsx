@@ -10,6 +10,8 @@ import {
 } from '@/lib/api-client';
 import { reportClientError } from '@/lib/client-logging';
 
+const CONNECTOR_SECTION_STATE_STORAGE_KEY = 'connector-manager:collapsed-sections';
+
 function formatSyncTimestamp(value: string | null): string {
   if (!value) {
     return 'Not synced yet';
@@ -97,6 +99,12 @@ function sourceKindLabel(kind: string): string {
   return kind;
 }
 
+function indexedSourceSummary(connector: ConnectorSummary): string {
+  const total = connector.totalSourceCount ?? 0;
+  const searchable = connector.searchableSourceCount ?? 0;
+  return `${searchable}/${total} searchable`;
+}
+
 export function ConnectorManager() {
   const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
@@ -106,10 +114,23 @@ export function ConnectorManager() {
   const [savingRepos, setSavingRepos] = useState(false);
   const [disconnectingKind, setDisconnectingKind] = useState<ConnectorSummary['kind'] | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [hasLoadedCollapsedSections, setHasLoadedCollapsedSections] = useState(false);
 
   const connectorStatus = searchParams.get('connectorStatus');
   const connectorMessage = searchParams.get('connectorMessage');
   const connectorKind = searchParams.get('connector');
+
+  const isSectionCollapsed = (kind: ConnectorSummary['kind'], section: string) =>
+    collapsedSections[`${kind}:${section}`] ?? false;
+
+  const toggleSection = (kind: ConnectorSummary['kind'], section: string) => {
+    const key = `${kind}:${section}`;
+    setCollapsedSections((previous) => ({
+      ...previous,
+      [key]: !(previous[key] ?? false),
+    }));
+  };
 
   const load = useCallback(async (showLoading = true) => {
     if (showLoading) {
@@ -151,6 +172,43 @@ export function ConnectorManager() {
   useEffect(() => {
     void load();
   }, [connectorKind, connectorMessage, connectorStatus, load]);
+
+  useEffect(() => {
+    try {
+      const storedValue = window.localStorage.getItem(CONNECTOR_SECTION_STATE_STORAGE_KEY);
+      if (!storedValue) {
+        setHasLoadedCollapsedSections(true);
+        return;
+      }
+
+      const parsed = JSON.parse(storedValue) as Record<string, unknown>;
+      if (!parsed || typeof parsed !== 'object') {
+        setHasLoadedCollapsedSections(true);
+        return;
+      }
+
+      setCollapsedSections(
+        Object.fromEntries(
+          Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
+        ),
+      );
+    } catch {
+      // Ignore malformed local state and fall back to defaults.
+    } finally {
+      setHasLoadedCollapsedSections(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!hasLoadedCollapsedSections) {
+      return;
+    }
+
+    window.localStorage.setItem(
+      CONNECTOR_SECTION_STATE_STORAGE_KEY,
+      JSON.stringify(collapsedSections),
+    );
+  }, [collapsedSections, hasLoadedCollapsedSections]);
 
   useEffect(() => {
     const interval = window.setInterval(() => {
@@ -197,6 +255,7 @@ export function ConnectorManager() {
     setActionError(null);
     try {
       await api.connectors.saveGitHubRepos(selectedRepoIds);
+      await api.connectors.sync('github');
       const [connectorResponse, repoResponse] = await Promise.all([
         api.connectors.list(),
         api.connectors.listGitHubRepos(),
@@ -274,58 +333,88 @@ export function ConnectorManager() {
       ) : (
         connectors.map((connector) => (
           <div key={connector.kind} className="rounded-xl border border-border bg-surface-overlay p-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-foreground">{connectorLabel(connector.kind)}</p>
-                <p className="mt-1 text-xs text-foreground-muted">
-                  Status: {connector.status}
-                  {connector.lastSyncStatus ? ` | sync ${connector.lastSyncStatus}` : ''}
-                </p>
-                <p className="mt-1 text-xs text-foreground-muted">
-                  {formatSyncTimestamp(connector.lastSyncAt)}
-                </p>
-                {connector.kind === 'github' && connector.selectedRepoCount !== undefined ? (
-                  <p className="mt-1 text-xs text-foreground-muted">
-                    Selected repos: {connector.selectedRepoCount}
-                  </p>
-                ) : null}
-                {connector.lastError ? (
-                  <p className="mt-2 text-xs text-error">{connector.lastError}</p>
-                ) : null}
-              </div>
-              <div className="flex flex-col gap-2">
-                {!connector.hasCredentials || connector.status !== 'connected' ? (
-                  <button
-                    onClick={() => void startConnection(connector.kind)}
-                    className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
-                  >
-                    Connect
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => void triggerSync(connector.kind)}
-                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-                  >
-                    Sync now
-                  </button>
-                )}
-                {connector.hasCredentials ? (
-                  <button
-                    onClick={() => void disconnect(connector.kind)}
-                    disabled={disconnectingKind === connector.kind}
-                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
-                  >
-                    {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
-                  </button>
-                ) : null}
-              </div>
-            </div>
+            {(() => {
+              const requiresRepoSelection = connector.kind === 'github';
+              const selectedRepoCount = connector.selectedRepoCount ?? 0;
+              const syncDisabled =
+                connector.status !== 'connected' ||
+                (requiresRepoSelection && selectedRepoCount === 0);
+
+              return (
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{connectorLabel(connector.kind)}</p>
+                    <p className="mt-1 text-xs text-foreground-muted">
+                      Status: {connector.status}
+                      {connector.lastSyncStatus ? ` | sync ${connector.lastSyncStatus}` : ''}
+                    </p>
+                    <p className="mt-1 text-xs text-foreground-muted">
+                      {formatSyncTimestamp(connector.lastSyncAt)}
+                    </p>
+                    {connector.kind === 'github' && connector.selectedRepoCount !== undefined ? (
+                      <p className="mt-1 text-xs text-foreground-muted">
+                        Selected repos: {connector.selectedRepoCount}
+                      </p>
+                    ) : null}
+                    {connector.kind === 'github' &&
+                    connector.hasCredentials &&
+                    connector.status === 'connected' &&
+                    selectedRepoCount === 0 ? (
+                      <p className="mt-1 text-xs text-warning">
+                        Select and save at least one repository before syncing.
+                      </p>
+                    ) : null}
+                    {connector.lastError ? (
+                      <p className="mt-2 text-xs text-error">{connector.lastError}</p>
+                    ) : null}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {!connector.hasCredentials || connector.status !== 'connected' ? (
+                      <button
+                        onClick={() => void startConnection(connector.kind)}
+                        className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
+                      >
+                        Connect
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => void triggerSync(connector.kind)}
+                        disabled={syncDisabled}
+                        className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {connector.kind === 'github' && selectedRepoCount === 0
+                          ? 'Select repos first'
+                          : 'Sync now'}
+                      </button>
+                    )}
+                    {connector.hasCredentials ? (
+                      <button
+                        onClick={() => void disconnect(connector.kind)}
+                        disabled={disconnectingKind === connector.kind}
+                        className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                      >
+                        {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })()}
 
             <div className="mt-3 space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                Recent Sync Runs
-              </p>
-              {connector.recentSyncRuns.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleSection(connector.kind, 'sync-runs')}
+                className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
+              >
+                <span>Recent Sync Runs</span>
+                {isSectionCollapsed(connector.kind, 'sync-runs') ? (
+                  <ChevronLeftIcon />
+                ) : (
+                  <ChevronDownIcon />
+                )}
+              </button>
+              {isSectionCollapsed(connector.kind, 'sync-runs') ? null : connector.recentSyncRuns.length === 0 ? (
                 <p className="text-xs text-foreground-muted">No sync history yet.</p>
               ) : (
                 connector.recentSyncRuns.map((run) => (
@@ -347,7 +436,8 @@ export function ConnectorManager() {
                       </p>
                     </div>
                     <p className="mt-2 text-foreground-muted">
-                      {run.itemsDiscovered} seen | {run.itemsQueued} queued | {run.itemsDeleted} deleted
+                      {run.itemsDiscovered} seen | {run.itemsQueued} queued
+                      {run.itemsDeleted > 0 ? ` | ${run.itemsDeleted} removed` : ''}
                       {run.errorCount > 0 ? ` | ${run.errorCount} errors` : ''}
                     </p>
                     {run.errorSummary ? (
@@ -359,92 +449,139 @@ export function ConnectorManager() {
             </div>
 
             <div className="mt-3 space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                Indexed Sources
-              </p>
-              {connector.recentSources.length === 0 ? (
+              <button
+                type="button"
+                onClick={() => toggleSection(connector.kind, 'sources')}
+                className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
+              >
+                <span>Indexed Sources ({indexedSourceSummary(connector)})</span>
+                {isSectionCollapsed(connector.kind, 'sources') ? (
+                  <ChevronLeftIcon />
+                ) : (
+                  <ChevronDownIcon />
+                )}
+              </button>
+              {isSectionCollapsed(connector.kind, 'sources') ? null : connector.recentSources.length === 0 ? (
                 <p className="text-xs text-foreground-muted">No indexed sources yet.</p>
               ) : (
-                connector.recentSources.map((source) => (
-                  <div
-                    key={source.id}
-                    className="rounded-lg border border-border px-3 py-2 text-xs"
-                  >
-                    {source.uri ? (
-                      <a
-                        href={source.uri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="block font-medium text-link underline underline-offset-4"
-                      >
-                        {source.title}
-                      </a>
-                    ) : (
-                      <p className="font-medium text-foreground">{source.title}</p>
-                    )}
-                    <p className="mt-1 text-foreground-muted">
-                      {sourceKindLabel(source.kind)}
-                      {source.mimeType ? ` | ${source.mimeType}` : ''}
-                    </p>
-                    <p className="mt-1 text-foreground-muted">
-                      Updated {formatRunTimestamp(source.updatedAt)}
-                    </p>
-                  </div>
-                ))
+                <>
+                  <p className="text-xs text-foreground-muted">
+                    Searchable means the source has finished chunking and embedding for retrieval.
+                  </p>
+                  {connector.recentSources.map((source) => (
+                    <div
+                      key={source.id}
+                      className="rounded-lg border border-border px-3 py-2 text-xs"
+                    >
+                      {source.uri ? (
+                        <a
+                          href={source.uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="block font-medium text-link underline underline-offset-4"
+                        >
+                          {source.title}
+                        </a>
+                      ) : (
+                        <p className="font-medium text-foreground">{source.title}</p>
+                      )}
+                      <p className="mt-1 text-foreground-muted">
+                        {sourceKindLabel(source.kind)}
+                        {source.mimeType ? ` | ${source.mimeType}` : ''}
+                      </p>
+                      <p className="mt-1 text-foreground-muted">
+                        Updated {formatRunTimestamp(source.updatedAt)}
+                      </p>
+                    </div>
+                  ))}
+                </>
               )}
             </div>
 
             {connector.kind === 'github' && connector.status === 'connected' ? (
               <div className="mt-3 space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
-                  Repositories
-                </p>
-                {githubRepos.length === 0 ? (
-                  <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
-                ) : (
-                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                    {githubRepos.map((repo) => {
-                      const checked = selectedRepoIds.includes(repo.id);
-                      return (
-                        <label
-                          key={repo.id}
-                          className="flex items-start gap-2 rounded-lg border border-border px-2 py-2 text-xs text-foreground"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={(event) => {
-                              setSelectedRepoIds((previous) =>
-                                event.target.checked
-                                  ? [...previous, repo.id]
-                                  : previous.filter((id) => id !== repo.id),
-                              );
-                            }}
-                            className="mt-0.5"
-                          />
-                          <span>
-                            <span className="block font-medium text-foreground">{repo.fullName}</span>
-                            <span className="block text-foreground-muted">
-                              {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
-                            </span>
-                          </span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
                 <button
-                  onClick={() => void saveRepoSelection()}
-                  disabled={savingRepos}
-                  className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
+                  type="button"
+                  onClick={() => toggleSection(connector.kind, 'repositories')}
+                  className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
                 >
-                  {savingRepos ? 'Saving...' : 'Save repos'}
+                  <span>Repositories</span>
+                  {isSectionCollapsed(connector.kind, 'repositories') ? (
+                    <ChevronLeftIcon />
+                  ) : (
+                    <ChevronDownIcon />
+                  )}
                 </button>
+                {isSectionCollapsed(connector.kind, 'repositories') ? null : (
+                  <>
+                    <p className="text-xs text-foreground-muted">
+                      Save your repository selection to update what GitHub indexes. Saving will
+                      automatically queue a sync.
+                    </p>
+                    {githubRepos.length === 0 ? (
+                      <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
+                    ) : (
+                      <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                        {githubRepos.map((repo) => {
+                          const checked = selectedRepoIds.includes(repo.id);
+                          return (
+                            <label
+                              key={repo.id}
+                              className="flex items-start gap-2 rounded-lg border border-border px-2 py-2 text-xs text-foreground"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(event) => {
+                                  setSelectedRepoIds((previous) =>
+                                    event.target.checked
+                                      ? [...previous, repo.id]
+                                      : previous.filter((id) => id !== repo.id),
+                                  );
+                                }}
+                                className="mt-0.5"
+                              />
+                              <span>
+                                <span className="block font-medium text-foreground">{repo.fullName}</span>
+                                <span className="block text-foreground-muted">
+                                  {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
+                                </span>
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => void saveRepoSelection()}
+                      disabled={savingRepos}
+                      className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
+                    >
+                      {savingRepos ? 'Saving...' : 'Save repos'}
+                    </button>
+                  </>
+                )}
               </div>
             ) : null}
           </div>
         ))
       )}
     </div>
+  );
+}
+
+function ChevronLeftIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
   );
 }

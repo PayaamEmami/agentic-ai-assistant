@@ -33,6 +33,7 @@ export interface CompletionRequest {
   maxTokens?: number;
   tools?: ToolDefinition[];
   stream?: boolean;
+  signal?: AbortSignal;
 }
 
 export interface CompletionResponse {
@@ -59,6 +60,7 @@ export interface ToolDefinition {
 export interface EmbeddingRequest {
   input: string[];
   model?: string;
+  signal?: AbortSignal;
 }
 
 export interface EmbeddingResponse {

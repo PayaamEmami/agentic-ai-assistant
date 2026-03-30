@@ -22,10 +22,10 @@ export function ChatPanel() {
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, loading.isSendingMessage]);
+  }, [messages, loading.isSendingMessage, loading.isInterruptingMessage]);
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
       {loading.isLoadingMessages && messages.length === 0 ? (
         <div className="flex flex-1 items-center justify-center h-full">
           <p className="text-foreground-muted">Loading conversation...</p>
@@ -33,7 +33,9 @@ export function ChatPanel() {
       ) : messages.length === 0 ? (
         <div className="flex flex-1 items-center justify-center h-full">
           <p className="text-foreground-muted">
-            {firstName ? `What can I help you with, ${firstName}?` : 'What can I help you with today?'}
+            {firstName
+              ? `What can I help you with, ${firstName}?`
+              : 'What can I help you with today?'}
           </p>
         </div>
       ) : (
@@ -44,7 +46,7 @@ export function ChatPanel() {
       {loading.isSendingMessage && (
         <div className="flex justify-start">
           <div className="max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground-muted">
-            Assistant is thinking...
+            {loading.isInterruptingMessage ? 'Stopping response...' : 'Assistant is thinking...'}
           </div>
         </div>
       )}

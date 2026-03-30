@@ -58,7 +58,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen bg-surface">
+    <div className="flex h-screen min-h-0 overflow-hidden bg-surface">
       {!isDesktop && isMobileSidebarOpen ? (
         <button
           type="button"
@@ -77,7 +77,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
             : undefined
         }
       />
-      <div className="relative flex min-w-0 flex-1 flex-col">
+      <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
         {!isDesktop && !isMobileSidebarOpen ? (
           <button
             type="button"
@@ -90,7 +90,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
           </button>
         ) : null}
         <main
-          className={`flex min-h-0 flex-1 flex-col bg-surface-elevated ${
+          className={`flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-elevated ${
             !isDesktop && !isMobileSidebarOpen ? 'pt-16 md:pt-0' : ''
           }`}
         >

@@ -16,15 +16,21 @@ export async function chatRoutes(app: FastifyInstance) {
       });
     }
 
-    const { conversationId, content, attachmentIds } = parsed.data;
+    const { conversationId, content, attachmentIds, clientRunId } = parsed.data;
     const userId = request.user!.id;
     const result = await chatService.sendMessage(
       userId,
       content,
       conversationId,
       attachmentIds,
+      clientRunId,
     );
     return reply.status(200).send(result);
+  });
+
+  app.post<{ Params: { runId: string } }>('/chat/runs/:runId/interrupt', async (request, reply) => {
+    const result = await chatService.interruptRun(request.user!.id, request.params.runId);
+    return reply.status(result.status === 'not_found' ? 404 : 200).send(result);
   });
 
   app.get('/conversations', async (request, reply) => {
@@ -33,41 +39,29 @@ export async function chatRoutes(app: FastifyInstance) {
     return reply.status(200).send({ conversations });
   });
 
-  app.get<{ Params: { id: string } }>(
-    '/conversations/:id',
-    async (request, reply) => {
-      const conversation = await chatService.getConversation(
-        request.user!.id,
-        request.params.id,
-      );
-      return reply.status(200).send(conversation);
-    },
-  );
+  app.get<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
+    const conversation = await chatService.getConversation(request.user!.id, request.params.id);
+    return reply.status(200).send(conversation);
+  });
 
-  app.patch<{ Params: { id: string } }>(
-    '/conversations/:id',
-    async (request, reply) => {
-      const parsed = UpdateConversationRequest.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
+  app.patch<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
+    const parsed = UpdateConversationRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
 
-      const conversation = await chatService.updateConversationTitle(
-        request.user!.id,
-        request.params.id,
-        parsed.data.title,
-      );
-      return reply.status(200).send({ conversation });
-    },
-  );
+    const conversation = await chatService.updateConversationTitle(
+      request.user!.id,
+      request.params.id,
+      parsed.data.title,
+    );
+    return reply.status(200).send({ conversation });
+  });
 
-  app.delete<{ Params: { id: string } }>(
-    '/conversations/:id',
-    async (request, reply) => {
-      const result = await chatService.deleteConversation(request.user!.id, request.params.id);
-      return reply.status(200).send(result);
-    },
-  );
+  app.delete<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
+    const result = await chatService.deleteConversation(request.user!.id, request.params.id);
+    return reply.status(200).send(result);
+  });
 }

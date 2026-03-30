@@ -1,9 +1,6 @@
 'use client';
 
-import type {
-  CitationContentBlock,
-  MessageContentBlock,
-} from '@/lib/chat-context';
+import type { CitationContentBlock, MessageContentBlock } from '@/lib/chat-context';
 import { CitationCard } from './citation-card';
 
 interface MessageProps {
@@ -88,10 +85,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
   if (block.type === 'tool_result') {
     return (
-      <div
-        key={index}
-        className="rounded border border-border bg-surface-input p-2"
-      >
+      <div key={index} className="rounded border border-border bg-surface-input p-2">
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-foreground">
             Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
@@ -103,9 +97,7 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
           </span>
         </div>
         {typeof block.output === 'undefined' ? null : (
-          <pre className="overflow-x-auto text-xs text-foreground">
-            {stringify(block.output)}
-          </pre>
+          <pre className="overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
         )}
       </div>
     );
@@ -119,6 +111,18 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
     );
   }
 
+  if (block.type === 'status') {
+    return (
+      <div
+        key={index}
+        className="inline-flex items-center gap-2 text-xs font-medium text-foreground-muted"
+      >
+        <span className="h-2 w-2 rounded-full bg-warning" />
+        <span>{block.label ?? 'Response stopped'}</span>
+      </div>
+    );
+  }
+
   return (
     <pre key={index} className="overflow-x-auto text-xs text-foreground-muted">
       {stringify(block)}
@@ -128,20 +132,34 @@ function renderContentBlock(block: MessageContentBlock, index: number) {
 
 export function Message({ role, content }: MessageProps) {
   const isUser = role === 'user';
+  const isSystem = role === 'system';
   const visibleContent = content.filter((block) => block.type !== 'citation');
+  const statusBlocks = visibleContent.filter(
+    (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
+  );
+  const primaryContent = visibleContent.filter((block) => block.type !== 'status');
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
+
   const bubbleClassName = `max-w-[70%] rounded-lg px-4 py-2 text-sm ${
     isUser
       ? 'bg-accent text-white'
-      : 'border border-border bg-surface-overlay text-foreground'
+      : isSystem
+        ? 'border border-border-subtle bg-surface-input/70 text-foreground-muted'
+        : 'border border-border bg-surface-overlay text-foreground'
   } ${isUser ? '' : 'space-y-2'}`;
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div
+      className={`flex ${isUser ? 'justify-end' : isSystem ? 'justify-center' : 'justify-start'}`}
+    >
       <div className={bubbleClassName}>
-        {visibleContent.map(renderContentBlock)}
+        {primaryContent.length > 0 ? (
+          primaryContent.map(renderContentBlock)
+        ) : statusBlocks.length > 0 && role === 'assistant' ? (
+          <p className="text-xs italic text-foreground-muted">No response generated before stop.</p>
+        ) : null}
         {citations.length > 0 ? (
           <details className="rounded-lg border border-border-subtle bg-surface-input/60">
             <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-foreground-muted">
@@ -158,6 +176,11 @@ export function Message({ role, content }: MessageProps) {
               ))}
             </div>
           </details>
+        ) : null}
+        {statusBlocks.length > 0 ? (
+          <div className="border-t border-border-subtle/80 pt-2">
+            {statusBlocks.map(renderContentBlock)}
+          </div>
         ) : null}
       </div>
     </div>

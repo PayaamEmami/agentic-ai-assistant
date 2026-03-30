@@ -33,6 +33,8 @@ interface ConnectorSummary {
   lastError: string | null;
   hasCredentials: boolean;
   selectedRepoCount?: number;
+  totalSourceCount: number;
+  searchableSourceCount: number;
   recentSyncRuns: Array<{
     id: string;
     trigger: string;
@@ -116,7 +118,7 @@ function verifyOAuthState(state: string): OAuthStatePayload {
 
 function buildConnectorRedirect(kind: SupportedConnectorKind, status: 'connected' | 'error', message?: string): string {
   const baseUrl = process.env['WEB_BASE_URL'] ?? 'http://localhost:3000';
-  const url = new URL('/chat', baseUrl);
+  const url = new URL('/chat/connectors', baseUrl);
   url.searchParams.set('connector', kind);
   url.searchParams.set('connectorStatus', status);
   if (message) {
@@ -346,17 +348,27 @@ export class ConnectorService {
     const byKind = new Map(configs.map((config) => [config.kind, config]));
     const recentRunsByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSyncRuns>>>();
     const recentSourcesByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSources>>>();
+    const sourceStatsByKind = new Map<
+      SupportedConnectorKind,
+      Awaited<ReturnType<typeof sourceRepository.getConnectorSourceStats>>
+    >();
     for (const kind of ['google_docs', 'github'] as const) {
-      const [recentRuns, recentSources] = await Promise.all([
+      const [recentRuns, recentSources, sourceStats] = await Promise.all([
         toRecentSyncRuns(userId, kind),
         toRecentSources(userId, kind),
+        sourceRepository.getConnectorSourceStats(userId, kind),
       ]);
       recentRunsByKind.set(kind, recentRuns);
       recentSourcesByKind.set(kind, recentSources);
+      sourceStatsByKind.set(kind, sourceStats);
     }
 
     return (['google_docs', 'github'] as const).map((kind) => {
       const config = byKind.get(kind);
+      const sourceStats = sourceStatsByKind.get(kind) ?? {
+        totalSources: 0,
+        searchableSources: 0,
+      };
       return {
         id: config?.id ?? crypto.randomUUID(),
         kind,
@@ -366,6 +378,8 @@ export class ConnectorService {
         lastError: config?.lastError ?? null,
         hasCredentials: Boolean(config?.credentialsEncrypted),
         selectedRepoCount: config ? getSelectedRepoCount(config.settings) : undefined,
+        totalSourceCount: sourceStats.totalSources,
+        searchableSourceCount: sourceStats.searchableSources,
         recentSyncRuns: recentRunsByKind.get(kind) ?? [],
         recentSources: recentSourcesByKind.get(kind) ?? [],
       };

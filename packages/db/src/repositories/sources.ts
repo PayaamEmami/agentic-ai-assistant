@@ -23,6 +23,11 @@ export interface IndexedSourceSummary {
   updatedAt: Date;
 }
 
+export interface ConnectorSourceStats {
+  totalSources: number;
+  searchableSources: number;
+}
+
 export interface SourceRepository {
   findById(id: string): Promise<Source | null>;
   findByExternalId(userId: string, connectorKind: string, externalId: string): Promise<Source | null>;
@@ -49,6 +54,10 @@ export interface SourceRepository {
     connectorKind: string,
     limit?: number,
   ): Promise<IndexedSourceSummary[]>;
+  getConnectorSourceStats(
+    userId: string,
+    connectorKind: string,
+  ): Promise<ConnectorSourceStats>;
   deleteByUserAndConnector(userId: string, connectorKind: string): Promise<number>;
 }
 
@@ -172,6 +181,24 @@ export const sourceRepository: SourceRepository = {
       [userId, connectorKind, limit],
     );
     return result.rows;
+  },
+
+  async getConnectorSourceStats(
+    userId: string,
+    connectorKind: string,
+  ): Promise<ConnectorSourceStats> {
+    const pool = getPool();
+    const result = await pool.query<ConnectorSourceStats>(
+      `SELECT COUNT(DISTINCT s.id)::int AS "totalSources",
+              COUNT(DISTINCT CASE WHEN e.id IS NOT NULL THEN s.id END)::int AS "searchableSources"
+       FROM sources AS s
+       LEFT JOIN documents AS d ON d.source_id = s.id
+       LEFT JOIN chunks AS c ON c.document_id = d.id
+       LEFT JOIN embeddings AS e ON e.chunk_id = c.id AND e.vector IS NOT NULL
+       WHERE s.user_id = $1 AND s.connector_kind = $2`,
+      [userId, connectorKind],
+    );
+    return result.rows[0] ?? { totalSources: 0, searchableSources: 0 };
   },
 
   async deleteByUserAndConnector(userId: string, connectorKind: string): Promise<number> {

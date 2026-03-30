@@ -25,6 +25,7 @@ export interface AgentContext {
   personalContext?: string;
   activeConnectors?: string[];
   previousResult?: AgentResult;
+  signal?: AbortSignal;
 }
 
 export interface AgentVerificationResult {

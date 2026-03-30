@@ -148,7 +148,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex w-72 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:z-20 md:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-transform duration-200 md:static md:z-20 md:translate-x-0 ${
         collapsed ? 'md:w-20' : 'md:w-72'
       } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
@@ -214,7 +214,7 @@ export function Sidebar({
           </div>
         </div>
       </div>
-      <nav className={`flex-1 overflow-y-auto ${collapsed ? 'p-2' : 'p-2'}`}>
+      <nav className={`min-h-0 flex-1 overflow-y-auto ${collapsed ? 'p-2' : 'p-2'}`}>
         {!collapsed && isConversationListCollapsed ? null : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p
@@ -340,7 +340,7 @@ export function Sidebar({
       </nav>
       <div
         ref={accountMenuRef}
-        className="relative flex min-h-[73px] items-center border-t border-border p-1"
+        className="relative flex min-h-[73px] shrink-0 items-center border-t border-border p-1"
       >
         {isAccountMenuOpen ? (
           <div

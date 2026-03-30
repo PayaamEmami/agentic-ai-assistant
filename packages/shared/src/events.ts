@@ -12,6 +12,13 @@ export interface AssistantTextDoneEvent {
   fullText: string;
 }
 
+export interface AssistantInterruptedEvent {
+  type: 'assistant.interrupted';
+  conversationId: string;
+  messageId: string;
+  reason: 'user_cancelled';
+}
+
 export interface ToolStartEvent {
   type: 'tool.start';
   conversationId: string;
@@ -77,6 +84,7 @@ export interface ErrorEvent {
 export type RealtimeEvent =
   | AssistantTextEvent
   | AssistantTextDoneEvent
+  | AssistantInterruptedEvent
   | ToolStartEvent
   | ToolDoneEvent
   | ApprovalRequestedEvent

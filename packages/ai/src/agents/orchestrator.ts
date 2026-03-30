@@ -13,16 +13,23 @@ import {
 export class OrchestratorAgent implements Agent {
   readonly role = 'orchestrator' as const;
 
-  constructor(private readonly modelProvider: ModelProvider, private readonly model?: string) {}
+  constructor(
+    private readonly modelProvider: ModelProvider,
+    private readonly model?: string,
+  ) {}
 
   async execute(context: AgentContext): Promise<AgentResult> {
     const systemPrompt = buildAgentSystemPrompt(this.role, toSystemPromptContext(context));
-    const messages = [{ role: 'system', content: systemPrompt } as const, ...toChatMessages(context.messageHistory)];
+    const messages = [
+      { role: 'system', content: systemPrompt } as const,
+      ...toChatMessages(context.messageHistory),
+    ];
 
     const completion = await this.modelProvider.complete({
       messages,
       model: this.model,
       tools: toToolDefinitions(context.availableTools),
+      signal: context.signal,
     });
 
     const toolCalls = parseToolCalls(completion.toolCalls);

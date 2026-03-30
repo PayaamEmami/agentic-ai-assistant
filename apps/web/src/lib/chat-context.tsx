@@ -52,12 +52,19 @@ export interface TranscriptContentBlock {
   durationMs?: number;
 }
 
+export interface StatusContentBlock {
+  type: 'status';
+  status: 'interrupted';
+  label?: string;
+}
+
 export type MessageContentBlock =
   | TextContentBlock
   | AttachmentRefContentBlock
   | ToolResultContentBlock
   | CitationContentBlock
-  | TranscriptContentBlock;
+  | TranscriptContentBlock
+  | StatusContentBlock;
 
 export interface ChatMessage {
   id: string;
@@ -108,6 +115,7 @@ export interface ChatLoadingState {
   isLoadingConversations: boolean;
   isLoadingMessages: boolean;
   isSendingMessage: boolean;
+  isInterruptingMessage: boolean;
   isUploadingAttachment: boolean;
   isLoadingApprovals: boolean;
 }
@@ -122,11 +130,15 @@ interface ChatContextValue {
   loading: ChatLoadingState;
   error: string | null;
   sendMessage: (content: string, attachments?: UploadedAttachment[]) => Promise<void>;
+  interruptMessage: () => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;
   renameConversation: (conversationId: string, title: string) => Promise<void>;
   deleteConversation: (conversationId: string) => Promise<void>;
-  uploadAttachment: (file: File, options?: { indexForRag?: boolean }) => Promise<UploadedAttachment>;
+  uploadAttachment: (
+    file: File,
+    options?: { indexForRag?: boolean },
+  ) => Promise<UploadedAttachment>;
   approveAction: (approvalId: string) => Promise<void>;
   rejectAction: (approvalId: string) => Promise<void>;
   startLiveVoiceSession: () => Promise<{
@@ -170,7 +182,9 @@ function parseRole(role: string): ChatRole {
   return 'assistant';
 }
 
-function parseToolStatus(value: unknown): 'planned' | 'pending' | 'running' | 'completed' | 'failed' {
+function parseToolStatus(
+  value: unknown,
+): 'planned' | 'pending' | 'running' | 'completed' | 'failed' {
   if (
     value === 'planned' ||
     value === 'pending' ||
@@ -253,6 +267,14 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
     };
   }
 
+  if (type === 'status') {
+    return {
+      type,
+      status: raw.status === 'interrupted' ? 'interrupted' : 'interrupted',
+      label: asString(raw.label),
+    };
+  }
+
   return { type: 'text', text: stringify(raw) };
 }
 
@@ -278,7 +300,9 @@ function sortConversations(items: ConversationSummary[]): ConversationSummary[] 
   });
 }
 
-function normalizeConversationSummary(conversation: ConversationSummaryResponse): ConversationSummary {
+function normalizeConversationSummary(
+  conversation: ConversationSummaryResponse,
+): ConversationSummary {
   return {
     id: conversation.id,
     title: conversation.title,
@@ -440,10 +464,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [isSendingMessage, setIsSendingMessage] = useState(false);
+  const [isInterruptingMessage, setIsInterruptingMessage] = useState(false);
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
+  const activeRunConversationIdRef = useRef<string | undefined>(undefined);
 
   const loadPendingApprovals = useCallback(async () => {
     setIsLoadingApprovals(true);
@@ -472,7 +499,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const remoteConversations = response.conversations.map(normalizeConversationSummary);
       setConversations((previous) => mergeConversations(previous, remoteConversations));
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to load conversations');
+      setError(
+        requestError instanceof Error ? requestError.message : 'Failed to load conversations',
+      );
     } finally {
       setIsLoadingConversations(false);
     }
@@ -492,25 +521,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [loadConversations, refreshConversation],
   );
 
-  const selectConversation = useCallback(async (conversationId?: string) => {
-    setError(null);
-    setCurrentConversationId(conversationId);
+  const selectConversation = useCallback(
+    async (conversationId?: string) => {
+      setError(null);
+      setCurrentConversationId(conversationId);
 
-    if (!conversationId) {
-      setMessages([]);
-      return;
-    }
+      if (!conversationId) {
+        setMessages([]);
+        return;
+      }
 
-    setIsLoadingMessages(true);
-    try {
-      await refreshConversation(conversationId);
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to load conversation');
-      setMessages([]);
-    } finally {
-      setIsLoadingMessages(false);
-    }
-  }, [refreshConversation]);
+      setIsLoadingMessages(true);
+      try {
+        await refreshConversation(conversationId);
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error ? requestError.message : 'Failed to load conversation',
+        );
+        setMessages([]);
+      } finally {
+        setIsLoadingMessages(false);
+      }
+    },
+    [refreshConversation],
+  );
 
   const sendMessage = useCallback(
     async (content: string, attachments: UploadedAttachment[] = []) => {
@@ -521,6 +555,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       setError(null);
       setIsSendingMessage(true);
+      setIsInterruptingMessage(false);
+
+      const clientRunId = crypto.randomUUID();
+      activeRunIdRef.current = clientRunId;
+      activeRunConversationIdRef.current = currentConversationId;
 
       const optimisticUserMessage = createOptimisticUserMessage(trimmedContent, attachments);
       setMessages((previous) => [...previous, optimisticUserMessage]);
@@ -531,9 +570,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           trimmedContent,
           currentConversationId,
           attachmentIds.length > 0 ? attachmentIds : undefined,
+          clientRunId,
         );
 
         const timestamp = new Date().toISOString();
+        activeRunConversationIdRef.current = response.conversationId;
         setCurrentConversationId(response.conversationId);
         setConversations((previous) =>
           upsertConversation(previous, {
@@ -549,7 +590,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const detail = await api.chat.getConversation(response.conversationId);
           const nextMessages = detail.messages.map(normalizeMessage);
           if (nextMessages.length > 0) {
-            hasAssistantMessage = nextMessages.some((message) => message.role === 'assistant');
+            hasAssistantMessage = nextMessages.some((message) => message.role !== 'user');
             setMessages(nextMessages);
           }
         } catch (detailError) {
@@ -563,12 +604,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         }
 
         if (!hasAssistantMessage) {
-          setMessages((previous) => [...previous, createFallbackAssistantMessage(response.messageId)]);
+          setMessages((previous) => [
+            ...previous,
+            createFallbackAssistantMessage(response.messageId),
+          ]);
         }
 
         await Promise.all([loadConversations(), loadPendingApprovals()]);
       } catch (requestError) {
-        const message = requestError instanceof Error ? requestError.message : 'Failed to send message';
+        const message =
+          requestError instanceof Error ? requestError.message : 'Failed to send message';
         setError(message);
         setMessages((previous) => [
           ...previous,
@@ -580,11 +625,39 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           },
         ]);
       } finally {
+        activeRunIdRef.current = null;
+        activeRunConversationIdRef.current = undefined;
         setIsSendingMessage(false);
+        setIsInterruptingMessage(false);
       }
     },
     [currentConversationId, loadConversations, loadPendingApprovals],
   );
+
+  const interruptMessage = useCallback(async () => {
+    const activeRunId = activeRunIdRef.current;
+    if (!activeRunId) {
+      return;
+    }
+
+    setError(null);
+    setIsInterruptingMessage(true);
+
+    try {
+      const response = await api.chat.interruptRun(activeRunId);
+      const conversationId = response.conversationId ?? activeRunConversationIdRef.current;
+
+      if (conversationId) {
+        activeRunConversationIdRef.current = conversationId;
+        setCurrentConversationId(conversationId);
+        await Promise.all([refreshConversation(conversationId), loadConversations()]);
+      }
+    } catch (requestError) {
+      setIsInterruptingMessage(false);
+      setError(requestError instanceof Error ? requestError.message : 'Failed to stop message');
+      throw requestError;
+    }
+  }, [loadConversations, refreshConversation]);
 
   const uploadAttachment = useCallback(async (file: File, options?: { indexForRag?: boolean }) => {
     setError(null);
@@ -600,23 +673,30 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         documentId: response.documentId,
       };
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to upload attachment');
+      setError(
+        requestError instanceof Error ? requestError.message : 'Failed to upload attachment',
+      );
       throw requestError;
     } finally {
       setIsUploadingAttachment(false);
     }
   }, []);
 
-  const decideApproval = useCallback(async (approvalId: string, status: 'approved' | 'rejected') => {
-    setError(null);
-    try {
-      await api.approvals.decide(approvalId, status);
-      setPendingApprovals((previous) => previous.filter((item) => item.id !== approvalId));
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to decide approval');
-      throw requestError;
-    }
-  }, []);
+  const decideApproval = useCallback(
+    async (approvalId: string, status: 'approved' | 'rejected') => {
+      setError(null);
+      try {
+        await api.approvals.decide(approvalId, status);
+        setPendingApprovals((previous) => previous.filter((item) => item.id !== approvalId));
+      } catch (requestError) {
+        setError(
+          requestError instanceof Error ? requestError.message : 'Failed to decide approval',
+        );
+        throw requestError;
+      }
+    },
+    [],
+  );
 
   const approveAction = useCallback(
     async (approvalId: string) => {
@@ -654,7 +734,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         return upsertConversation(previous, {
           id: conversationId,
-          title: existing?.title ?? (role === 'user' ? buildConversationTitle(trimmed) : 'Untitled conversation'),
+          title:
+            existing?.title ??
+            (role === 'user' ? buildConversationTitle(trimmed) : 'Untitled conversation'),
           createdAt: existing?.createdAt ?? timestamp,
           updatedAt: timestamp,
         });
@@ -671,7 +753,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         upsertConversation(previous, normalizeConversationSummary(response.conversation)),
       );
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to rename conversation');
+      setError(
+        requestError instanceof Error ? requestError.message : 'Failed to rename conversation',
+      );
       throw requestError;
     }
   }, []);
@@ -681,7 +765,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setError(null);
       try {
         await api.chat.deleteConversation(conversationId);
-        const remaining = conversations.filter((conversation) => conversation.id !== conversationId);
+        const remaining = conversations.filter(
+          (conversation) => conversation.id !== conversationId,
+        );
         setConversations(remaining);
 
         if (currentConversationId === conversationId) {
@@ -695,7 +781,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             try {
               await refreshConversation(nextConversationId);
             } catch (requestError) {
-              setError(requestError instanceof Error ? requestError.message : 'Failed to load conversation');
+              setError(
+                requestError instanceof Error
+                  ? requestError.message
+                  : 'Failed to load conversation',
+              );
               setMessages([]);
             } finally {
               setIsLoadingMessages(false);
@@ -705,7 +795,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
         await loadPendingApprovals();
       } catch (requestError) {
-        setError(requestError instanceof Error ? requestError.message : 'Failed to delete conversation');
+        setError(
+          requestError instanceof Error ? requestError.message : 'Failed to delete conversation',
+        );
         throw requestError;
       }
     },
@@ -746,6 +838,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
 
       switch (parsed.type) {
         case 'assistant.text.done':
+        case 'assistant.interrupted':
         case 'tool.start':
         case 'tool.done':
           void refreshConversation(currentConversationId);
@@ -787,6 +880,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       isLoadingConversations,
       isLoadingMessages,
       isSendingMessage,
+      isInterruptingMessage,
       isUploadingAttachment,
       isLoadingApprovals,
     }),
@@ -795,6 +889,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       isLoadingConversations,
       isLoadingMessages,
       isSendingMessage,
+      isInterruptingMessage,
       isUploadingAttachment,
     ],
   );
@@ -810,6 +905,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       loading,
       error,
       sendMessage,
+      interruptMessage,
       loadConversations,
       selectConversation,
       renameConversation,
@@ -827,6 +923,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       conversations,
       currentConversationId,
       error,
+      interruptMessage,
       loadConversations,
       loading,
       messages,

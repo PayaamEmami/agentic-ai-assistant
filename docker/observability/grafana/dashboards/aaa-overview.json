@@ -12,11 +12,15 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
       "id": 1,
       "targets": [
         { "expr": "sum(rate(aaa_api_http_requests_total[5m]))", "refId": "A" }
       ],
+      "options": {
+        "legend": { "displayMode": "hidden", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
       "title": "API Request Rate",
       "type": "timeseries"
     },
@@ -24,34 +28,24 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "fieldConfig": {
         "defaults": {
-          "unit": "reqps",
-          "custom": { "axisLabel": "jobs / sec" }
+          "unit": "ms",
+          "custom": { "axisLabel": "ms" }
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
       "id": 2,
       "targets": [
-        { "expr": "sum(rate(aaa_worker_jobs_total[5m])) by (queue, outcome)", "refId": "A" }
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aaa_api_http_request_duration_ms_bucket[5m])) by (le))",
+          "refId": "A"
+        }
       ],
-      "title": "Worker Job Rate",
-      "type": "timeseries"
-    },
-    {
-      "datasource": { "type": "prometheus", "uid": "prometheus" },
-      "fieldConfig": {
-        "defaults": {
-          "unit": "currencyUSD",
-          "custom": { "axisLabel": "USD / sec" }
-        },
-        "overrides": []
+      "options": {
+        "legend": { "displayMode": "hidden", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
       },
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
-      "id": 3,
-      "targets": [
-        { "expr": "sum(rate(aaa_openai_estimated_cost_usd_total[5m])) by (operation, model)", "refId": "A" }
-      ],
-      "title": "Estimated OpenAI Cost Rate",
+      "title": "API Latency P95",
       "type": "timeseries"
     },
     {
@@ -63,12 +57,156 @@
         },
         "overrides": []
       },
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "id": 3,
+      "targets": [
+        { "expr": "sum(aaa_api_websocket_connections) by (state)", "legendFormat": "{{state}}", "refId": "A" }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Active WebSocket Connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "axisLabel": "jobs / sec" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "id": 4,
       "targets": [
-        { "expr": "aaa_api_websocket_connections", "refId": "A" }
+        { "expr": "sum(rate(aaa_worker_jobs_total[5m])) by (queue, outcome)", "legendFormat": "{{queue}} | {{outcome}}", "refId": "A" }
       ],
-      "title": "Active WebSocket Connections",
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Worker Job Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "axisLabel": "jobs" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "id": 5,
+      "targets": [
+        {
+          "expr": "sum(aaa_worker_queue_depth{state=~\"waiting|active|failed\"}) by (queue, state)",
+          "legendFormat": "{{queue}} | {{state}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Worker Queue Depth",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "axisLabel": "failures / sec" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+      "id": 6,
+      "targets": [
+        {
+          "expr": "sum(rate(aaa_worker_jobs_total{outcome=\"failure\"}[5m])) by (queue)",
+          "legendFormat": "{{queue}}",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Worker Failure Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "currencyUSD",
+          "custom": { "axisLabel": "USD / sec" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "id": 7,
+      "targets": [
+        { "expr": "sum(rate(aaa_openai_estimated_cost_usd_total[5m])) by (operation, model)", "legendFormat": "{{operation}} | {{model}}", "refId": "A" }
+      ],
+      "options": {
+        "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "title": "Estimated OpenAI Cost Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "axisLabel": "ms" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "id": 8,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aaa_openai_request_duration_ms_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "hidden", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "title": "OpenAI Latency P95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "custom": { "axisLabel": "ms" }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "id": 9,
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(aaa_db_query_duration_ms_bucket[5m])) by (le))",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "legend": { "displayMode": "hidden", "placement": "bottom", "showLegend": false },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "title": "DB Query Latency P95",
       "type": "timeseries"
     }
   ],

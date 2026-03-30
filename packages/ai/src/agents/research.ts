@@ -7,7 +7,10 @@ import { toChatMessages, toSystemPromptContext } from './helpers.js';
 export class ResearchAgent implements Agent {
   readonly role = 'research' as const;
 
-  constructor(private readonly modelProvider: ModelProvider, private readonly model?: string) {}
+  constructor(
+    private readonly modelProvider: ModelProvider,
+    private readonly model?: string,
+  ) {}
 
   async execute(context: AgentContext): Promise<AgentResult> {
     const systemPrompt = buildAgentSystemPrompt(this.role, toSystemPromptContext(context));
@@ -20,6 +23,7 @@ export class ResearchAgent implements Agent {
     const completion = await this.modelProvider.complete({
       messages,
       model: this.model,
+      signal: context.signal,
     });
 
     return {

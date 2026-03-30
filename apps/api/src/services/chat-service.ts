@@ -22,7 +22,9 @@ import { getConfiguredToolRegistry, type UnifiedToolDescriptor } from '@aaa/mcp'
 import {
   NATIVE_TOOL_DEFINITIONS,
   type ApprovalRequestedEvent,
+  type AssistantInterruptedEvent,
   type AssistantTextDoneEvent,
+  type InterruptChatRunResponse,
 } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
@@ -39,8 +41,19 @@ const MAX_RETRIEVAL_CONTEXT = 6;
 const MAX_CITATIONS = 4;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
-const TOOL_APPROVAL_RESPONSE = 'I prepared tool calls and requested approval for protected actions.';
+const TOOL_APPROVAL_RESPONSE =
+  'I prepared tool calls and requested approval for protected actions.';
 const MAX_CONVERSATION_TITLE_CHARS = 80;
+const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
+const USER_CANCELLED_REASON = 'user_cancelled' as const;
+
+interface ActiveChatRun {
+  userId: string;
+  controller: AbortController;
+  conversationId?: string;
+}
+
+const activeChatRuns = new Map<string, ActiveChatRun>();
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
@@ -55,6 +68,28 @@ type AvailableTool = {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return (
+      error.name === 'AbortError' ||
+      error.name === 'APIUserAbortError' ||
+      error.message === 'Chat run interrupted'
+    );
+  }
+
+  return false;
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error('Chat run interrupted');
+  }
 }
 
 function extractTextFromContent(content: unknown[]): string {
@@ -132,7 +167,9 @@ function summarizeToolContent(content: unknown[]): string {
     const toolName = typeof block.toolName === 'string' ? block.toolName : 'tool';
     const status = typeof block.status === 'string' ? block.status : 'completed';
     const output = 'output' in block ? stringifyValue(block.output) : null;
-    summaries.push(output ? `Tool ${toolName} ${status}. Output: ${output}` : `Tool ${toolName} ${status}.`);
+    summaries.push(
+      output ? `Tool ${toolName} ${status}. Output: ${output}` : `Tool ${toolName} ${status}.`,
+    );
   }
 
   return summaries.join('\n').trim();
@@ -328,6 +365,7 @@ function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
 interface SendMessageOptions {
   conversationId?: string;
   attachmentIds?: string[];
+  clientRunId?: string;
 }
 
 interface SendMessageResult {
@@ -365,15 +403,51 @@ export class ChatService {
     content: string,
     conversationId?: string,
     attachmentIds?: string[],
+    clientRunId?: string,
   ) {
-    const result = await this.processMessage(userId, content, {
-      conversationId,
-      attachmentIds,
-    });
+    const activeRun =
+      clientRunId !== undefined
+        ? {
+            userId,
+            controller: new AbortController(),
+            conversationId,
+          }
+        : undefined;
+
+    if (clientRunId && activeRun) {
+      activeChatRuns.set(clientRunId, activeRun);
+    }
+
+    let result: SendMessageResult;
+    try {
+      result = await this.processMessage(userId, content, {
+        conversationId,
+        attachmentIds,
+        clientRunId,
+      });
+    } finally {
+      if (clientRunId) {
+        activeChatRuns.delete(clientRunId);
+      }
+    }
 
     return {
       conversationId: result.conversationId,
       messageId: result.messageId,
+    };
+  }
+
+  async interruptRun(userId: string, runId: string): Promise<InterruptChatRunResponse> {
+    const activeRun = activeChatRuns.get(runId);
+    if (!activeRun || activeRun.userId !== userId) {
+      return { ok: false, status: 'not_found' };
+    }
+
+    activeRun.controller.abort(new Error('Chat run interrupted'));
+    return {
+      ok: true,
+      status: 'interrupting',
+      conversationId: activeRun.conversationId,
     };
   }
 
@@ -384,6 +458,9 @@ export class ChatService {
   ): Promise<SendMessageResult> {
     getPool();
     const initialConversationTitle = buildConversationTitle(content);
+    const activeRun =
+      options.clientRunId !== undefined ? activeChatRuns.get(options.clientRunId) : undefined;
+    const signal = activeRun?.controller.signal;
 
     const conversation =
       options.conversationId === undefined
@@ -392,6 +469,10 @@ export class ChatService {
 
     if (!conversation || conversation.userId !== userId) {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    if (activeRun) {
+      activeRun.conversationId = conversation.id;
     }
 
     const attachments = options.attachmentIds?.length
@@ -403,12 +484,14 @@ export class ChatService {
 
     const alreadyAttached = attachments.find((attachment) => attachment.messageId !== null);
     if (alreadyAttached) {
-      throw new AppError(409, 'An attachment has already been sent in another message', 'ATTACHMENT_ALREADY_USED');
+      throw new AppError(
+        409,
+        'An attachment has already been sent in another message',
+        'ATTACHMENT_ALREADY_USED',
+      );
     }
 
-    const userMessageContent: Array<Record<string, unknown>> = [
-      { type: 'text', text: content },
-    ];
+    const userMessageContent: Array<Record<string, unknown>> = [{ type: 'text', text: content }];
     for (const attachment of attachments) {
       userMessageContent.push({
         type: 'attachment_ref',
@@ -424,7 +507,11 @@ export class ChatService {
     const userMessage = await messageRepository.create(conversation.id, 'user', userMessageContent);
     await Promise.all(
       attachments.map(async (attachment) => {
-        const linked = await attachmentRepository.attachToMessage(attachment.id, userMessage.id, userId);
+        const linked = await attachmentRepository.attachToMessage(
+          attachment.id,
+          userMessage.id,
+          userId,
+        );
         if (!linked) {
           throw new AppError(
             409,
@@ -435,210 +522,290 @@ export class ChatService {
       }),
     );
 
-    const recentMessages = await messageRepository.listByConversation(
-      conversation.id,
-      HISTORY_LIMIT,
-    );
-
-    if (
-      conversation.title === null &&
-      recentMessages.length === 1 &&
-      initialConversationTitle
-    ) {
-      await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
-    }
-
-    const retrieval = await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT);
-    const retrievalContext = retrieval.results.map((result) => result.content);
-    const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
-    const personalContext = await this.personalizationService.getPersonalContext(userId);
-    const activeConnectors = (await connectorConfigRepository.listByUser(userId))
-      .filter((connector) => connector.status === 'connected')
-      .map((connector) => connectorLabel(connector.kind));
-    const availableTools = await loadAvailableTools();
-
-    let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
-    let toolCalls: AgentToolCall[] = [];
-    let requiresApproval = false;
-    let verificationIssues: string[] = [];
-    let verificationStatus: 'approved' | 'revise' | null = null;
     try {
-      const result = await this.agentOrchestrator.run({
-        conversationId: conversation.id,
-        userId,
-        messageHistory,
-        availableTools: toAgentToolContexts(availableTools),
-        retrievedContext: retrievalContext,
-        personalContext,
-        activeConnectors,
-      });
-      toolCalls = result.toolCalls;
-      requiresApproval = result.requiresApproval;
-      verificationIssues = result.verification?.issues ?? [];
-      verificationStatus = result.verification?.status ?? null;
-      assistantResponse = normalizeAssistantResponse(result.response, toolCalls, requiresApproval);
-    } catch (error) {
-      logger.error(
-        {
-          event: 'chat.generation_failed',
-          outcome: 'failure',
-          conversationId: conversation.id,
-          error,
-        },
-        'Assistant generation failed',
-      );
-    }
+      throwIfAborted(signal);
 
-    const availableToolsByName = new Map(
-      availableTools.map((tool) => [tool.name, tool] as const),
-    );
-    const toolResultBlocks: Array<Record<string, unknown>> = [];
-    const approvalEvents: ApprovalRequestedEvent[] = [];
-    let hasApprovalRequest = false;
-
-    for (const toolCall of toolCalls) {
-      const tool = availableToolsByName.get(toolCall.name);
-      if (!tool) {
-        continue;
-      }
-
-      const toolInput = toolCall.arguments;
-      const toolExecution = await toolExecutionRepository.create(
+      const recentMessages = await messageRepository.listByConversation(
         conversation.id,
-        null,
-        toolCall.name,
-        toolInput,
-        tool.origin,
+        HISTORY_LIMIT,
       );
 
-      if (tool.requiresApproval) {
-        hasApprovalRequest = true;
-        await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
-        const approval = await approvalRepository.create(
-          userId,
-          conversation.id,
-          toolExecution.id,
-          `Approve execution of tool "${toolCall.name}"`,
-        );
-        await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
-
-        toolResultBlocks.push({
-          type: 'tool_result',
-          toolExecutionId: toolExecution.id,
-          toolName: toolCall.name,
-          status: 'planned',
-        });
-
-        approvalEvents.push({
-          type: 'approval.requested',
-          conversationId: conversation.id,
-          approvalId: approval.id,
-          toolExecutionId: toolExecution.id,
-          description: approval.description,
-        });
-      } else {
-        await enqueueToolExecutionJob({
-          toolExecutionId: toolExecution.id,
-          toolName: toolCall.name,
-          input: toolInput,
-          conversationId: conversation.id,
-          correlationId:
-            getLogContext().correlationId ?? `chat-${conversation.id}-${toolExecution.id}`,
-        });
-
-        toolResultBlocks.push({
-          type: 'tool_result',
-          toolExecutionId: toolExecution.id,
-          toolName: toolCall.name,
-          status: 'planned',
-        });
+      if (conversation.title === null && recentMessages.length === 1 && initialConversationTitle) {
+        await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
       }
-    }
 
-    if (
-      hasApprovalRequest &&
-      toolCalls.length > 0 &&
-      (assistantResponse === TOOL_ACTION_RESPONSE || (!assistantResponse.trim() && requiresApproval))
-    ) {
-      assistantResponse = TOOL_APPROVAL_RESPONSE;
-    }
+      const retrieval = await this.retrievalBridge.search(
+        content,
+        userId,
+        MAX_RETRIEVAL_CONTEXT,
+        signal,
+      );
+      throwIfAborted(signal);
 
-    const assistantTextBlock: Record<string, unknown> = { type: 'text', text: assistantResponse };
-    if (verificationStatus) {
-      assistantTextBlock['verificationStatus'] = verificationStatus;
-    }
-    if (verificationIssues.length > 0) {
-      assistantTextBlock['verificationIssues'] = verificationIssues;
-    }
+      const retrievalContext = retrieval.results.map((result) => {
+        const connectorKind =
+          typeof result.metadata.connectorKind === 'string' ? result.metadata.connectorKind : null;
+        const lines = [
+          `Title: ${result.documentTitle}`,
+          connectorKind ? `Connector: ${connectorKind}` : null,
+          result.uri ? `URI: ${result.uri}` : null,
+          `Content:\n${result.content}`,
+        ].filter((line): line is string => line !== null);
 
-    const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
-    if (toolResultBlocks.length > 0) {
-      assistantContent.push(...toolResultBlocks);
-    } else {
-      assistantContent.push(...toCitationContentBlocks(retrieval.citations));
+        return lines.join('\n');
+      });
+      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
+      throwIfAborted(signal);
+
+      const personalContext = await this.personalizationService.getPersonalContext(userId);
+      throwIfAborted(signal);
+
+      const activeConnectors = (await connectorConfigRepository.listByUser(userId))
+        .filter((connector) => connector.status === 'connected')
+        .map((connector) => connectorLabel(connector.kind));
+      throwIfAborted(signal);
+
+      const availableTools = await loadAvailableTools();
+      throwIfAborted(signal);
+
+      let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
+      let toolCalls: AgentToolCall[] = [];
+      let requiresApproval = false;
+      let verificationIssues: string[] = [];
+      let verificationStatus: 'approved' | 'revise' | null = null;
+      try {
+        const result = await this.agentOrchestrator.run({
+          conversationId: conversation.id,
+          userId,
+          messageHistory,
+          availableTools: toAgentToolContexts(availableTools),
+          retrievedContext: retrievalContext,
+          personalContext,
+          activeConnectors,
+          signal,
+        });
+        toolCalls = result.toolCalls;
+        requiresApproval = result.requiresApproval;
+        verificationIssues = result.verification?.issues ?? [];
+        verificationStatus = result.verification?.status ?? null;
+        assistantResponse = normalizeAssistantResponse(
+          result.response,
+          toolCalls,
+          requiresApproval,
+        );
+      } catch (error) {
+        if (signal?.aborted || isAbortError(error)) {
+          throw error;
+        }
+
+        logger.error(
+          {
+            event: 'chat.generation_failed',
+            outcome: 'failure',
+            conversationId: conversation.id,
+            error,
+          },
+          'Assistant generation failed',
+        );
+      }
+
+      const availableToolsByName = new Map(
+        availableTools.map((tool) => [tool.name, tool] as const),
+      );
+      const toolResultBlocks: Array<Record<string, unknown>> = [];
+      const approvalEvents: ApprovalRequestedEvent[] = [];
+      let hasApprovalRequest = false;
+
+      for (const toolCall of toolCalls) {
+        throwIfAborted(signal);
+
+        const tool = availableToolsByName.get(toolCall.name);
+        if (!tool) {
+          continue;
+        }
+
+        const toolInput = toolCall.arguments;
+        const toolExecution = await toolExecutionRepository.create(
+          conversation.id,
+          null,
+          toolCall.name,
+          toolInput,
+          tool.origin,
+        );
+
+        if (tool.requiresApproval) {
+          hasApprovalRequest = true;
+          await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
+          const approval = await approvalRepository.create(
+            userId,
+            conversation.id,
+            toolExecution.id,
+            `Approve execution of tool "${toolCall.name}"`,
+          );
+          await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
+
+          toolResultBlocks.push({
+            type: 'tool_result',
+            toolExecutionId: toolExecution.id,
+            toolName: toolCall.name,
+            status: 'planned',
+          });
+
+          approvalEvents.push({
+            type: 'approval.requested',
+            conversationId: conversation.id,
+            approvalId: approval.id,
+            toolExecutionId: toolExecution.id,
+            description: approval.description,
+          });
+        } else {
+          await enqueueToolExecutionJob({
+            toolExecutionId: toolExecution.id,
+            toolName: toolCall.name,
+            input: toolInput,
+            conversationId: conversation.id,
+            correlationId:
+              getLogContext().correlationId ?? `chat-${conversation.id}-${toolExecution.id}`,
+          });
+
+          toolResultBlocks.push({
+            type: 'tool_result',
+            toolExecutionId: toolExecution.id,
+            toolName: toolCall.name,
+            status: 'planned',
+          });
+        }
+      }
+
+      if (
+        hasApprovalRequest &&
+        toolCalls.length > 0 &&
+        (assistantResponse === TOOL_ACTION_RESPONSE ||
+          (!assistantResponse.trim() && requiresApproval))
+      ) {
+        assistantResponse = TOOL_APPROVAL_RESPONSE;
+      }
+
+      const assistantTextBlock: Record<string, unknown> = { type: 'text', text: assistantResponse };
+      if (verificationStatus) {
+        assistantTextBlock['verificationStatus'] = verificationStatus;
+      }
+      if (verificationIssues.length > 0) {
+        assistantTextBlock['verificationIssues'] = verificationIssues;
+      }
+
+      const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
+      if (toolResultBlocks.length > 0) {
+        assistantContent.push(...toolResultBlocks);
+      } else {
+        assistantContent.push(...toCitationContentBlocks(retrieval.citations));
+      }
+
+      const assistantMessage = await messageRepository.create(
+        conversation.id,
+        'assistant',
+        assistantContent,
+      );
+
+      const event: AssistantTextDoneEvent = {
+        type: 'assistant.text.done',
+        conversationId: conversation.id,
+        messageId: assistantMessage.id,
+        fullText: assistantResponse,
+      };
+
+      broadcast(conversation.id, event);
+      for (const approvalEvent of approvalEvents) {
+        broadcast(conversation.id, approvalEvent);
+      }
+
+      if (verificationIssues.length > 0) {
+        logger.warn(
+          {
+            event: 'chat.verification_flagged',
+            outcome: 'failure',
+            conversationId: conversation.id,
+            verificationStatus,
+            verificationIssues,
+          },
+          'Verifier revised or flagged the assistant response',
+        );
+      }
+
+      logger.info(
+        {
+          event: 'chat.message_completed',
+          outcome: 'success',
+          userId,
+          conversationId: conversation.id,
+        },
+        'Processing chat message',
+      );
+      logger.debug(
+        {
+          event: 'chat.message_processed',
+          outcome: 'success',
+          conversationId: conversation.id,
+          historySize: recentMessages.length,
+          attachmentCount: attachments.length,
+          retrievalResultCount: retrieval.results.length,
+          citationCount: retrieval.citations.length,
+          toolCallCount: toolCalls.length,
+          approvalRequestCount: approvalEvents.length,
+          verificationStatus,
+          verifierIssueCount: verificationIssues.length,
+        },
+        'Chat message processed',
+      );
+
+      return {
+        conversationId: conversation.id,
+        messageId: assistantMessage.id,
+        assistantText: assistantResponse,
+      };
+    } catch (error) {
+      if (!signal?.aborted && !isAbortError(error)) {
+        throw error;
+      }
+
+      return this.createInterruptedMessage(conversation.id, userId);
     }
+  }
 
-    const assistantMessage = await messageRepository.create(
-      conversation.id,
-      'assistant',
-      assistantContent,
-    );
+  private async createInterruptedMessage(
+    conversationId: string,
+    userId: string,
+  ): Promise<SendMessageResult> {
+    const interruptedMessage = await messageRepository.create(conversationId, 'assistant', [
+      {
+        type: 'status',
+        status: 'interrupted',
+        label: INTERRUPTED_STATUS_LABEL,
+      },
+    ]);
 
-    const event: AssistantTextDoneEvent = {
-      type: 'assistant.text.done',
-      conversationId: conversation.id,
-      messageId: assistantMessage.id,
-      fullText: assistantResponse,
+    const event: AssistantInterruptedEvent = {
+      type: 'assistant.interrupted',
+      conversationId,
+      messageId: interruptedMessage.id,
+      reason: USER_CANCELLED_REASON,
     };
 
-    broadcast(conversation.id, event);
-    for (const approvalEvent of approvalEvents) {
-      broadcast(conversation.id, approvalEvent);
-    }
-
-    if (verificationIssues.length > 0) {
-      logger.warn(
-        {
-          event: 'chat.verification_flagged',
-          outcome: 'failure',
-          conversationId: conversation.id,
-          verificationStatus,
-          verificationIssues,
-        },
-        'Verifier revised or flagged the assistant response',
-      );
-    }
-
+    broadcast(conversationId, event);
     logger.info(
       {
-        event: 'chat.message_completed',
-        outcome: 'success',
+        event: 'chat.message_interrupted',
+        outcome: 'stop',
         userId,
-        conversationId: conversation.id,
+        conversationId,
       },
-      'Processing chat message',
-    );
-    logger.debug(
-      {
-        event: 'chat.message_processed',
-        outcome: 'success',
-        conversationId: conversation.id,
-        historySize: recentMessages.length,
-        attachmentCount: attachments.length,
-        retrievalResultCount: retrieval.results.length,
-        citationCount: retrieval.citations.length,
-        toolCallCount: toolCalls.length,
-        approvalRequestCount: approvalEvents.length,
-        verificationStatus,
-        verifierIssueCount: verificationIssues.length,
-      },
-      'Chat message processed',
+      'Chat message interrupted by user',
     );
 
     return {
-      conversationId: conversation.id,
-      messageId: assistantMessage.id,
-      assistantText: assistantResponse,
+      conversationId,
+      messageId: interruptedMessage.id,
+      assistantText: '',
     };
   }
 

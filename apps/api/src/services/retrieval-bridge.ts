@@ -10,6 +10,44 @@ import { logger } from '../lib/logger.js';
 const DEFAULT_RESULT_LIMIT = 6;
 const MAX_RESULT_LIMIT = 20;
 const CANDIDATE_MULTIPLIER = 4;
+const QUERY_STOPWORDS = new Set([
+  'about',
+  'does',
+  'from',
+  'have',
+  'info',
+  'information',
+  'know',
+  'like',
+  'show',
+  'tell',
+  'that',
+  'them',
+  'they',
+  'this',
+  'what',
+  'when',
+  'where',
+  'which',
+  'with',
+  'would',
+  'your',
+  'you',
+  'me',
+  'my',
+]);
+
+function isAbortError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === 'AbortError') {
+    return true;
+  }
+
+  if (error instanceof Error) {
+    return error.name === 'AbortError' || error.name === 'APIUserAbortError';
+  }
+
+  return false;
+}
 
 export interface RetrievalSearchResult {
   chunkId: string;
@@ -46,14 +84,14 @@ function normalizeLimit(limit: number | undefined): number {
 function tokenize(text: string): string[] {
   const normalized = text
     .toLowerCase()
-    .split(/\s+/)
-    .map((token) => token.replace(/[^a-z0-9]/g, ''))
-    .filter((token) => token.length >= 3);
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 3 && !QUERY_STOPWORDS.has(token));
 
   return Array.from(new Set(normalized));
 }
 
-function keywordBoost(query: string, content: string): number {
+function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
   const keywords = tokenize(query);
   if (keywords.length === 0) {
     return 0;
@@ -67,7 +105,7 @@ function keywordBoost(query: string, content: string): number {
     }
   }
 
-  return (matches / keywords.length) * 0.25;
+  return (matches / keywords.length) * maxBoost;
 }
 
 function truncateOnWordBoundary(content: string, maxLength: number): string {
@@ -94,7 +132,12 @@ export class RetrievalBridge {
       modelProvider ?? (apiKey ? new OpenAIProvider(apiKey, process.env['OPENAI_MODEL']) : null);
   }
 
-  async search(query: string, userId: string, limit?: number): Promise<RetrievalResponse> {
+  async search(
+    query: string,
+    userId: string,
+    limit?: number,
+    signal?: AbortSignal,
+  ): Promise<RetrievalResponse> {
     const trimmedQuery = query.trim();
     if (!trimmedQuery || !this.modelProvider) {
       return { results: [], citations: [] };
@@ -106,6 +149,7 @@ export class RetrievalBridge {
       const embeddingResponse = await this.modelProvider.embed({
         input: [trimmedQuery],
         model: process.env['OPENAI_EMBEDDING_MODEL'],
+        signal,
       });
       const queryVector = embeddingResponse.embeddings[0];
 
@@ -146,6 +190,10 @@ export class RetrievalBridge {
         citations: this.assembleCitations(results),
       };
     } catch (error) {
+      if (isAbortError(error)) {
+        throw error;
+      }
+
       logger.warn(
         {
           event: 'retrieval.search_failed',
@@ -186,13 +234,15 @@ export class RetrievalBridge {
 
     const sourceId = source?.id ?? document.sourceId ?? document.id;
     const baseScore = totalCandidates <= 1 ? 1 : 1 - index / (totalCandidates - 1);
+    const contentScore = keywordBoost(query, chunk.content);
+    const titleScore = keywordBoost(query, document.title, 0.75);
 
     return {
       chunkId: chunk.id,
       documentId: chunk.documentId,
       sourceId,
       content: chunk.content,
-      score: baseScore + keywordBoost(query, chunk.content),
+      score: baseScore + contentScore + titleScore,
       metadata: chunk.metadata,
       documentTitle: document.title,
       uri: source?.uri ?? null,

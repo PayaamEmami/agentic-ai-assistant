@@ -28,6 +28,7 @@ export const SendMessageRequest = z.object({
   conversationId: z.string().uuid().optional(),
   content: z.string().min(1).max(32000),
   attachmentIds: z.array(z.string().uuid()).optional(),
+  clientRunId: z.string().uuid().optional(),
 });
 export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
 
@@ -36,6 +37,13 @@ export const SendMessageResponse = z.object({
   messageId: z.string().uuid(),
 });
 export type SendMessageResponse = z.infer<typeof SendMessageResponse>;
+
+export const InterruptChatRunResponse = z.object({
+  ok: z.boolean(),
+  status: z.enum(['interrupting', 'not_found']),
+  conversationId: z.string().uuid().optional(),
+});
+export type InterruptChatRunResponse = z.infer<typeof InterruptChatRunResponse>;
 
 export const UploadAttachmentResponse = z.object({
   attachmentId: z.string().uuid(),
@@ -199,6 +207,8 @@ export const ConnectorSummaryDto = z.object({
   lastError: z.string().nullable(),
   hasCredentials: z.boolean(),
   selectedRepoCount: z.number().int().nonnegative().optional(),
+  totalSourceCount: z.number().int().nonnegative().default(0),
+  searchableSourceCount: z.number().int().nonnegative().default(0),
   recentSyncRuns: z.array(ConnectorSyncRunDto).default([]),
   recentSources: z.array(ConnectorSourceDto).default([]),
 });
@@ -270,7 +280,9 @@ export const UpdatePersonalizationProfileRequest = z.object({
   writingStyle: z.string().max(500).nullable().optional(),
   tonePreference: z.string().max(500).nullable().optional(),
 });
-export type UpdatePersonalizationProfileRequest = z.infer<typeof UpdatePersonalizationProfileRequest>;
+export type UpdatePersonalizationProfileRequest = z.infer<
+  typeof UpdatePersonalizationProfileRequest
+>;
 
 export const CreateMemoryRequest = z.object({
   kind: MemoryKindDto,

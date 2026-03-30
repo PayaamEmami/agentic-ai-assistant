@@ -14,6 +14,8 @@ interface GoogleFile {
   modifiedTime?: string;
   webViewLink?: string;
   trashed?: boolean;
+  ownedByMe?: boolean;
+  driveId?: string;
 }
 
 function asString(value: unknown): string | undefined {
@@ -48,13 +50,13 @@ export class GoogleDocsConnector implements Connector {
   async read(externalId: string): Promise<ConnectorItem | null> {
     const headers = await this.buildHeaders();
     const file = await requestJson<GoogleFile>(
-      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?fields=id,name,mimeType,modifiedTime,webViewLink,trashed`,
+      `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?fields=id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId`,
       {
         headers,
       },
     );
 
-    if (file.mimeType !== 'application/vnd.google-apps.document' || file.trashed) {
+    if (!this.shouldIncludeGoogleDoc(file)) {
       return null;
     }
 
@@ -78,9 +80,11 @@ export class GoogleDocsConnector implements Connector {
     }
 
     const params = new URLSearchParams({
-      q: `mimeType='application/vnd.google-apps.document' and trashed=false and fullText contains '${trimmed.replace(/'/g, "\\'")}'`,
+      corpora: 'user',
+      spaces: 'drive',
+      q: `mimeType='application/vnd.google-apps.document' and trashed=false and 'me' in owners and fullText contains '${trimmed.replace(/'/g, "\\'")}'`,
       pageSize: String(Math.min(limit, 100)),
-      fields: 'files(id,name,mimeType,modifiedTime,webViewLink,trashed)',
+      fields: 'files(id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId)',
     });
     const response = await requestJson<{ files?: GoogleFile[] }>(
       `https://www.googleapis.com/drive/v3/files?${params.toString()}`,
@@ -89,7 +93,9 @@ export class GoogleDocsConnector implements Connector {
       },
     );
 
-    return (response.files ?? []).map((file) => this.toConnectorItem(file));
+    return (response.files ?? [])
+      .filter((file) => this.shouldIncludeGoogleDoc(file))
+      .map((file) => this.toConnectorItem(file));
   }
 
   async sync(cursor?: string): Promise<SyncResult> {
@@ -116,7 +122,7 @@ export class GoogleDocsConnector implements Connector {
       pageSize: '1000',
       includeRemoved: 'true',
       fields:
-        'changes(fileId,removed,file(id,name,mimeType,modifiedTime,webViewLink,trashed)),nextPageToken,newStartPageToken',
+        'changes(fileId,removed,file(id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId)),nextPageToken,newStartPageToken',
     });
     const response = await requestJson<{
       changes?: Array<{ fileId: string; removed?: boolean; file?: GoogleFile }>;
@@ -131,7 +137,7 @@ export class GoogleDocsConnector implements Connector {
 
     const items: ConnectorItem[] = [];
     for (const change of response.changes ?? []) {
-      if (change.removed || change.file?.trashed) {
+      if (change.removed) {
         items.push({
           externalId: change.fileId,
           sourceKind: 'document',
@@ -145,7 +151,21 @@ export class GoogleDocsConnector implements Connector {
         continue;
       }
 
-      if (!change.file || change.file.mimeType !== 'application/vnd.google-apps.document') {
+      if (!change.file) {
+        continue;
+      }
+
+      if (!this.shouldIncludeGoogleDoc(change.file)) {
+        items.push({
+          externalId: change.fileId,
+          sourceKind: 'document',
+          title: change.file.name ?? 'Removed Google Doc',
+          content: null,
+          mimeType: 'application/vnd.google-apps.document',
+          uri: change.file.webViewLink ?? null,
+          updatedAt: change.file.modifiedTime ? new Date(change.file.modifiedTime) : null,
+          metadata: { deleted: true },
+        });
         continue;
       }
 
@@ -214,10 +234,12 @@ export class GoogleDocsConnector implements Connector {
 
   private async listGoogleDocs(limit: number, pageToken?: string): Promise<GoogleFile[]> {
     const params = new URLSearchParams({
-      q: "mimeType='application/vnd.google-apps.document' and trashed=false",
+      corpora: 'user',
+      spaces: 'drive',
+      q: "mimeType='application/vnd.google-apps.document' and trashed=false and 'me' in owners",
       orderBy: 'modifiedTime desc',
       pageSize: String(Math.min(limit, 1000)),
-      fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,trashed)',
+      fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId)',
     });
     if (pageToken) {
       params.set('pageToken', pageToken);
@@ -230,7 +252,16 @@ export class GoogleDocsConnector implements Connector {
       },
     );
 
-    return response.files ?? [];
+    return (response.files ?? []).filter((file) => this.shouldIncludeGoogleDoc(file));
+  }
+
+  private shouldIncludeGoogleDoc(file: GoogleFile): boolean {
+    return (
+      file.mimeType === 'application/vnd.google-apps.document' &&
+      !file.trashed &&
+      file.ownedByMe === true &&
+      !file.driveId
+    );
   }
 
   private toConnectorItem(file: GoogleFile): ConnectorItem {

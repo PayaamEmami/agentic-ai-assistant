@@ -7,7 +7,10 @@ import { toChatMessages, toSystemPromptContext } from './helpers.js';
 export class VerifierAgent implements Agent {
   readonly role = 'verifier' as const;
 
-  constructor(private readonly modelProvider: ModelProvider, private readonly model?: string) {}
+  constructor(
+    private readonly modelProvider: ModelProvider,
+    private readonly model?: string,
+  ) {}
 
   async execute(context: AgentContext): Promise<AgentResult> {
     if (!context.previousResult) {
@@ -29,6 +32,7 @@ export class VerifierAgent implements Agent {
     const completion = await this.modelProvider.complete({
       messages,
       model: this.model,
+      signal: context.signal,
     });
 
     const verified = parseVerificationContent(completion.content, context.previousResult);
@@ -106,7 +110,9 @@ function parseVerificationContent(
     status,
     response,
     issues: Array.isArray(parsed.issues)
-      ? parsed.issues.filter((issue): issue is string => typeof issue === 'string' && issue.trim().length > 0)
+      ? parsed.issues.filter(
+          (issue): issue is string => typeof issue === 'string' && issue.trim().length > 0,
+        )
       : [],
   };
 }

@@ -1,5 +1,11 @@
 import type { Agent, AgentContext, AgentResult, AgentRole } from './agents/types.js';
 
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error('Operation aborted');
+  }
+}
+
 export class AgentOrchestrator {
   private agents: Map<AgentRole, Agent>;
 
@@ -18,12 +24,14 @@ export class AgentOrchestrator {
     const maxDelegations = 5;
 
     for (let i = 0; i < maxDelegations; i++) {
+      throwIfAborted(currentContext.signal);
       result = await currentAgent.execute(currentContext);
       if (!result.delegateTo) {
         if (!verifier || currentAgent.role === 'verifier') {
           return result;
         }
 
+        throwIfAborted(currentContext.signal);
         return verifier.execute({ ...currentContext, previousResult: result });
       }
 

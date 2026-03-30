@@ -10,6 +10,7 @@ import { ConnectorService } from '../services/connector-service.js';
 export async function connectorRoutes(app: FastifyInstance) {
   const connectorService = new ConnectorService();
   const logger = getLogger({ component: 'connector-routes' });
+  const webBaseUrl = process.env.WEB_BASE_URL ?? 'http://localhost:3000';
 
   app.get('/connectors/google-docs/callback', async (request, reply) => {
     const query = request.query as { code?: string; state?: string; error?: string };
@@ -24,8 +25,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'Google Docs callback returned an error',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          `/chat?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
+        webBaseUrl +
+          `/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
       );
     }
 
@@ -40,8 +41,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'Google Docs callback missing required parameters',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          '/chat?connector=google_docs&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
+        webBaseUrl +
+          '/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
       );
     }
 
@@ -60,8 +61,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'Google Docs callback failed',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          `/chat?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
+        webBaseUrl +
+          `/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
       );
     }
   });
@@ -79,8 +80,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'GitHub callback returned an error',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          `/chat?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
+        webBaseUrl +
+          `/chat/connectors?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
       );
     }
 
@@ -95,8 +96,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'GitHub callback missing required parameters',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          '/chat?connector=github&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
+        webBaseUrl +
+          '/chat/connectors?connector=github&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
       );
     }
 
@@ -115,8 +116,8 @@ export async function connectorRoutes(app: FastifyInstance) {
         'GitHub callback failed',
       );
       return reply.redirect(
-        (process.env.WEB_BASE_URL ?? 'http://localhost:3000') +
-          `/chat?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
+        webBaseUrl +
+          `/chat/connectors?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
       );
     }
   });

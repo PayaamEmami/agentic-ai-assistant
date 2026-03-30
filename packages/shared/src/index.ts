@@ -51,6 +51,7 @@ export {
   AuthResponse,
   SendMessageRequest,
   SendMessageResponse,
+  InterruptChatRunResponse,
   UploadAttachmentResponse,
   ConversationListItem,
   ConversationListResponse,
@@ -103,6 +104,7 @@ export type { RealtimeEvent } from './events.js';
 export type {
   AssistantTextEvent,
   AssistantTextDoneEvent,
+  AssistantInterruptedEvent,
   ToolStartEvent,
   ToolDoneEvent,
   ApprovalRequestedEvent,

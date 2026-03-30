@@ -54,7 +54,11 @@ function buildHeaders(options?: RequestInit, authToken?: string): Headers {
     headers.set('Authorization', `Bearer ${authToken}`);
   }
 
-  if (options?.body != null && !(options.body instanceof FormData) && !headers.has('Content-Type')) {
+  if (
+    options?.body != null &&
+    !(options.body instanceof FormData) &&
+    !headers.has('Content-Type')
+  ) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -141,6 +145,8 @@ export interface ConnectorSummary {
   lastError: string | null;
   hasCredentials: boolean;
   selectedRepoCount?: number;
+  totalSourceCount: number;
+  searchableSourceCount: number;
   recentSyncRuns: ConnectorSyncRunSummary[];
   recentSources: ConnectorSourceSummary[];
 }
@@ -205,7 +211,10 @@ export interface ConversationSummaryResponse {
   updatedAt: string;
 }
 
-export function buildWebSocketUrl(token: string, correlationId = createCorrelationId('ws')): string {
+export function buildWebSocketUrl(
+  token: string,
+  correlationId = createCorrelationId('ws'),
+): string {
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/ws/events';
@@ -239,17 +248,30 @@ export const api = {
     },
   },
   chat: {
-    send(content: string, conversationId?: string, attachmentIds?: string[]) {
+    send(content: string, conversationId?: string, attachmentIds?: string[], clientRunId?: string) {
       return request<{ conversationId: string; messageId: string }>('/api/chat', {
         method: 'POST',
-        body: JSON.stringify({ content, conversationId, attachmentIds }),
+        body: JSON.stringify({ content, conversationId, attachmentIds, clientRunId }),
+      });
+    },
+    interruptRun(runId: string) {
+      return request<{
+        ok: boolean;
+        status: 'interrupting' | 'not_found';
+        conversationId?: string;
+      }>(`/api/chat/runs/${runId}/interrupt`, {
+        method: 'POST',
       });
     },
     listConversations() {
       return request<{ conversations: ConversationSummaryResponse[] }>('/api/conversations');
     },
     getConversation(id: string) {
-      return request<{ id: string; title: string | null; messages: Array<{ id: string; role: string; content: unknown[]; createdAt: string }> }>(`/api/conversations/${id}`);
+      return request<{
+        id: string;
+        title: string | null;
+        messages: Array<{ id: string; role: string; content: unknown[]; createdAt: string }>;
+      }>(`/api/conversations/${id}`);
     },
     updateConversation(id: string, title: string) {
       return request<{ conversation: ConversationSummaryResponse }>(`/api/conversations/${id}`, {
@@ -302,7 +324,9 @@ export const api = {
   },
   approvals: {
     listPending() {
-      return request<{ approvals: Array<{ id: string; description: string; status: string; createdAt: string }> }>('/api/approvals');
+      return request<{
+        approvals: Array<{ id: string; description: string; status: string; createdAt: string }>;
+      }>('/api/approvals');
     },
     decide(id: string, status: 'approved' | 'rejected') {
       return request<{ ok: boolean }>(`/api/approvals/${id}/decide`, {
@@ -376,29 +400,26 @@ export const api = {
         memories: PersonalizationMemory[];
       }>('/api/personalization');
     },
-    updateProfile(input: {
-      writingStyle?: string | null;
-      tonePreference?: string | null;
-    }) {
+    updateProfile(input: { writingStyle?: string | null; tonePreference?: string | null }) {
       return request<{ profile: PersonalizationProfile }>('/api/personalization/profile', {
         method: 'PUT',
         body: JSON.stringify(input),
       });
     },
-    createMemory(input: {
-      kind: PersonalizationMemoryKind;
-      content: string;
-    }) {
+    createMemory(input: { kind: PersonalizationMemoryKind; content: string }) {
       return request<{ memory: PersonalizationMemory }>('/api/personalization/memories', {
         method: 'POST',
         body: JSON.stringify(input),
       });
     },
     updateMemory(memoryId: string, input: { content: string }) {
-      return request<{ memory: PersonalizationMemory }>(`/api/personalization/memories/${memoryId}`, {
-        method: 'PATCH',
-        body: JSON.stringify(input),
-      });
+      return request<{ memory: PersonalizationMemory }>(
+        `/api/personalization/memories/${memoryId}`,
+        {
+          method: 'PATCH',
+          body: JSON.stringify(input),
+        },
+      );
     },
     deleteMemory(memoryId: string) {
       return request<{ ok: boolean }>(`/api/personalization/memories/${memoryId}`, {

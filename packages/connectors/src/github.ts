@@ -22,8 +22,11 @@ const SKIPPED_FILE_NAMES = new Set([
   'yarn.lock',
 ]);
 const TEXT_EXTENSIONS = new Set([
+  '.bib',
+  '.bst',
   '.c',
   '.cc',
+  '.cls',
   '.cpp',
   '.cs',
   '.css',
@@ -43,6 +46,8 @@ const TEXT_EXTENSIONS = new Set([
   '.rs',
   '.sh',
   '.sql',
+  '.sty',
+  '.tex',
   '.svg',
   '.ts',
   '.tsx',
@@ -108,6 +113,15 @@ interface GitHubRepoApiResponse {
   owner: { login: string };
 }
 
+interface GitHubCursorRepoState {
+  sha: string;
+  name?: string;
+  fullName?: string;
+  owner?: string;
+  defaultBranch?: string;
+  private?: boolean;
+}
+
 function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
@@ -146,6 +160,17 @@ function shouldIncludeGitHubPath(path: string, size: number | undefined): boolea
   }
 
   return extension === '' && !fileName.includes('.');
+}
+
+function toCursorRepoState(repo: GitHubRepoSelection, sha: string): GitHubCursorRepoState {
+  return {
+    sha,
+    name: repo.name,
+    fullName: repo.fullName,
+    owner: repo.owner,
+    defaultBranch: repo.defaultBranch,
+    private: repo.private,
+  };
 }
 
 export class GitHubConnector implements Connector {
@@ -316,30 +341,39 @@ export class GitHubConnector implements Connector {
 
   async sync(cursor?: string): Promise<SyncResult> {
     const previousCursor = this.parseCursor(cursor);
-    const nextCursor: Record<string, string> = {};
+    const nextCursor: Record<string, GitHubCursorRepoState> = {};
     const items: ConnectorItem[] = [];
     const errors: Array<{ externalId: string; error: string }> = [];
+    const selectedRepoIds = new Set(this.selectedRepos.map((repo) => String(repo.id)));
 
     for (const repo of this.selectedRepos) {
       try {
-        const branchInfo = await requestJson<{ commit: { sha: string } }>(
-          `https://api.github.com/repos/${repo.fullName}/branches/${encodeURIComponent(repo.defaultBranch)}`,
-          {
-            headers: this.buildHeaders(),
-          },
-        );
-        const branchSha = branchInfo.commit.sha;
-        nextCursor[String(repo.id)] = branchSha;
+        const branchSha = await this.loadBranchSha(repo);
+        nextCursor[String(repo.id)] = toCursorRepoState(repo, branchSha);
 
-        if (previousCursor[String(repo.id)] === branchSha) {
+        const previousRepoState = previousCursor[String(repo.id)];
+        if (previousRepoState?.sha === branchSha) {
           continue;
         }
 
-        const tree = await this.loadRepositoryTree(repo, branchSha);
-        for (const entry of tree) {
-          if (entry.type !== 'blob' || !shouldIncludeGitHubPath(entry.path, entry.size)) {
-            continue;
+        const currentEntries = this.getIndexableEntries(await this.loadRepositoryTree(repo, branchSha));
+        if (previousRepoState?.sha) {
+          try {
+            const previousEntries = this.getIndexableEntries(
+              await this.loadRepositoryTree(repo, previousRepoState.sha),
+            );
+            const currentPaths = new Set(currentEntries.map((entry) => entry.path));
+            for (const entry of previousEntries) {
+              if (!currentPaths.has(entry.path)) {
+                items.push(this.toDeletedConnectorItem(repo, entry.path));
+              }
+            }
+          } catch {
+            // Fall back to reindexing current files when the previous tree is unavailable.
           }
+        }
+
+        for (const entry of currentEntries) {
           items.push(this.toConnectorItem(repo, entry));
         }
       } catch (error) {
@@ -350,11 +384,36 @@ export class GitHubConnector implements Connector {
       }
     }
 
+    for (const [repoId, previousRepoState] of Object.entries(previousCursor)) {
+      if (selectedRepoIds.has(repoId)) {
+        continue;
+      }
+
+      const deselectedRepo = this.toRepoSelectionFromCursor(repoId, previousRepoState);
+      if (!deselectedRepo) {
+        continue;
+      }
+
+      try {
+        const previousEntries = this.getIndexableEntries(
+          await this.loadRepositoryTree(deselectedRepo, previousRepoState.sha),
+        );
+        for (const entry of previousEntries) {
+          items.push(this.toDeletedConnectorItem(deselectedRepo, entry.path));
+        }
+      } catch (error) {
+        errors.push({
+          externalId: previousRepoState.fullName ?? repoId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     return {
       items,
       itemsSynced: items.length,
       errors,
-      nextCursor: JSON.stringify(nextCursor),
+      nextCursor: JSON.stringify({ version: 2, repos: nextCursor }),
     };
   }
 
@@ -421,14 +480,69 @@ export class GitHubConnector implements Connector {
     return response.tree ?? [];
   }
 
-  private parseCursor(cursor: string | undefined): Record<string, string> {
+  private async loadBranchSha(repo: GitHubRepoSelection): Promise<string> {
+    const branchInfo = await requestJson<{ commit: { sha: string } }>(
+      `https://api.github.com/repos/${repo.fullName}/branches/${encodeURIComponent(repo.defaultBranch)}`,
+      {
+        headers: this.buildHeaders(),
+      },
+    );
+    return branchInfo.commit.sha;
+  }
+
+  private getIndexableEntries(tree: GitHubTreeEntry[]): GitHubTreeEntry[] {
+    return tree.filter(
+      (entry) => entry.type === 'blob' && shouldIncludeGitHubPath(entry.path, entry.size),
+    );
+  }
+
+  private parseCursor(cursor: string | undefined): Record<string, GitHubCursorRepoState> {
     if (!cursor) {
       return {};
     }
 
     try {
-      const parsed = JSON.parse(cursor) as Record<string, string>;
-      return parsed && typeof parsed === 'object' ? parsed : {};
+      const parsed = JSON.parse(cursor) as unknown;
+      if (!parsed || typeof parsed !== 'object') {
+        return {};
+      }
+
+      const rawRepos =
+        'version' in parsed && 'repos' in parsed && parsed.repos && typeof parsed.repos === 'object'
+          ? parsed.repos
+          : parsed;
+
+      return Object.fromEntries(
+        Object.entries(rawRepos as Record<string, unknown>)
+          .map(([repoId, value]) => {
+            if (typeof value === 'string') {
+              return [repoId, { sha: value } satisfies GitHubCursorRepoState];
+            }
+
+            if (!value || typeof value !== 'object') {
+              return null;
+            }
+
+            const candidate = value as Record<string, unknown>;
+            const sha = asString(candidate.sha);
+            if (!sha) {
+              return null;
+            }
+
+            return [
+              repoId,
+              {
+                sha,
+                name: asString(candidate.name),
+                fullName: asString(candidate.fullName),
+                owner: asString(candidate.owner),
+                defaultBranch: asString(candidate.defaultBranch),
+                private: typeof candidate.private === 'boolean' ? candidate.private : undefined,
+              } satisfies GitHubCursorRepoState,
+            ];
+          })
+          .filter((entry): entry is [string, GitHubCursorRepoState] => entry !== null),
+      );
     } catch {
       return {};
     }
@@ -464,6 +578,52 @@ export class GitHubConnector implements Connector {
         blobSha: entry.sha,
         size: entry.size ?? null,
       },
+    };
+  }
+
+  private toDeletedConnectorItem(repo: GitHubRepoSelection, path: string): ConnectorItem {
+    return {
+      externalId: `${repo.fullName}:${path}`,
+      sourceKind: 'code_repository',
+      title: path,
+      content: null,
+      mimeType: 'text/plain',
+      uri: repo.defaultBranch
+        ? `https://github.com/${repo.fullName}/blob/${repo.defaultBranch}/${path}`
+        : `https://github.com/${repo.fullName}`,
+      updatedAt: null,
+      metadata: {
+        owner: repo.owner,
+        repo: repo.name,
+        fullName: repo.fullName,
+        branch: repo.defaultBranch,
+        path,
+        deleted: true,
+      },
+    };
+  }
+
+  private toRepoSelectionFromCursor(
+    repoId: string,
+    state: GitHubCursorRepoState,
+  ): GitHubRepoSelection | null {
+    const fullName = state.fullName;
+    if (!fullName) {
+      return null;
+    }
+
+    const [ownerFromFullName, nameFromFullName] = fullName.split('/', 2);
+    if (!ownerFromFullName || !nameFromFullName) {
+      return null;
+    }
+
+    return {
+      id: Number(repoId),
+      name: state.name ?? nameFromFullName,
+      fullName,
+      owner: state.owner ?? ownerFromFullName,
+      defaultBranch: state.defaultBranch ?? 'HEAD',
+      private: state.private ?? false,
     };
   }
 }

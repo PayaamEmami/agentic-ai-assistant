@@ -49,13 +49,16 @@ export class OpenAIProvider implements ModelProvider {
           'aaa.ai.operation': 'chat_complete',
         },
         () =>
-          this.client.chat.completions.create({
-            model,
-            messages: this.mapMessages(request.messages),
-            temperature: request.temperature,
-            max_tokens: request.maxTokens,
-            tools: preparedTools.tools,
-          }),
+          this.client.chat.completions.create(
+            {
+              model,
+              messages: this.mapMessages(request.messages),
+              temperature: request.temperature,
+              max_tokens: request.maxTokens,
+              tools: preparedTools.tools,
+            },
+            request.signal ? { signal: request.signal } : undefined,
+          ),
       );
 
       const choice = completion.choices[0];
@@ -92,9 +95,18 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI chat completion finished',
       );
       openAiRequestCounter.inc({ operation: 'chat_complete', model, outcome: 'success' });
-      openAiDurationMs.observe({ operation: 'chat_complete', model, outcome: 'success' }, Date.now() - startedAt);
-      openAiTokens.inc({ operation: 'chat_complete', model, token_type: 'prompt' }, response.usage.promptTokens);
-      openAiTokens.inc({ operation: 'chat_complete', model, token_type: 'completion' }, response.usage.completionTokens);
+      openAiDurationMs.observe(
+        { operation: 'chat_complete', model, outcome: 'success' },
+        Date.now() - startedAt,
+      );
+      openAiTokens.inc(
+        { operation: 'chat_complete', model, token_type: 'prompt' },
+        response.usage.promptTokens,
+      );
+      openAiTokens.inc(
+        { operation: 'chat_complete', model, token_type: 'completion' },
+        response.usage.completionTokens,
+      );
       openAiEstimatedCostUsd.inc(
         { operation: 'chat_complete', model },
         estimateOpenAiCost({
@@ -107,7 +119,10 @@ export class OpenAIProvider implements ModelProvider {
       return response;
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'chat_complete', model, outcome: 'failure' });
-      openAiDurationMs.observe({ operation: 'chat_complete', model, outcome: 'failure' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'chat_complete', model, outcome: 'failure' },
+        Date.now() - startedAt,
+      );
       logger.error(
         {
           event: 'openai.chat.completed',
@@ -134,18 +149,21 @@ export class OpenAIProvider implements ModelProvider {
           'aaa.ai.operation': 'chat_stream',
         },
         () =>
-          this.client.chat.completions.create({
-            model,
-            messages: this.mapMessages(request.messages),
-            temperature: request.temperature,
-            max_tokens: request.maxTokens,
-            tools: preparedTools.tools,
-            stream: true,
-          }),
+          this.client.chat.completions.create(
+            {
+              model,
+              messages: this.mapMessages(request.messages),
+              temperature: request.temperature,
+              max_tokens: request.maxTokens,
+              tools: preparedTools.tools,
+              stream: true,
+            },
+            request.signal ? { signal: request.signal } : undefined,
+          ),
       );
 
-    const toolCallState = new Map<number, ToolCall>();
-    let finishReason: CompletionResponse['finishReason'] | undefined;
+      const toolCallState = new Map<number, ToolCall>();
+      let finishReason: CompletionResponse['finishReason'] | undefined;
 
       for await (const chunk of stream) {
         for (const choice of chunk.choices) {
@@ -198,12 +216,18 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI streaming completion finished',
       );
       openAiRequestCounter.inc({ operation: 'chat_stream', model, outcome: 'success' });
-      openAiDurationMs.observe({ operation: 'chat_stream', model, outcome: 'success' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'chat_stream', model, outcome: 'success' },
+        Date.now() - startedAt,
+      );
 
       yield { type: 'done', finishReason: finishReason ?? 'stop' };
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'chat_stream', model, outcome: 'failure' });
-      openAiDurationMs.observe({ operation: 'chat_stream', model, outcome: 'failure' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'chat_stream', model, outcome: 'failure' },
+        Date.now() - startedAt,
+      );
       logger.error(
         {
           event: 'openai.chat_stream.completed',
@@ -229,20 +253,23 @@ export class OpenAIProvider implements ModelProvider {
           'aaa.ai.operation': 'embedding',
         },
         () =>
-          this.client.embeddings.create({
-            model,
-            input: request.input,
-          }),
+          this.client.embeddings.create(
+            {
+              model,
+              input: request.input,
+            },
+            request.signal ? { signal: request.signal } : undefined,
+          ),
       );
 
-    const response = {
-      embeddings: result.data.map((entry) => entry.embedding),
-      model: result.model,
-      usage: {
-        promptTokens: result.usage.prompt_tokens,
-        totalTokens: result.usage.total_tokens,
-      },
-    };
+      const response = {
+        embeddings: result.data.map((entry) => entry.embedding),
+        model: result.model,
+        usage: {
+          promptTokens: result.usage.prompt_tokens,
+          totalTokens: result.usage.total_tokens,
+        },
+      };
 
       logger.info(
         {
@@ -260,8 +287,14 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI embedding request finished',
       );
       openAiRequestCounter.inc({ operation: 'embedding', model, outcome: 'success' });
-      openAiDurationMs.observe({ operation: 'embedding', model, outcome: 'success' }, Date.now() - startedAt);
-      openAiTokens.inc({ operation: 'embedding', model, token_type: 'input' }, response.usage.totalTokens);
+      openAiDurationMs.observe(
+        { operation: 'embedding', model, outcome: 'success' },
+        Date.now() - startedAt,
+      );
+      openAiTokens.inc(
+        { operation: 'embedding', model, token_type: 'input' },
+        response.usage.totalTokens,
+      );
       openAiEstimatedCostUsd.inc(
         { operation: 'embedding', model },
         estimateOpenAiCost({
@@ -273,7 +306,10 @@ export class OpenAIProvider implements ModelProvider {
       return response;
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'embedding', model, outcome: 'failure' });
-      openAiDurationMs.observe({ operation: 'embedding', model, outcome: 'failure' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'embedding', model, outcome: 'failure' },
+        Date.now() - startedAt,
+      );
       logger.error(
         {
           event: 'openai.embedding.completed',
@@ -308,9 +344,9 @@ export class OpenAIProvider implements ModelProvider {
           }),
       );
 
-    const response = {
-      text: transcription.text.trim(),
-    };
+      const response = {
+        text: transcription.text.trim(),
+      };
 
       logger.info(
         {
@@ -323,12 +359,18 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI transcription finished',
       );
       openAiRequestCounter.inc({ operation: 'transcription', model, outcome: 'success' });
-      openAiDurationMs.observe({ operation: 'transcription', model, outcome: 'success' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'transcription', model, outcome: 'success' },
+        Date.now() - startedAt,
+      );
 
       return response;
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'transcription', model, outcome: 'failure' });
-      openAiDurationMs.observe({ operation: 'transcription', model, outcome: 'failure' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'transcription', model, outcome: 'failure' },
+        Date.now() - startedAt,
+      );
       logger.error(
         {
           event: 'openai.transcription.completed',
@@ -363,10 +405,10 @@ export class OpenAIProvider implements ModelProvider {
           }),
       );
 
-    const result = {
-      audio: Buffer.from(await response.arrayBuffer()),
-      contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
-    };
+      const result = {
+        audio: Buffer.from(await response.arrayBuffer()),
+        contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
+      };
 
       logger.info(
         {
@@ -380,12 +422,18 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI speech synthesis finished',
       );
       openAiRequestCounter.inc({ operation: 'speech', model, outcome: 'success' });
-      openAiDurationMs.observe({ operation: 'speech', model, outcome: 'success' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'speech', model, outcome: 'success' },
+        Date.now() - startedAt,
+      );
 
       return result;
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'speech', model, outcome: 'failure' });
-      openAiDurationMs.observe({ operation: 'speech', model, outcome: 'failure' }, Date.now() - startedAt);
+      openAiDurationMs.observe(
+        { operation: 'speech', model, outcome: 'failure' },
+        Date.now() - startedAt,
+      );
       logger.error(
         {
           event: 'openai.tts.completed',
@@ -405,15 +453,25 @@ export class OpenAIProvider implements ModelProvider {
         case 'system':
           return {
             role: 'system',
-            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
+            content:
+              typeof message.content === 'string'
+                ? message.content
+                : this.extractTextFromParts(message.content),
             name: message.name,
           };
         case 'user':
-          return { role: 'user', content: this.mapUserContent(message.content), name: message.name };
+          return {
+            role: 'user',
+            content: this.mapUserContent(message.content),
+            name: message.name,
+          };
         case 'assistant':
           return {
             role: 'assistant',
-            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
+            content:
+              typeof message.content === 'string'
+                ? message.content
+                : this.extractTextFromParts(message.content),
             name: message.name,
           };
         case 'tool':
@@ -422,7 +480,10 @@ export class OpenAIProvider implements ModelProvider {
           }
           return {
             role: 'tool',
-            content: typeof message.content === 'string' ? message.content : this.extractTextFromParts(message.content),
+            content:
+              typeof message.content === 'string'
+                ? message.content
+                : this.extractTextFromParts(message.content),
             tool_call_id: message.toolCallId,
           };
         default: {
@@ -535,11 +596,21 @@ export class OpenAIProvider implements ModelProvider {
       .map((part) => {
         if (typeof part !== 'object' || part === null) return '';
 
-        if ('type' in part && part.type === 'text' && 'text' in part && typeof part.text === 'string') {
+        if (
+          'type' in part &&
+          part.type === 'text' &&
+          'text' in part &&
+          typeof part.text === 'string'
+        ) {
           return part.text;
         }
 
-        if ('type' in part && part.type === 'refusal' && 'refusal' in part && typeof part.refusal === 'string') {
+        if (
+          'type' in part &&
+          part.type === 'refusal' &&
+          'refusal' in part &&
+          typeof part.refusal === 'string'
+        ) {
           return part.refusal;
         }
 

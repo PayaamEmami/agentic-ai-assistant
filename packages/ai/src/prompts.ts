@@ -36,6 +36,9 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
     'If you use retrieved context, explicitly cite supporting sources (for example: [Source 1], [Source 2]).',
   );
   sections.push(
+    'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, or upload that same content again.',
+  );
+  sections.push(
     'Before taking any external action (sending, posting, modifying, deleting, or executing side-effectful tools), request user approval first.',
   );
 
