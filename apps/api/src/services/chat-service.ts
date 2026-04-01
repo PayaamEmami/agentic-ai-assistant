@@ -39,7 +39,7 @@ const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
-const MAX_CITATIONS = 4;
+const MAX_CITATIONS = 6;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE =
