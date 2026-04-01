@@ -28,9 +28,10 @@ import {
 } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import type { RetrievalCitation } from './retrieval-bridge.js';
+import type { RetrievalCitation, RetrievalResponse } from './retrieval-bridge.js';
 import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
+import { decideRetrieval } from './retrieval-policy.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
@@ -534,12 +535,29 @@ export class ChatService {
         await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
       }
 
-      const retrieval = await this.retrievalBridge.search(
-        content,
-        userId,
-        MAX_RETRIEVAL_CONTEXT,
-        signal,
+      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
+      throwIfAborted(signal);
+
+      const retrievalDecision = decideRetrieval(content, recentMessages);
+      logger.debug(
+        {
+          event: 'chat.retrieval_decided',
+          outcome: retrievalDecision.shouldRetrieve ? 'search' : 'skip',
+          conversationId: conversation.id,
+          reason: retrievalDecision.reason,
+          hasRecentCitationContext: retrievalDecision.hasRecentCitationContext,
+        },
+        'Retrieval decision evaluated',
       );
+
+      const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
+        ? await this.retrievalBridge.search(
+            content,
+            userId,
+            MAX_RETRIEVAL_CONTEXT,
+            signal,
+          )
+        : { results: [], citations: [] };
       throwIfAborted(signal);
 
       const retrievalContext = retrieval.results.map((result) => {
@@ -554,8 +572,6 @@ export class ChatService {
 
         return lines.join('\n');
       });
-      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
-      throwIfAborted(signal);
 
       const personalContext = await this.personalizationService.getPersonalContext(userId);
       throwIfAborted(signal);

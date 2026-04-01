@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../types.js';
 import type { ModelProvider } from '../model-provider.js';
-import { buildAgentSystemPrompt } from '../prompts.js';
+import { buildAgentSystemPrompt, buildRetrievalAugmentedMessages } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import { toChatMessages, toSystemPromptContext } from './helpers.js';
 
@@ -28,9 +28,10 @@ export class VerifierAgent implements Agent {
       ...toChatMessages(context.messageHistory),
       buildPreviousResultMessage(context),
     ];
+    const verifierMessages = buildRetrievalAugmentedMessages(messages, context.retrievedContext);
 
     const completion = await this.modelProvider.complete({
-      messages,
+      messages: verifierMessages,
       model: this.model,
       signal: context.signal,
     });
@@ -73,7 +74,8 @@ function buildPreviousResultMessage(context: AgentContext): ChatMessage {
   return {
     role: 'user',
     content:
-      'Validate this prior agent result against user intent and safety constraints. ' +
+      'Validate this prior agent result against user intent, safety constraints, and any retrieved context already provided in the prompt. ' +
+      'Treat retrieved context as pre-authorized read-only evidence; only flag access claims that go beyond that evidence or imply actions that did not occur. ' +
       'Reply with JSON only.\n' +
       JSON.stringify(context.previousResult),
   };

@@ -102,7 +102,7 @@ function sourceKindLabel(kind: string): string {
 function indexedSourceSummary(connector: ConnectorSummary): string {
   const total = connector.totalSourceCount ?? 0;
   const searchable = connector.searchableSourceCount ?? 0;
-  return `${searchable}/${total} searchable`;
+  return `${searchable}/${total}`;
 }
 
 export function ConnectorManager() {
