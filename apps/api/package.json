@@ -11,6 +11,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aaa/actions": "workspace:*",
     "@aaa/ai": "workspace:*",
     "@aaa/connectors": "workspace:*",
     "@aaa/db": "workspace:*",

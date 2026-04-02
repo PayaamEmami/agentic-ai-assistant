@@ -1,33 +1,44 @@
 import type { FastifyInstance } from 'fastify';
 import { getLogger } from '@aaa/observability';
-import {
-  ConnectorKindDto,
-  GitHubRepoSelectionRequest,
-} from '@aaa/shared';
+import { ConnectorKindDto, GitHubRepoSelectionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { ConnectorService } from '../services/connector-service.js';
+
+interface OAuthCallbackQuery {
+  code?: string;
+  state?: string;
+  error?: string;
+}
 
 export async function connectorRoutes(app: FastifyInstance) {
   const connectorService = new ConnectorService();
   const logger = getLogger({ component: 'connector-routes' });
   const webBaseUrl = process.env.WEB_BASE_URL ?? 'http://localhost:3000';
 
-  app.get('/connectors/google-docs/callback', async (request, reply) => {
-    const query = request.query as { code?: string; state?: string; error?: string };
+  function buildErrorRedirect(kind: string, message: string): string {
+    return (
+      webBaseUrl +
+      `/chat/connectors?connector=${kind}&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`
+    );
+  }
+
+  async function handleOAuthCallback(
+    query: OAuthCallbackQuery,
+    kind: 'github' | 'github_actions' | 'google_docs' | 'google_drive_actions',
+    handler: (code: string, state: string) => Promise<string>,
+    fallbackMessage: string,
+  ): Promise<string> {
     if (query.error) {
       logger.warn(
         {
           event: 'connector.oauth.callback_failed',
           outcome: 'failure',
-          connectorKind: 'google_docs',
+          connectorKind: kind,
           reason: query.error,
         },
-        'Google Docs callback returned an error',
+        `${kind} callback returned an error`,
       );
-      return reply.redirect(
-        webBaseUrl +
-          `/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
-      );
+      return buildErrorRedirect(kind, query.error);
     }
 
     if (!query.code || !query.state) {
@@ -35,91 +46,110 @@ export async function connectorRoutes(app: FastifyInstance) {
         {
           event: 'connector.oauth.callback_failed',
           outcome: 'failure',
-          connectorKind: 'google_docs',
+          connectorKind: kind,
           reason: 'missing_callback_parameters',
         },
-        'Google Docs callback missing required parameters',
+        `${kind} callback missing required parameters`,
       );
-      return reply.redirect(
-        webBaseUrl +
-          '/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
-      );
+      return buildErrorRedirect(kind, 'Missing callback parameters');
     }
 
     try {
-      const redirectUrl = await connectorService.handleGoogleCallback(query.code, query.state);
-      return reply.redirect(redirectUrl);
+      return await handler(query.code, query.state);
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Google Docs connection failed';
+      const message = error instanceof Error ? error.message : fallbackMessage;
       logger.error(
         {
           event: 'connector.oauth.callback_failed',
           outcome: 'failure',
-          connectorKind: 'google_docs',
+          connectorKind: kind,
           error,
         },
-        'Google Docs callback failed',
+        `${kind} callback failed`,
       );
-      return reply.redirect(
-        webBaseUrl +
-          `/chat/connectors?connector=google_docs&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
-      );
+      return buildErrorRedirect(kind, message);
     }
+  }
+
+  app.get('/connectors/google/docs/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'google_docs',
+      (code, state) => connectorService.handleGoogleCallback(code, state),
+      'Google Docs connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
+
+  app.get('/connectors/google/drive-actions/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'google_drive_actions',
+      (code, state) => connectorService.handleGoogleDriveActionsCallback(code, state),
+      'Google Drive actions connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
+
+  app.get('/connectors/github/rag/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'github',
+      (code, state) => connectorService.handleGitHubCallback(code, state),
+      'GitHub connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
+
+  app.get('/connectors/github/actions/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'github_actions',
+      (code, state) => connectorService.handleGitHubActionsCallback(code, state),
+      'GitHub actions connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
+
+  // Backward-compatible aliases for older local env values.
+  app.get('/connectors/google-docs/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'google_docs',
+      (code, state) => connectorService.handleGoogleCallback(code, state),
+      'Google Docs connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
+
+  app.get('/connectors/google-drive-actions/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'google_drive_actions',
+      (code, state) => connectorService.handleGoogleDriveActionsCallback(code, state),
+      'Google Drive actions connection failed',
+    );
+    return reply.redirect(redirectUrl);
   });
 
   app.get('/connectors/github/callback', async (request, reply) => {
-    const query = request.query as { code?: string; state?: string; error?: string };
-    if (query.error) {
-      logger.warn(
-        {
-          event: 'connector.oauth.callback_failed',
-          outcome: 'failure',
-          connectorKind: 'github',
-          reason: query.error,
-        },
-        'GitHub callback returned an error',
-      );
-      return reply.redirect(
-        webBaseUrl +
-          `/chat/connectors?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(query.error)}`,
-      );
-    }
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'github',
+      (code, state) => connectorService.handleGitHubCallback(code, state),
+      'GitHub connection failed',
+    );
+    return reply.redirect(redirectUrl);
+  });
 
-    if (!query.code || !query.state) {
-      logger.warn(
-        {
-          event: 'connector.oauth.callback_failed',
-          outcome: 'failure',
-          connectorKind: 'github',
-          reason: 'missing_callback_parameters',
-        },
-        'GitHub callback missing required parameters',
-      );
-      return reply.redirect(
-        webBaseUrl +
-          '/chat/connectors?connector=github&connectorStatus=error&connectorMessage=Missing%20callback%20parameters',
-      );
-    }
-
-    try {
-      const redirectUrl = await connectorService.handleGitHubCallback(query.code, query.state);
-      return reply.redirect(redirectUrl);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'GitHub connection failed';
-      logger.error(
-        {
-          event: 'connector.oauth.callback_failed',
-          outcome: 'failure',
-          connectorKind: 'github',
-          error,
-        },
-        'GitHub callback failed',
-      );
-      return reply.redirect(
-        webBaseUrl +
-          `/chat/connectors?connector=github&connectorStatus=error&connectorMessage=${encodeURIComponent(message)}`,
-      );
-    }
+  app.get('/connectors/github-actions/callback', async (request, reply) => {
+    const redirectUrl = await handleOAuthCallback(
+      request.query as OAuthCallbackQuery,
+      'github_actions',
+      (code, state) => connectorService.handleGitHubActionsCallback(code, state),
+      'GitHub actions connection failed',
+    );
+    return reply.redirect(redirectUrl);
   });
 
   app.get('/connectors', { preHandler: authenticate }, async (request, reply) => {
@@ -127,7 +157,7 @@ export async function connectorRoutes(app: FastifyInstance) {
     return reply.status(200).send({ connectors });
   });
 
-  app.post<{ Params: { kind: 'github' | 'google_docs' } }>(
+  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
     '/connectors/:kind/start',
     { preHandler: authenticate },
     async (request, reply) => {
@@ -146,7 +176,7 @@ export async function connectorRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post<{ Params: { kind: 'github' | 'google_docs' } }>(
+  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
     '/connectors/:kind/sync',
     { preHandler: authenticate },
     async (request, reply) => {
@@ -162,7 +192,7 @@ export async function connectorRoutes(app: FastifyInstance) {
     },
   );
 
-  app.delete<{ Params: { kind: 'github' | 'google_docs' } }>(
+  app.delete<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
     '/connectors/:kind',
     { preHandler: authenticate },
     async (request, reply) => {

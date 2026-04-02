@@ -120,14 +120,13 @@ if [[ ! -d node_modules ]]; then
 fi
 
 echo "Starting local infrastructure..."
-docker compose -f docker/docker-compose.yml up -d \
+docker compose -f docker/docker-compose.yml up -d --remove-orphans \
   postgres \
   redis \
   prometheus \
   loki \
   tempo \
   otel-collector \
-  promtail \
   grafana
 
 echo "Running database migrations..."
@@ -145,5 +144,8 @@ echo "Worker metrics: http://localhost:${WORKER_OBSERVABILITY_PORT}/metrics"
 echo "Grafana: http://localhost:3005"
 echo "Prometheus: http://localhost:9090"
 echo
+
+export LOG_FILE_ENABLED="false"
+export LOG_LOKI_ENDPOINT="${LOG_LOKI_ENDPOINT:-http://localhost:3100/loki/api/v1/push}"
 
 pnpm dev

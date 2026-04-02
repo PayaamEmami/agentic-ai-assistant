@@ -102,6 +102,32 @@ export function shouldDelegateToResearch(context: AgentContext): boolean {
   return RESEARCH_HINTS.some((hint) => latestMessage.includes(hint));
 }
 
+const CODING_HINTS = [
+  'code',
+  'fix',
+  'bug',
+  'implement',
+  'refactor',
+  'open a pr',
+  'create a pr',
+  'pull request',
+  'commit',
+  'branch',
+  'repository',
+  'repo',
+  'file',
+  'test',
+];
+
+export function shouldDelegateToCoding(context: AgentContext): boolean {
+  const latestMessage = latestUserMessage(context).toLowerCase();
+  if (!latestMessage) {
+    return false;
+  }
+
+  return CODING_HINTS.some((hint) => latestMessage.includes(hint));
+}
+
 export function requiresApprovalForCalls(
   toolCalls: AgentResult['toolCalls'],
   tools: Array<string | AgentToolContext>,

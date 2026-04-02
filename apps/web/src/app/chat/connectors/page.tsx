@@ -22,7 +22,7 @@ export default function ConnectorsPage() {
               </Link>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-              Connect external sources, choose what gets indexed, and manage syncs
+              Manage connectors for both workspace knowledge and live tool access
               without taking over the main chat screen.
             </p>
           </section>

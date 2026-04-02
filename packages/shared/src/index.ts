@@ -106,6 +106,7 @@ export type {
   AssistantTextDoneEvent,
   AssistantInterruptedEvent,
   ToolStartEvent,
+  ToolProgressEvent,
   ToolDoneEvent,
   ApprovalRequestedEvent,
   ApprovalResolvedEvent,

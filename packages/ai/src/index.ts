@@ -35,6 +35,12 @@ export type {
   AgentRole,
   AgentToolContext,
 } from './agents/index.js';
-export { OrchestratorAgent, ResearchAgent, ActionAgent, VerifierAgent } from './agents/index.js';
+export {
+  OrchestratorAgent,
+  ResearchAgent,
+  ActionAgent,
+  CodingAgent,
+  VerifierAgent,
+} from './agents/index.js';
 
 export { AgentOrchestrator } from './orchestrator.js';

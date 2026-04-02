@@ -45,6 +45,11 @@ function isFileLoggingEnabled(): boolean {
   return process.env.NODE_ENV !== 'production';
 }
 
+function resolveLokiEndpoint(): string | null {
+  const raw = process.env['LOG_LOKI_ENDPOINT'];
+  return typeof raw === 'string' && raw.length > 0 ? raw : null;
+}
+
 function levelLabel(level: unknown): string {
   if (typeof level === 'string') {
     return level.toUpperCase();
@@ -123,6 +128,86 @@ class PrettyConsoleStream extends Writable {
   }
 }
 
+class LokiBatchStream extends Writable {
+  private readonly buffer: Array<[string, string]> = [];
+
+  private flushTimer: NodeJS.Timeout | null = null;
+
+  private flushing = false;
+
+  constructor(
+    private readonly endpoint: string,
+    private readonly labels: Record<string, string>,
+  ) {
+    super();
+  }
+
+  override _write(
+    chunk: Buffer | string,
+    _encoding: BufferEncoding,
+    callback: (error?: Error | null) => void,
+  ): void {
+    this.buffer.push([`${Date.now()}000000`, String(chunk).trimEnd()]);
+    if (this.buffer.length >= 25) {
+      void this.flush();
+    } else if (this.flushTimer === null) {
+      this.flushTimer = setTimeout(() => {
+        this.flushTimer = null;
+        void this.flush();
+      }, 250);
+      this.flushTimer.unref();
+    }
+    callback();
+  }
+
+  override _final(callback: (error?: Error | null) => void): void {
+    if (this.flushTimer) {
+      clearTimeout(this.flushTimer);
+      this.flushTimer = null;
+    }
+    void this.flush().finally(() => callback());
+  }
+
+  private async flush(): Promise<void> {
+    if (this.flushing || this.buffer.length === 0) {
+      return;
+    }
+
+    this.flushing = true;
+    const values = this.buffer.splice(0, this.buffer.length);
+
+    try {
+      const response = await fetch(this.endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          streams: [
+            {
+              stream: this.labels,
+              values,
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        process.stderr.write(
+          `Loki log export failed with status ${response.status} ${response.statusText}\n`,
+        );
+      }
+    } catch (error) {
+      process.stderr.write(`Loki log export failed: ${error instanceof Error ? error.message : String(error)}\n`);
+    } finally {
+      this.flushing = false;
+      if (this.buffer.length > 0) {
+        void this.flush();
+      }
+    }
+  }
+}
+
 function createLoggerDestination(service: string, format: 'pretty' | 'json', logDirectory: string) {
   const streams: Array<{ stream: Writable | NodeJS.WriteStream }> = [];
 
@@ -138,6 +223,16 @@ function createLoggerDestination(service: string, format: 'pretty' | 'json', log
       flags: 'a',
     });
     streams.push({ stream: fileStream });
+  }
+
+  const lokiEndpoint = resolveLokiEndpoint();
+  if (lokiEndpoint) {
+    streams.push({
+      stream: new LokiBatchStream(lokiEndpoint, {
+        service,
+        environment: process.env['NODE_ENV'] ?? 'development',
+      }),
+    });
   }
 
   return multistream(streams);

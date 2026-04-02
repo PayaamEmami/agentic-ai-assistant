@@ -14,7 +14,9 @@ import { addLogContext, fetchWithTelemetry, getLogContext, getLogger } from '@aa
 import { AppError } from '../lib/errors.js';
 import { enqueueConnectorSyncJob } from './connector-queue.js';
 
-type SupportedConnectorKind = 'github' | 'google_docs';
+type ReadConnectorKind = 'github' | 'google_docs';
+type ActionConnectorKind = 'github_actions' | 'google_drive_actions';
+type SupportedConnectorKind = ReadConnectorKind | ActionConnectorKind;
 
 interface OAuthStatePayload {
   flowId: string;
@@ -75,6 +77,52 @@ function requireEnv(key: string): string {
   return value;
 }
 
+function normalizeRedirectBase(base: string): string {
+  return base.endsWith('/') ? base : `${base}/`;
+}
+
+function buildGoogleRedirectUri(kind: 'google_docs' | 'google_drive_actions'): string {
+  const base = process.env['GOOGLE_REDIRECT_URI_BASE'];
+  if (base) {
+    return new URL(
+      kind === 'google_docs' ? 'docs/callback' : 'drive-actions/callback',
+      normalizeRedirectBase(base),
+    ).toString();
+  }
+
+  if (kind === 'google_drive_actions') {
+    return process.env['GOOGLE_DRIVE_ACTIONS_REDIRECT_URI'] ?? requireEnv('GOOGLE_REDIRECT_URI');
+  }
+
+  return requireEnv('GOOGLE_REDIRECT_URI');
+}
+
+function buildGitHubRedirectUri(kind: 'github' | 'github_actions'): string {
+  const base = process.env['GITHUB_REDIRECT_URI_BASE'];
+  if (base) {
+    return new URL(
+      kind === 'github' ? 'rag/callback' : 'actions/callback',
+      normalizeRedirectBase(base),
+    ).toString();
+  }
+
+  if (kind === 'github_actions') {
+    return process.env['GITHUB_ACTIONS_REDIRECT_URI'] ?? requireEnv('GITHUB_REDIRECT_URI');
+  }
+
+  return requireEnv('GITHUB_REDIRECT_URI');
+}
+
+function buildGitHubScope(kind: 'github' | 'github_actions'): string {
+  if (kind === 'github_actions') {
+    // "repo" enables branch, commit, PR, comment, and review write operations.
+    // "workflow" avoids failures when a coding task needs to update workflow files.
+    return 'repo workflow read:user';
+  }
+
+  return 'repo read:user';
+}
+
 function getOAuthStateSecret(): string {
   return process.env['JWT_SECRET'] ?? 'dev-insecure-jwt-secret';
 }
@@ -109,7 +157,12 @@ function verifyOAuthState(state: string): OAuthStatePayload {
   if (payload.expiresAt < Date.now()) {
     throw new AppError(400, 'Connector state has expired', 'CONNECTOR_STATE_EXPIRED');
   }
-  if (payload.kind !== 'github' && payload.kind !== 'google_docs') {
+  if (
+    payload.kind !== 'github' &&
+    payload.kind !== 'google_docs' &&
+    payload.kind !== 'github_actions' &&
+    payload.kind !== 'google_drive_actions'
+  ) {
     throw new AppError(400, 'Unsupported connector state', 'CONNECTOR_INVALID_STATE');
   }
 
@@ -127,11 +180,10 @@ function buildConnectorRedirect(kind: SupportedConnectorKind, status: 'connected
   return url.toString();
 }
 
-async function exchangeGoogleCode(code: string) {
+async function exchangeGoogleCode(code: string, redirectUri: string) {
   const logger = getLogger({ component: 'connector-service', provider: 'google' });
   const clientId = requireEnv('GOOGLE_CLIENT_ID');
   const clientSecret = requireEnv('GOOGLE_CLIENT_SECRET');
-  const redirectUri = requireEnv('GOOGLE_REDIRECT_URI');
 
   const response = await fetchWithTelemetry(
     'https://oauth2.googleapis.com/token',
@@ -187,11 +239,10 @@ async function exchangeGoogleCode(code: string) {
   }>;
 }
 
-async function exchangeGitHubCode(code: string) {
+async function exchangeGitHubCode(code: string, redirectUri: string) {
   const logger = getLogger({ component: 'connector-service', provider: 'github' });
   const clientId = requireEnv('GITHUB_CLIENT_ID');
   const clientSecret = requireEnv('GITHUB_CLIENT_SECRET');
-  const redirectUri = requireEnv('GITHUB_REDIRECT_URI');
 
   const response = await fetchWithTelemetry(
     'https://github.com/login/oauth/access_token',
@@ -314,7 +365,7 @@ function getSelectedRepoCount(settings: Record<string, unknown>): number | undef
   return Array.isArray(selectedRepos) ? selectedRepos.length : undefined;
 }
 
-async function toRecentSyncRuns(userId: string, kind: SupportedConnectorKind) {
+async function toRecentSyncRuns(userId: string, kind: ReadConnectorKind) {
   const runs = await connectorSyncRunRepository.listRecentByUserAndKind(userId, kind, 5);
   return runs.map((run) => ({
     id: run.id,
@@ -330,7 +381,7 @@ async function toRecentSyncRuns(userId: string, kind: SupportedConnectorKind) {
   }));
 }
 
-async function toRecentSources(userId: string, kind: SupportedConnectorKind) {
+async function toRecentSources(userId: string, kind: ReadConnectorKind) {
   const sources = await sourceRepository.listIndexedByUserAndConnector(userId, kind, 8);
   return sources.map((source) => ({
     id: source.id,
@@ -346,10 +397,10 @@ export class ConnectorService {
   async listConnectors(userId: string): Promise<ConnectorSummary[]> {
     const configs = await connectorConfigRepository.listByUser(userId);
     const byKind = new Map(configs.map((config) => [config.kind, config]));
-    const recentRunsByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSyncRuns>>>();
-    const recentSourcesByKind = new Map<SupportedConnectorKind, Awaited<ReturnType<typeof toRecentSources>>>();
+    const recentRunsByKind = new Map<ReadConnectorKind, Awaited<ReturnType<typeof toRecentSyncRuns>>>();
+    const recentSourcesByKind = new Map<ReadConnectorKind, Awaited<ReturnType<typeof toRecentSources>>>();
     const sourceStatsByKind = new Map<
-      SupportedConnectorKind,
+      ReadConnectorKind,
       Awaited<ReturnType<typeof sourceRepository.getConnectorSourceStats>>
     >();
     for (const kind of ['google_docs', 'github'] as const) {
@@ -363,9 +414,12 @@ export class ConnectorService {
       sourceStatsByKind.set(kind, sourceStats);
     }
 
-    return (['google_docs', 'github'] as const).map((kind) => {
+    return (['google_docs', 'github', 'google_drive_actions', 'github_actions'] as const).map((kind) => {
       const config = byKind.get(kind);
-      const sourceStats = sourceStatsByKind.get(kind) ?? {
+      const sourceStats =
+        (kind === 'google_docs' || kind === 'github'
+          ? sourceStatsByKind.get(kind)
+          : undefined) ?? {
         totalSources: 0,
         searchableSources: 0,
       };
@@ -380,8 +434,10 @@ export class ConnectorService {
         selectedRepoCount: config ? getSelectedRepoCount(config.settings) : undefined,
         totalSourceCount: sourceStats.totalSources,
         searchableSourceCount: sourceStats.searchableSources,
-        recentSyncRuns: recentRunsByKind.get(kind) ?? [],
-        recentSources: recentSourcesByKind.get(kind) ?? [],
+        recentSyncRuns:
+          kind === 'google_docs' || kind === 'github' ? (recentRunsByKind.get(kind) ?? []) : [],
+        recentSources:
+          kind === 'google_docs' || kind === 'github' ? (recentSourcesByKind.get(kind) ?? []) : [],
       };
     });
   }
@@ -411,7 +467,7 @@ export class ConnectorService {
     if (kind === 'google_docs') {
       const params = new URLSearchParams({
         client_id: requireEnv('GOOGLE_CLIENT_ID'),
-        redirect_uri: requireEnv('GOOGLE_REDIRECT_URI'),
+        redirect_uri: buildGoogleRedirectUri('google_docs'),
         response_type: 'code',
         access_type: 'offline',
         prompt: 'consent',
@@ -421,10 +477,26 @@ export class ConnectorService {
       return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
     }
 
+    if (kind === 'google_drive_actions') {
+      const params = new URLSearchParams({
+        client_id: requireEnv('GOOGLE_CLIENT_ID'),
+        redirect_uri: buildGoogleRedirectUri('google_drive_actions'),
+        response_type: 'code',
+        access_type: 'offline',
+        prompt: 'consent',
+        scope: [
+          'https://www.googleapis.com/auth/drive',
+          'https://www.googleapis.com/auth/documents',
+        ].join(' '),
+        state,
+      });
+      return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+    }
+
     const params = new URLSearchParams({
       client_id: requireEnv('GITHUB_CLIENT_ID'),
-      redirect_uri: requireEnv('GITHUB_REDIRECT_URI'),
-      scope: 'repo read:user',
+      redirect_uri: buildGitHubRedirectUri(kind),
+      scope: buildGitHubScope(kind),
       state,
     });
     return `https://github.com/login/oauth/authorize?${params.toString()}`;
@@ -437,7 +509,7 @@ export class ConnectorService {
       userId: payload.userId,
       connectorKind: 'google_docs',
     });
-    const token = await exchangeGoogleCode(code);
+    const token = await exchangeGoogleCode(code, buildGoogleRedirectUri('google_docs'));
     const existing = await connectorConfigRepository.findByUserAndKind(payload.userId, 'google_docs');
     const credentials = {
       accessToken: token.access_token,
@@ -467,6 +539,37 @@ export class ConnectorService {
     return buildConnectorRedirect('google_docs', 'connected');
   }
 
+  async handleGoogleDriveActionsCallback(code: string, state: string): Promise<string> {
+    const payload = verifyOAuthState(state);
+    addLogContext({
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'google_drive_actions',
+    });
+    const token = await exchangeGoogleCode(
+      code,
+      buildGoogleRedirectUri('google_drive_actions'),
+    );
+    const existing = await connectorConfigRepository.findByUserAndKind(
+      payload.userId,
+      'google_drive_actions',
+    );
+    const credentials = {
+      accessToken: token.access_token,
+      refreshToken: token.refresh_token ?? undefined,
+      expiresAt: new Date(Date.now() + token.expires_in * 1000).toISOString(),
+    };
+    await connectorConfigRepository.upsert(
+      payload.userId,
+      'google_drive_actions',
+      'connected',
+      encryptConnectorCredentials(credentials),
+      existing?.settings ?? {},
+    );
+
+    return buildConnectorRedirect('google_drive_actions', 'connected');
+  }
+
   async handleGitHubCallback(code: string, state: string): Promise<string> {
     const payload = verifyOAuthState(state);
     addLogContext({
@@ -474,7 +577,7 @@ export class ConnectorService {
       userId: payload.userId,
       connectorKind: 'github',
     });
-    const accessToken = await exchangeGitHubCode(code);
+    const accessToken = await exchangeGitHubCode(code, buildGitHubRedirectUri('github'));
     const account = await fetchGitHubAccount(accessToken);
     const existing = await connectorConfigRepository.findByUserAndKind(payload.userId, 'github');
     const credentials = {
@@ -505,7 +608,43 @@ export class ConnectorService {
     return buildConnectorRedirect('github', 'connected');
   }
 
+  async handleGitHubActionsCallback(code: string, state: string): Promise<string> {
+    const payload = verifyOAuthState(state);
+    addLogContext({
+      correlationId: payload.flowId,
+      userId: payload.userId,
+      connectorKind: 'github_actions',
+    });
+    const accessToken = await exchangeGitHubCode(
+      code,
+      buildGitHubRedirectUri('github_actions'),
+    );
+    const account = await fetchGitHubAccount(accessToken);
+    const existing = await connectorConfigRepository.findByUserAndKind(
+      payload.userId,
+      'github_actions',
+    );
+    const credentials = {
+      accessToken,
+      accountLogin: account.login,
+      accountId: account.id,
+    };
+    await connectorConfigRepository.upsert(
+      payload.userId,
+      'github_actions',
+      'connected',
+      encryptConnectorCredentials(credentials),
+      existing?.settings ?? {},
+    );
+
+    return buildConnectorRedirect('github_actions', 'connected');
+  }
+
   async triggerSync(userId: string, kind: SupportedConnectorKind): Promise<void> {
+    if (kind !== 'github' && kind !== 'google_docs') {
+      throw new AppError(400, 'This connector does not support sync', 'CONNECTOR_SYNC_UNSUPPORTED');
+    }
+
     const config = await connectorConfigRepository.findByUserAndKind(userId, kind);
     if (!config) {
       throw new AppError(404, 'Connector is not connected', 'CONNECTOR_NOT_FOUND');

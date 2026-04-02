@@ -4,15 +4,13 @@ import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
   parseToolCalls,
   requiresApprovalForCalls,
-  shouldDelegateToCoding,
-  shouldDelegateToResearch,
   toChatMessages,
   toSystemPromptContext,
   toToolDefinitions,
 } from './helpers.js';
 
-export class OrchestratorAgent implements Agent {
-  readonly role = 'orchestrator' as const;
+export class CodingAgent implements Agent {
+  readonly role = 'coding' as const;
 
   constructor(
     private readonly modelProvider: ModelProvider,
@@ -34,19 +32,11 @@ export class OrchestratorAgent implements Agent {
     });
 
     const toolCalls = parseToolCalls(completion.toolCalls);
-    const delegateTo =
-      shouldDelegateToCoding(context)
-        ? 'coding'
-        : toolCalls.length > 0
-          ? 'action'
-          : shouldDelegateToResearch(context)
-            ? 'research'
-            : null;
 
     return {
       response: completion.content,
       toolCalls,
-      delegateTo,
+      delegateTo: null,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),
     };
   }

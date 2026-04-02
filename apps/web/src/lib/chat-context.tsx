@@ -92,6 +92,7 @@ export interface ToolActivityItem {
   name: string;
   status: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
   output?: unknown;
+  detail?: string;
 }
 
 export interface CitationItem {
@@ -367,6 +368,7 @@ function extractToolActivities(messages: ChatMessage[]): ToolActivityItem[] {
         name: block.toolName ?? 'Tool',
         status: parseToolStatus(block.status),
         output: block.output,
+        detail: undefined,
       });
     });
   }
@@ -840,7 +842,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         case 'assistant.text.done':
         case 'assistant.interrupted':
         case 'tool.start':
+        case 'tool.progress':
         case 'tool.done':
+          if (parsed.type === 'tool.progress') {
+            const progress = parsed as {
+              toolExecutionId?: string;
+              toolName?: string;
+              message?: string;
+            };
+            setToolActivities((previous) => {
+              const id = progress.toolExecutionId ?? crypto.randomUUID();
+              const next = previous.filter((item) => item.id !== id);
+              next.push({
+                id,
+                name: progress.toolName ?? 'Tool',
+                status: 'running',
+                detail: progress.message,
+              });
+              return next;
+            });
+            return;
+          }
           void refreshConversation(currentConversationId);
           return;
         case 'approval.requested':

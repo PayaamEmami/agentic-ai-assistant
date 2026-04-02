@@ -36,6 +36,23 @@ export interface ToolDoneEvent {
   status: 'completed' | 'failed';
 }
 
+export interface ToolProgressEvent {
+  type: 'tool.progress';
+  conversationId: string;
+  toolExecutionId: string;
+  toolName: string;
+  phase:
+    | 'clone'
+    | 'plan'
+    | 'edit'
+    | 'validate'
+    | 'commit'
+    | 'push'
+    | 'pr_update'
+    | 'done';
+  message: string;
+}
+
 export interface ApprovalRequestedEvent {
   type: 'approval.requested';
   conversationId: string;
@@ -86,6 +103,7 @@ export type RealtimeEvent =
   | AssistantTextDoneEvent
   | AssistantInterruptedEvent
   | ToolStartEvent
+  | ToolProgressEvent
   | ToolDoneEvent
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent

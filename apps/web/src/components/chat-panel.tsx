@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { useChatContext } from '@/lib/chat-context';
 import { useAuthContext } from '@/lib/auth-context';
 import { Message } from './message';
+import { ToolActivity } from './tool-activity';
 
 function getFirstName(displayName: string | undefined) {
   const normalized = displayName?.trim();
@@ -15,7 +16,7 @@ function getFirstName(displayName: string | undefined) {
 }
 
 export function ChatPanel() {
-  const { messages, loading } = useChatContext();
+  const { messages, toolActivities, loading } = useChatContext();
   const { user } = useAuthContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const firstName = getFirstName(user?.displayName);
@@ -50,6 +51,16 @@ export function ChatPanel() {
           </div>
         </div>
       )}
+      {toolActivities
+        .filter((activity) => activity.status === 'planned' || activity.status === 'running')
+        .map((activity) => (
+          <ToolActivity
+            key={activity.id}
+            name={activity.name}
+            status={activity.status}
+            detail={activity.detail}
+          />
+        ))}
       <div ref={scrollRef} />
     </div>
   );

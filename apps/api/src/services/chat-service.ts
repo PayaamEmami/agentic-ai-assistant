@@ -1,6 +1,7 @@
 import {
   ActionAgent,
   AgentOrchestrator,
+  CodingAgent,
   OpenAIProvider,
   OrchestratorAgent,
   ResearchAgent,
@@ -303,6 +304,10 @@ function connectorLabel(kind: string): string {
       return 'GitHub';
     case 'google_docs':
       return 'Google Docs';
+    case 'github_actions':
+      return 'GitHub Actions';
+    case 'google_drive_actions':
+      return 'Google Drive Actions';
     default:
       return kind;
   }
@@ -393,6 +398,7 @@ export class ChatService {
       new OrchestratorAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new ResearchAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new ActionAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+      new CodingAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new VerifierAgent(this.modelProvider, process.env['OPENAI_MODEL']),
     ]);
     this.personalizationService = new PersonalizationService();

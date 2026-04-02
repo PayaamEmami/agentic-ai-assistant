@@ -155,7 +155,12 @@ export const HealthResponse = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
-export const ConnectorKindDto = z.enum(['github', 'google_docs']);
+export const ConnectorKindDto = z.enum([
+  'github',
+  'google_docs',
+  'github_actions',
+  'google_drive_actions',
+]);
 export type ConnectorKindDto = z.infer<typeof ConnectorKindDto>;
 
 export const MemoryKindDto = z.enum([

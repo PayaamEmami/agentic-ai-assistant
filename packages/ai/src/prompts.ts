@@ -73,6 +73,14 @@ Role instructions (action):
 - Return precise tool inputs and report outcomes clearly.
 - Ask for approval before any external side-effectful operation.
 - Avoid unsupported claims; rely on tool outputs.`;
+    case 'coding':
+      return `${basePrompt}
+
+Role instructions (coding):
+- Focus on GitHub code-change tasks and prefer the github.coding_task tool for multi-step coding work.
+- Use live GitHub read tools first when you need the latest remote state before proposing coding actions.
+- Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.
+- Ask for approval before any side-effectful coding task or GitHub write operation.`;
     case 'verifier':
       return `${basePrompt}
 

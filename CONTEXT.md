@@ -61,7 +61,7 @@ pnpm dev:local
 What it does:
 
 1. Requires a real `.env` file in the repo root
-2. Starts PostgreSQL and Redis with `docker/docker-compose.yml`
+2. Starts PostgreSQL, Redis, and the local observability stack with `docker/docker-compose.yml`
 3. Runs DB migrations via `pnpm --filter @aaa/db migrate:up`
 4. Starts all app dev servers with `pnpm dev`
 
@@ -136,6 +136,8 @@ Local logging defaults:
 - NDJSON log files are written under `.logs/`
 - API logs go to `.logs/api.ndjson`
 - Worker logs go to `.logs/worker.ndjson`
+
+During `pnpm dev:local`, the script disables file logging and points logs at local Loki instead so local observability works without Docker bind mounts on the host filesystem.
 
 Useful fields to grep for:
 

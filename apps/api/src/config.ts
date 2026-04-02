@@ -24,9 +24,13 @@ export interface AppConfig {
   googleClientId?: string;
   googleClientSecret?: string;
   googleRedirectUri?: string;
+  googleRedirectUriBase?: string;
+  googleDriveActionsRedirectUri?: string;
   githubClientId?: string;
   githubClientSecret?: string;
   githubRedirectUri?: string;
+  githubRedirectUriBase?: string;
+  githubActionsRedirectUri?: string;
 }
 
 declare module 'fastify' {
@@ -87,8 +91,12 @@ export function loadConfig(): AppConfig {
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
     googleRedirectUri: process.env.GOOGLE_REDIRECT_URI,
+    googleRedirectUriBase: process.env.GOOGLE_REDIRECT_URI_BASE,
+    googleDriveActionsRedirectUri: process.env.GOOGLE_DRIVE_ACTIONS_REDIRECT_URI,
     githubClientId: process.env.GITHUB_CLIENT_ID,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
     githubRedirectUri: process.env.GITHUB_REDIRECT_URI,
+    githubRedirectUriBase: process.env.GITHUB_REDIRECT_URI_BASE,
+    githubActionsRedirectUri: process.env.GITHUB_ACTIONS_REDIRECT_URI,
   };
 }

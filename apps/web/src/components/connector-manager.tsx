@@ -12,19 +12,6 @@ import { reportClientError } from '@/lib/client-logging';
 
 const CONNECTOR_SECTION_STATE_STORAGE_KEY = 'connector-manager:collapsed-sections';
 
-function formatSyncTimestamp(value: string | null): string {
-  if (!value) {
-    return 'Not synced yet';
-  }
-
-  const timestamp = new Date(value);
-  if (Number.isNaN(timestamp.getTime())) {
-    return 'Not synced yet';
-  }
-
-  return timestamp.toLocaleString();
-}
-
 function formatRunTimestamp(value: string): string {
   const timestamp = new Date(value);
   if (Number.isNaN(timestamp.getTime())) {
@@ -52,7 +39,18 @@ function formatRunDuration(startedAt: string, completedAt: string | null): strin
 }
 
 function connectorLabel(kind: ConnectorSummary['kind']): string {
-  return kind === 'google_docs' ? 'Google Docs' : 'GitHub';
+  switch (kind) {
+    case 'google_docs':
+      return 'Google Docs';
+    case 'github':
+      return 'GitHub';
+    case 'google_drive_actions':
+      return 'Google Drive';
+    case 'github_actions':
+      return 'GitHub';
+    default:
+      return kind;
+  }
 }
 
 function runStatusTone(status: ConnectorSyncRunSummary['status']): string {
@@ -103,6 +101,14 @@ function indexedSourceSummary(connector: ConnectorSummary): string {
   const total = connector.totalSourceCount ?? 0;
   const searchable = connector.searchableSourceCount ?? 0;
   return `${searchable}/${total} searchable`;
+}
+
+function isKnowledgeConnector(kind: ConnectorSummary['kind']): boolean {
+  return kind === 'github' || kind === 'google_docs';
+}
+
+function isToolConnector(kind: ConnectorSummary['kind']): boolean {
+  return kind === 'github_actions' || kind === 'google_drive_actions';
 }
 
 export function ConnectorManager() {
@@ -218,7 +224,9 @@ export function ConnectorManager() {
     return () => window.clearInterval(interval);
   }, [load]);
 
-  const startConnection = async (kind: 'github' | 'google_docs') => {
+  const startConnection = async (
+    kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions',
+  ) => {
     setActionError(null);
     try {
       const response = await api.connectors.start(kind);
@@ -234,7 +242,9 @@ export function ConnectorManager() {
     }
   };
 
-  const triggerSync = async (kind: 'github' | 'google_docs') => {
+  const triggerSync = async (
+    kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions',
+  ) => {
     setActionError(null);
     try {
       await api.connectors.sync(kind);
@@ -277,8 +287,11 @@ export function ConnectorManager() {
 
   const disconnect = async (kind: ConnectorSummary['kind']) => {
     const label = connectorLabel(kind);
+    const removesIndexedData = kind === 'github' || kind === 'google_docs';
     const confirmed = window.confirm(
-      `Disconnect ${label} and remove its indexed data from this workspace?`,
+      removesIndexedData
+        ? `Disconnect ${label} and remove its indexed data from this workspace?`
+        : `Disconnect ${label} from this workspace?`,
     );
     if (!confirmed) {
       return;
@@ -317,7 +330,13 @@ export function ConnectorManager() {
           }`}
         >
           {connectorLabel(
-            connectorKind === 'github' ? 'github' : 'google_docs',
+            connectorKind === 'github'
+              ? 'github'
+              : connectorKind === 'github_actions'
+                ? 'github_actions'
+                : connectorKind === 'google_drive_actions'
+                  ? 'google_drive_actions'
+                  : 'google_docs',
           )}{' '}
           {connectorStatus === 'connected' ? 'connected.' : 'failed.'}
           {connectorMessage ? ` ${connectorMessage}` : ''}
@@ -331,240 +350,274 @@ export function ConnectorManager() {
       {loading ? (
         <p className="text-xs text-foreground-muted">Loading connectors...</p>
       ) : (
-        connectors.map((connector) => (
-          <div key={connector.kind} className="rounded-xl border border-border bg-surface-overlay p-3">
-            {(() => {
-              const requiresRepoSelection = connector.kind === 'github';
-              const selectedRepoCount = connector.selectedRepoCount ?? 0;
-              const syncDisabled =
-                connector.status !== 'connected' ||
-                (requiresRepoSelection && selectedRepoCount === 0);
-
-              return (
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{connectorLabel(connector.kind)}</p>
-                    <p className="mt-1 text-xs text-foreground-muted">
-                      Status: {connector.status}
-                      {connector.lastSyncStatus ? ` | sync ${connector.lastSyncStatus}` : ''}
-                    </p>
-                    <p className="mt-1 text-xs text-foreground-muted">
-                      {formatSyncTimestamp(connector.lastSyncAt)}
-                    </p>
-                    {connector.kind === 'github' && connector.selectedRepoCount !== undefined ? (
-                      <p className="mt-1 text-xs text-foreground-muted">
-                        Selected repos: {connector.selectedRepoCount}
-                      </p>
-                    ) : null}
-                    {connector.kind === 'github' &&
-                    connector.hasCredentials &&
-                    connector.status === 'connected' &&
-                    selectedRepoCount === 0 ? (
-                      <p className="mt-1 text-xs text-warning">
-                        Select and save at least one repository before syncing.
-                      </p>
-                    ) : null}
-                    {connector.lastError ? (
-                      <p className="mt-2 text-xs text-error">{connector.lastError}</p>
-                    ) : null}
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {!connector.hasCredentials || connector.status !== 'connected' ? (
-                      <button
-                        onClick={() => void startConnection(connector.kind)}
-                        className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
-                      >
-                        Connect
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => void triggerSync(connector.kind)}
-                        disabled={syncDisabled}
-                        className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {connector.kind === 'github' && selectedRepoCount === 0
-                          ? 'Select repos first'
-                          : 'Sync now'}
-                      </button>
-                    )}
-                    {connector.hasCredentials ? (
-                      <button
-                        onClick={() => void disconnect(connector.kind)}
-                        disabled={disconnectingKind === connector.kind}
-                        className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
-                      >
-                        {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              );
-            })()}
-
-            <div className="mt-3 space-y-2">
-              <button
-                type="button"
-                onClick={() => toggleSection(connector.kind, 'sync-runs')}
-                className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
-              >
-                <span>Recent Sync Runs</span>
-                {isSectionCollapsed(connector.kind, 'sync-runs') ? (
-                  <ChevronLeftIcon />
-                ) : (
-                  <ChevronDownIcon />
-                )}
-              </button>
-              {isSectionCollapsed(connector.kind, 'sync-runs') ? null : connector.recentSyncRuns.length === 0 ? (
-                <p className="text-xs text-foreground-muted">No sync history yet.</p>
-              ) : (
-                connector.recentSyncRuns.map((run) => (
-                  <div
-                    key={run.id}
-                    className="rounded-lg border border-border px-3 py-2 text-xs"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className={`font-medium ${runStatusTone(run.status)}`}>
-                          {runStatusLabel(run.status)}
-                        </p>
-                        <p className="mt-1 text-foreground-muted">
-                          Started {formatRunTimestamp(run.startedAt)}
-                        </p>
-                      </div>
-                      <p className="text-foreground-muted">
-                        {formatRunDuration(run.startedAt, run.completedAt)}
-                      </p>
-                    </div>
-                    <p className="mt-2 text-foreground-muted">
-                      {run.itemsDiscovered} seen | {run.itemsQueued} queued
-                      {run.itemsDeleted > 0 ? ` | ${run.itemsDeleted} removed` : ''}
-                      {run.errorCount > 0 ? ` | ${run.errorCount} errors` : ''}
-                    </p>
-                    {run.errorSummary ? (
-                      <p className="mt-2 text-error">{run.errorSummary}</p>
-                    ) : null}
-                  </div>
-                ))
-              )}
-            </div>
-
-            <div className="mt-3 space-y-2">
-              <button
-                type="button"
-                onClick={() => toggleSection(connector.kind, 'sources')}
-                className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
-              >
-                <span>Indexed Sources ({indexedSourceSummary(connector)})</span>
-                {isSectionCollapsed(connector.kind, 'sources') ? (
-                  <ChevronLeftIcon />
-                ) : (
-                  <ChevronDownIcon />
-                )}
-              </button>
-              {isSectionCollapsed(connector.kind, 'sources') ? null : connector.recentSources.length === 0 ? (
-                <p className="text-xs text-foreground-muted">No indexed sources yet.</p>
-              ) : (
-                <>
-                  <p className="text-xs text-foreground-muted">
-                    Searchable means the source has finished chunking and embedding for retrieval.
+        <>
+          {[
+            {
+              id: 'knowledge',
+              title: 'Knowledge',
+              description:
+                'These connectors sync content into your workspace so the assistant can search it during chat.',
+              connectors: connectors.filter((connector) => isKnowledgeConnector(connector.kind)),
+            },
+            {
+              id: 'tools',
+              title: 'Tools',
+              description:
+                'These connectors authorize live actions like creating pull requests, editing files, and updating docs.',
+              connectors: connectors.filter((connector) => isToolConnector(connector.kind)),
+            },
+          ].map((group) =>
+            group.connectors.length === 0 ? null : (
+              <section key={group.id} className="space-y-3">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
+                    {group.title}
                   </p>
-                  {connector.recentSources.map((source) => (
-                    <div
-                      key={source.id}
-                      className="rounded-lg border border-border px-3 py-2 text-xs"
-                    >
-                      {source.uri ? (
-                        <a
-                          href={source.uri}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="block font-medium text-link underline underline-offset-4"
-                        >
-                          {source.title}
-                        </a>
-                      ) : (
-                        <p className="font-medium text-foreground">{source.title}</p>
-                      )}
-                      <p className="mt-1 text-foreground-muted">
-                        {sourceKindLabel(source.kind)}
-                        {source.mimeType ? ` | ${source.mimeType}` : ''}
-                      </p>
-                      <p className="mt-1 text-foreground-muted">
-                        Updated {formatRunTimestamp(source.updatedAt)}
-                      </p>
+                  <p className="mt-1 text-sm text-foreground-muted">{group.description}</p>
+                </div>
+                <div className="space-y-3">
+                  {group.connectors.map((connector) => (
+                    <div key={connector.kind} className="rounded-xl border border-border bg-surface-overlay p-3">
+                      {(() => {
+                        const requiresRepoSelection = connector.kind === 'github';
+                        const supportsSync = isKnowledgeConnector(connector.kind);
+                        const selectedRepoCount = connector.selectedRepoCount ?? 0;
+                        const syncDisabled =
+                          !supportsSync ||
+                          connector.status !== 'connected' ||
+                          (requiresRepoSelection && selectedRepoCount === 0);
+
+                        return (
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+                                <span>{connectorLabel(connector.kind)}</span>
+                                {connector.hasCredentials && connector.status === 'connected' ? (
+                                  <ConnectedIcon />
+                                ) : (
+                                  <DisconnectedIcon />
+                                )}
+                              </p>
+                              {connector.kind === 'github' &&
+                              connector.hasCredentials &&
+                              connector.status === 'connected' &&
+                              selectedRepoCount === 0 ? (
+                                <p className="mt-1 text-xs text-warning">
+                                  Select and save at least one repository before syncing.
+                                </p>
+                              ) : null}
+                              {connector.lastError ? (
+                                <p className="mt-2 text-xs text-error">{connector.lastError}</p>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              {!connector.hasCredentials || connector.status !== 'connected' ? (
+                                <button
+                                  onClick={() => void startConnection(connector.kind)}
+                                  className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
+                                >
+                                  Connect
+                                </button>
+                              ) : (
+                                supportsSync ? (
+                                  <button
+                                    onClick={() => void triggerSync(connector.kind)}
+                                    disabled={syncDisabled}
+                                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {connector.kind === 'github' && selectedRepoCount === 0
+                                      ? 'Select repos first'
+                                      : 'Sync now'}
+                                  </button>
+                                ) : null
+                              )}
+                              {connector.hasCredentials ? (
+                                <button
+                                  onClick={() => void disconnect(connector.kind)}
+                                  disabled={disconnectingKind === connector.kind}
+                                  className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                                >
+                                  {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {isKnowledgeConnector(connector.kind) ? (
+                        <div className="mt-3 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(connector.kind, 'sync-runs')}
+                            className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
+                          >
+                            <span>Recent Sync Runs</span>
+                            {isSectionCollapsed(connector.kind, 'sync-runs') ? (
+                              <ChevronLeftIcon />
+                            ) : (
+                              <ChevronDownIcon />
+                            )}
+                          </button>
+                          {isSectionCollapsed(connector.kind, 'sync-runs') ? null : connector.recentSyncRuns.length === 0 ? (
+                            <p className="text-xs text-foreground-muted">No sync history yet.</p>
+                          ) : (
+                            connector.recentSyncRuns.map((run) => (
+                              <div
+                                key={run.id}
+                                className="rounded-lg border border-border px-3 py-2 text-xs"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className={`font-medium ${runStatusTone(run.status)}`}>
+                                      {runStatusLabel(run.status)}
+                                    </p>
+                                    <p className="mt-1 text-foreground-muted">
+                                      Started {formatRunTimestamp(run.startedAt)}
+                                    </p>
+                                  </div>
+                                  <p className="text-foreground-muted">
+                                    {formatRunDuration(run.startedAt, run.completedAt)}
+                                  </p>
+                                </div>
+                                <p className="mt-2 text-foreground-muted">
+                                  {run.itemsDiscovered} seen | {run.itemsQueued} queued
+                                  {run.itemsDeleted > 0 ? ` | ${run.itemsDeleted} removed` : ''}
+                                  {run.errorCount > 0 ? ` | ${run.errorCount} errors` : ''}
+                                </p>
+                                {run.errorSummary ? (
+                                  <p className="mt-2 text-error">{run.errorSummary}</p>
+                                ) : null}
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ) : null}
+
+                      {isKnowledgeConnector(connector.kind) ? (
+                        <div className="mt-3 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(connector.kind, 'sources')}
+                            className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
+                          >
+                            <span>Indexed Sources ({indexedSourceSummary(connector)})</span>
+                            {isSectionCollapsed(connector.kind, 'sources') ? (
+                              <ChevronLeftIcon />
+                            ) : (
+                              <ChevronDownIcon />
+                            )}
+                          </button>
+                          {isSectionCollapsed(connector.kind, 'sources') ? null : connector.recentSources.length === 0 ? (
+                            <p className="text-xs text-foreground-muted">No indexed sources yet.</p>
+                          ) : (
+                            <>
+                              <p className="text-xs text-foreground-muted">
+                                Searchable means the source has finished chunking and embedding for retrieval.
+                              </p>
+                              {connector.recentSources.map((source) => (
+                                <div
+                                  key={source.id}
+                                  className="rounded-lg border border-border px-3 py-2 text-xs"
+                                >
+                                  {source.uri ? (
+                                    <a
+                                      href={source.uri}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="block font-medium text-link underline underline-offset-4"
+                                    >
+                                      {source.title}
+                                    </a>
+                                  ) : (
+                                    <p className="font-medium text-foreground">{source.title}</p>
+                                  )}
+                                  <p className="mt-1 text-foreground-muted">
+                                    {sourceKindLabel(source.kind)}
+                                    {source.mimeType ? ` | ${source.mimeType}` : ''}
+                                  </p>
+                                  <p className="mt-1 text-foreground-muted">
+                                    Updated {formatRunTimestamp(source.updatedAt)}
+                                  </p>
+                                </div>
+                              ))}
+                            </>
+                          )}
+                        </div>
+                      ) : null}
+
+                      {connector.kind === 'github' && connector.status === 'connected' ? (
+                        <div className="mt-3 space-y-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSection(connector.kind, 'repositories')}
+                            className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
+                          >
+                            <span>Repositories ({connector.selectedRepoCount ?? 0} selected)</span>
+                            {isSectionCollapsed(connector.kind, 'repositories') ? (
+                              <ChevronLeftIcon />
+                            ) : (
+                              <ChevronDownIcon />
+                            )}
+                          </button>
+                          {isSectionCollapsed(connector.kind, 'repositories') ? null : (
+                            <>
+                              <p className="text-xs text-foreground-muted">
+                                Save your repository selection to update what GitHub indexes. Saving will
+                                automatically queue a sync.
+                              </p>
+                              {githubRepos.length === 0 ? (
+                                <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
+                              ) : (
+                                <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                                  {githubRepos.map((repo) => {
+                                    const checked = selectedRepoIds.includes(repo.id);
+                                    return (
+                                      <label
+                                        key={repo.id}
+                                        className="flex items-start gap-2 rounded-lg border border-border px-2 py-2 text-xs text-foreground"
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={(event) => {
+                                            setSelectedRepoIds((previous) =>
+                                              event.target.checked
+                                                ? [...previous, repo.id]
+                                                : previous.filter((id) => id !== repo.id),
+                                            );
+                                          }}
+                                          className="mt-0.5"
+                                        />
+                                        <span>
+                                          <span className="block font-medium text-foreground">{repo.fullName}</span>
+                                          <span className="block text-foreground-muted">
+                                            {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
+                                          </span>
+                                        </span>
+                                      </label>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <button
+                                onClick={() => void saveRepoSelection()}
+                                disabled={savingRepos}
+                                className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
+                              >
+                                {savingRepos ? 'Saving...' : 'Save repos'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ) : null}
                     </div>
                   ))}
-                </>
-              )}
-            </div>
-
-            {connector.kind === 'github' && connector.status === 'connected' ? (
-              <div className="mt-3 space-y-2">
-                <button
-                  type="button"
-                  onClick={() => toggleSection(connector.kind, 'repositories')}
-                  className="flex w-full items-center justify-between gap-2 text-left text-xs font-medium uppercase tracking-wide text-foreground-muted transition hover:text-foreground"
-                >
-                  <span>Repositories</span>
-                  {isSectionCollapsed(connector.kind, 'repositories') ? (
-                    <ChevronLeftIcon />
-                  ) : (
-                    <ChevronDownIcon />
-                  )}
-                </button>
-                {isSectionCollapsed(connector.kind, 'repositories') ? null : (
-                  <>
-                    <p className="text-xs text-foreground-muted">
-                      Save your repository selection to update what GitHub indexes. Saving will
-                      automatically queue a sync.
-                    </p>
-                    {githubRepos.length === 0 ? (
-                      <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
-                    ) : (
-                      <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
-                        {githubRepos.map((repo) => {
-                          const checked = selectedRepoIds.includes(repo.id);
-                          return (
-                            <label
-                              key={repo.id}
-                              className="flex items-start gap-2 rounded-lg border border-border px-2 py-2 text-xs text-foreground"
-                            >
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(event) => {
-                                  setSelectedRepoIds((previous) =>
-                                    event.target.checked
-                                      ? [...previous, repo.id]
-                                      : previous.filter((id) => id !== repo.id),
-                                  );
-                                }}
-                                className="mt-0.5"
-                              />
-                              <span>
-                                <span className="block font-medium text-foreground">{repo.fullName}</span>
-                                <span className="block text-foreground-muted">
-                                  {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
-                                </span>
-                              </span>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    )}
-                    <button
-                      onClick={() => void saveRepoSelection()}
-                      disabled={savingRepos}
-                      className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
-                    >
-                      {savingRepos ? 'Saving...' : 'Save repos'}
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : null}
-          </div>
-        ))
+                </div>
+              </section>
+            ),
+          )}
+        </>
       )}
     </div>
   );
@@ -583,5 +636,34 @@ function ChevronDownIcon() {
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="m6 9 6 6 6-6" />
     </svg>
+  );
+}
+
+function ConnectedIcon() {
+  return (
+    <span
+      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-success/15 text-success"
+      aria-label="Connected"
+      title="Connected"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 6 9 17l-5-5" />
+      </svg>
+    </span>
+  );
+}
+
+function DisconnectedIcon() {
+  return (
+    <span
+      className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-error/15 text-error"
+      aria-label="Not connected"
+      title="Not connected"
+    >
+      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m18 6-12 12" />
+        <path d="m6 6 12 12" />
+      </svg>
+    </span>
   );
 }

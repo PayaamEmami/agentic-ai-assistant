@@ -193,6 +193,8 @@ That command handles the local startup flow for you.
 
 Grafana is provisioned with the local Prometheus, Loki, and Tempo datasources plus the repo dashboards under `docker/observability/grafana/dashboards/`.
 
+When you start the stack via `pnpm dev:local`, the observability containers use baked-in config images instead of host bind mounts, and the host-run API/worker processes push logs directly to Loki on `http://localhost:3100`.
+
 ## License
 
 See [LICENSE](./LICENSE).

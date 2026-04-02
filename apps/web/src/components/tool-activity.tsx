@@ -1,9 +1,10 @@
 interface ToolActivityProps {
   name: string;
   status: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
+  detail?: string;
 }
 
-export function ToolActivity({ name, status }: ToolActivityProps) {
+export function ToolActivity({ name, status, detail }: ToolActivityProps) {
   const statusColors: Record<string, string> = {
     planned: 'bg-accent/20 text-accent',
     pending: 'bg-surface-input text-foreground-muted',
@@ -20,11 +21,14 @@ export function ToolActivity({ name, status }: ToolActivityProps) {
   };
 
   return (
-    <div className="flex items-center justify-between rounded-lg border border-border bg-surface-overlay p-3">
-      <span className="text-sm text-foreground">{name}</span>
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[status] ?? ''}`}>
-        {statusLabels[status] ?? status}
-      </span>
+    <div className="rounded-lg border border-border bg-surface-overlay p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-sm text-foreground">{name}</span>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[status] ?? ''}`}>
+          {statusLabels[status] ?? status}
+        </span>
+      </div>
+      {detail ? <p className="mt-2 text-xs text-foreground-muted">{detail}</p> : null}
     </div>
   );
 }

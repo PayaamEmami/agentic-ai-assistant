@@ -73,59 +73,48 @@ services:
       - api
 
   prometheus:
-    image: prom/prometheus:v3.4.2
+    build:
+      context: ./observability/prometheus
+      dockerfile: Dockerfile
     ports:
       - "9090:9090"
-    volumes:
-      - ./observability/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./observability/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
 
   loki:
-    image: grafana/loki:3.2.1
+    build:
+      context: ./observability/loki
+      dockerfile: Dockerfile
     ports:
       - "3100:3100"
     command: ["-config.file=/etc/loki/config.yml"]
-    volumes:
-      - ./observability/loki/config.yml:/etc/loki/config.yml:ro
 
   tempo:
-    image: grafana/tempo:2.7.1
+    build:
+      context: ./observability/tempo
+      dockerfile: Dockerfile
     ports:
       - "3200:3200"
     command: ["-config.file=/etc/tempo/config.yml"]
-    volumes:
-      - ./observability/tempo/config.yml:/etc/tempo/config.yml:ro
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.120.0
+    build:
+      context: ./observability/otel-collector
+      dockerfile: Dockerfile
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     ports:
       - "${LOCAL_OTEL_HTTP_PORT:-4318}:4318"
     depends_on:
       - tempo
-    volumes:
-      - ./observability/otel-collector/config.yaml:/etc/otelcol-contrib/config.yaml:ro
-
-  promtail:
-    image: grafana/promtail:3.2.1
-    command: ["-config.file=/etc/promtail/config.yml"]
-    depends_on:
-      - loki
-    volumes:
-      - ./observability/promtail/config.yml:/etc/promtail/config.yml:ro
-      - ../.logs:/workspace/.logs
 
   grafana:
-    image: grafana/grafana:11.4.0
+    build:
+      context: ./observability/grafana
+      dockerfile: Dockerfile
     ports:
       - "3005:3000"
     depends_on:
       - prometheus
       - loki
       - tempo
-    volumes:
-      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
 
 volumes:
   pgdata:

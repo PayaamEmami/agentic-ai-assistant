@@ -42,6 +42,8 @@ export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
 export const ConnectorKind = {
   GitHub: 'github',
   GoogleDocs: 'google_docs',
+  GitHubActions: 'github_actions',
+  GoogleDriveActions: 'google_drive_actions',
 } as const;
 export type ConnectorKind = (typeof ConnectorKind)[keyof typeof ConnectorKind];
 
@@ -59,6 +61,7 @@ export const AgentRole = {
   Orchestrator: 'orchestrator',
   Research: 'research',
   Action: 'action',
+  Coding: 'coding',
   Verifier: 'verifier',
 } as const;
 export type AgentRole = (typeof AgentRole)[keyof typeof AgentRole];

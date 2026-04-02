@@ -1,5 +1,5 @@
 import { getPool } from '@aaa/db';
-import type { ToolDoneEvent, ToolStartEvent } from '@aaa/shared';
+import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 import { broadcast } from '../ws/connections.js';
 
@@ -46,6 +46,21 @@ function isToolDoneEvent(event: unknown): event is ToolDoneEvent {
   );
 }
 
+function isToolProgressEvent(event: unknown): event is ToolProgressEvent {
+  if (typeof event !== 'object' || event === null) {
+    return false;
+  }
+  const candidate = event as Partial<ToolProgressEvent>;
+  return (
+    candidate.type === 'tool.progress' &&
+    typeof candidate.conversationId === 'string' &&
+    typeof candidate.toolExecutionId === 'string' &&
+    typeof candidate.toolName === 'string' &&
+    typeof candidate.phase === 'string' &&
+    typeof candidate.message === 'string'
+  );
+}
+
 export async function startToolEventRelay(): Promise<void> {
   if (listenerClient) {
     return;
@@ -67,6 +82,11 @@ export async function startToolEventRelay(): Promise<void> {
       }
 
       if (isToolDoneEvent(parsed)) {
+        broadcast(parsed.conversationId, parsed);
+        return;
+      }
+
+      if (isToolProgressEvent(parsed)) {
         broadcast(parsed.conversationId, parsed);
       }
     } catch (error) {

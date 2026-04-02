@@ -2,6 +2,7 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
+      "@aaa/actions": ["packages/actions/src/index.ts"],
       "@aaa/ai": ["packages/ai/src/index.ts"],
       "@aaa/config": ["packages/config/src/index.ts"],
       "@aaa/connectors": ["packages/connectors/src/index.ts"],

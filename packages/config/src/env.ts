@@ -7,6 +7,7 @@ const envSchema = z.object({
   LOG_FILE_ENABLED: z
     .union([z.literal('true'), z.literal('false'), z.literal('1'), z.literal('0')])
     .optional(),
+  LOG_LOKI_ENDPOINT: z.string().optional(),
 
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.coerce.number().default(3001),
@@ -40,9 +41,13 @@ const envSchema = z.object({
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
   GITHUB_REDIRECT_URI: z.string().optional(),
+  GITHUB_REDIRECT_URI_BASE: z.string().optional(),
+  GITHUB_ACTIONS_REDIRECT_URI: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_REDIRECT_URI: z.string().optional(),
+  GOOGLE_REDIRECT_URI_BASE: z.string().optional(),
+  GOOGLE_DRIVE_ACTIONS_REDIRECT_URI: z.string().optional(),
   WEB_BASE_URL: z.string().default('http://localhost:3000'),
   CONNECTOR_CREDENTIALS_SECRET: z.string().optional(),
 });
