@@ -382,14 +382,20 @@ export function ConnectorManager() {
                         const requiresRepoSelection = connector.kind === 'github';
                         const supportsSync = isKnowledgeConnector(connector.kind);
                         const selectedRepoCount = connector.selectedRepoCount ?? 0;
+                        const showRepoWarning =
+                          connector.kind === 'github' &&
+                          connector.hasCredentials &&
+                          connector.status === 'connected' &&
+                          selectedRepoCount === 0;
+                        const showMeta = showRepoWarning || Boolean(connector.lastError);
                         const syncDisabled =
                           !supportsSync ||
                           connector.status !== 'connected' ||
                           (requiresRepoSelection && selectedRepoCount === 0);
 
                         return (
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
+                          <div className={showMeta ? 'space-y-2' : undefined}>
+                            <div className="flex items-center justify-between gap-3">
                               <p className="flex items-center gap-2 text-sm font-medium text-foreground">
                                 <span>{connectorLabel(connector.kind)}</span>
                                 {connector.hasCredentials && connector.status === 'connected' ? (
@@ -398,10 +404,41 @@ export function ConnectorManager() {
                                   <DisconnectedIcon />
                                 )}
                               </p>
-                              {connector.kind === 'github' &&
-                              connector.hasCredentials &&
-                              connector.status === 'connected' &&
-                              selectedRepoCount === 0 ? (
+                              <div className="flex flex-wrap items-center justify-end gap-2">
+                                {!connector.hasCredentials || connector.status !== 'connected' ? (
+                                  <button
+                                    onClick={() => void startConnection(connector.kind)}
+                                    className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
+                                  >
+                                    Connect
+                                  </button>
+                                ) : (
+                                  supportsSync ? (
+                                    <button
+                                      onClick={() => void triggerSync(connector.kind)}
+                                      disabled={syncDisabled}
+                                      className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                      {connector.kind === 'github' && selectedRepoCount === 0
+                                        ? 'Select repos first'
+                                        : 'Sync now'}
+                                    </button>
+                                  ) : null
+                                )}
+                                {connector.hasCredentials ? (
+                                  <button
+                                    onClick={() => void disconnect(connector.kind)}
+                                    disabled={disconnectingKind === connector.kind}
+                                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                                  >
+                                    {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
+                                  </button>
+                                ) : null}
+                              </div>
+                            </div>
+                            {showMeta ? (
+                              <div>
+                              {showRepoWarning ? (
                                 <p className="mt-1 text-xs text-warning">
                                   Select and save at least one repository before syncing.
                                 </p>
@@ -409,38 +446,8 @@ export function ConnectorManager() {
                               {connector.lastError ? (
                                 <p className="mt-2 text-xs text-error">{connector.lastError}</p>
                               ) : null}
-                            </div>
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                              {!connector.hasCredentials || connector.status !== 'connected' ? (
-                                <button
-                                  onClick={() => void startConnection(connector.kind)}
-                                  className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
-                                >
-                                  Connect
-                                </button>
-                              ) : (
-                                supportsSync ? (
-                                  <button
-                                    onClick={() => void triggerSync(connector.kind)}
-                                    disabled={syncDisabled}
-                                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                  >
-                                    {connector.kind === 'github' && selectedRepoCount === 0
-                                      ? 'Select repos first'
-                                      : 'Sync now'}
-                                  </button>
-                                ) : null
-                              )}
-                              {connector.hasCredentials ? (
-                                <button
-                                  onClick={() => void disconnect(connector.kind)}
-                                  disabled={disconnectingKind === connector.kind}
-                                  className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
-                                >
-                                  {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
-                                </button>
-                              ) : null}
-                            </div>
+                              </div>
+                            ) : null}
                           </div>
                         );
                       })()}
