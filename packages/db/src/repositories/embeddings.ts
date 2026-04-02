@@ -19,11 +19,20 @@ interface EmbeddingQueryRow {
 
 export interface Embedding extends EmbeddingRow {}
 
+export interface EmbeddingSearchFilters {
+  connectorKinds?: string[];
+}
+
 export interface EmbeddingRepository {
   findByChunkId(chunkId: string): Promise<Embedding | null>;
   create(chunkId: string, vector: number[], model: string): Promise<Embedding>;
   deleteByChunkIds(chunkIds: string[]): Promise<void>;
-  searchByVector(vector: number[], limit: number, userId?: string): Promise<Embedding[]>;
+  searchByVector(
+    vector: number[],
+    limit: number,
+    userId?: string,
+    filters?: EmbeddingSearchFilters,
+  ): Promise<Embedding[]>;
 }
 
 function serializeVector(vector: number[]): string {
@@ -89,27 +98,59 @@ export const embeddingRepository: EmbeddingRepository = {
     await pool.query('DELETE FROM embeddings WHERE chunk_id = ANY($1::uuid[])', [chunkIds]);
   },
 
-  async searchByVector(vector: number[], limit: number, userId?: string): Promise<Embedding[]> {
+  async searchByVector(
+    vector: number[],
+    limit: number,
+    userId?: string,
+    filters?: EmbeddingSearchFilters,
+  ): Promise<Embedding[]> {
     const pool = getPool();
+    const connectorKinds =
+      filters?.connectorKinds?.map((kind) => kind.trim()).filter((kind) => kind.length > 0) ?? [];
+    const hasConnectorFilter = connectorKinds.length > 0;
 
-    const query = userId
-      ? `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
-         FROM embeddings AS e
-         JOIN chunks AS c ON c.id = e.chunk_id
-         JOIN documents AS d ON d.id = c.document_id
-         WHERE e.vector IS NOT NULL
-           AND d.user_id = $3
-         ORDER BY e.vector <=> $1::vector
-         LIMIT $2`
-      : `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
-         FROM embeddings
-         WHERE vector IS NOT NULL
-         ORDER BY vector <=> $1::vector
-         LIMIT $2`;
+    let query: string;
+    let params: Array<string | number | string[]>;
 
-    const params = userId
-      ? [serializeVector(vector), limit, userId]
-      : [serializeVector(vector), limit];
+    if (userId) {
+      params = [serializeVector(vector), limit, userId];
+      const conditions = [
+        'e.vector IS NOT NULL',
+        '(d.user_id = $3 OR (d.user_id IS NULL AND s.user_id = $3))',
+      ];
+
+      if (hasConnectorFilter) {
+        params.push(connectorKinds);
+        conditions.push(`s.connector_kind = ANY($${params.length}::text[])`);
+      }
+
+      query = `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
+               FROM embeddings AS e
+               JOIN chunks AS c ON c.id = e.chunk_id
+               JOIN documents AS d ON d.id = c.document_id
+               LEFT JOIN sources AS s ON s.id = d.source_id
+               WHERE ${conditions.join('\n                 AND ')}
+               ORDER BY e.vector <=> $1::vector
+               LIMIT $2`;
+    } else if (hasConnectorFilter) {
+      params = [serializeVector(vector), limit, connectorKinds];
+      query = `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
+               FROM embeddings AS e
+               JOIN chunks AS c ON c.id = e.chunk_id
+               JOIN documents AS d ON d.id = c.document_id
+               LEFT JOIN sources AS s ON s.id = d.source_id
+               WHERE e.vector IS NOT NULL
+                 AND s.connector_kind = ANY($3::text[])
+               ORDER BY e.vector <=> $1::vector
+               LIMIT $2`;
+    } else {
+      params = [serializeVector(vector), limit];
+      query = `SELECT id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"
+               FROM embeddings
+               WHERE vector IS NOT NULL
+               ORDER BY vector <=> $1::vector
+               LIMIT $2`;
+    }
 
     const result = await pool.query<EmbeddingQueryRow>(query, params);
     return result.rows.map(mapEmbedding);

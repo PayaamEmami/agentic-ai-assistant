@@ -17,7 +17,7 @@ export { chunkRepository } from './chunks.js';
 export type { Chunk, ChunkRepository } from './chunks.js';
 
 export { embeddingRepository } from './embeddings.js';
-export type { Embedding, EmbeddingRepository } from './embeddings.js';
+export type { Embedding, EmbeddingRepository, EmbeddingSearchFilters } from './embeddings.js';
 
 export { sourceRepository } from './sources.js';
 export type { ConnectorSourceStats, IndexedSourceSummary, Source, SourceRepository } from './sources.js';

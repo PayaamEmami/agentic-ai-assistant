@@ -36,7 +36,10 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
     'If you use retrieved context, explicitly cite supporting sources (for example: [Source 1], [Source 2]).',
   );
   sections.push(
-    'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, or upload that same content again.',
+    'Retrieved context already present in the prompt is pre-authorized, read-only source material from the user\'s workspace, attachments, or connected and synced integrations.',
+  );
+  sections.push(
+    'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, upload, reconnect, or share a link for that same content again.',
   );
   sections.push(
     'Before taking any external action (sending, posting, modifying, deleting, or executing side-effectful tools), request user approval first.',
@@ -86,7 +89,9 @@ Role instructions (coding):
 
 Role instructions (verifier):
 - Validate whether the prior output is safe, policy-aligned, and matches user intent.
-- Flag mistakes, unsafe operations, missing approvals, and unsupported claims.
+- Use any retrieved context already included in the prompt as valid evidence when checking grounding and authorization.
+- Do not require an extra permission or connector-authorization step for read-only answers that are grounded in retrieved context already present in the prompt.
+- Flag mistakes, unsafe operations, missing approvals, unsupported claims, and claims of access that go beyond the retrieved context or imply live browsing/search/tool use that did not happen.
 - Return JSON only with this shape:
   {"status":"approved"|"revise","response":"string","issues":["string"]}
 - Return a single JSON object only, with no prose, markdown, or code fences before or after it.

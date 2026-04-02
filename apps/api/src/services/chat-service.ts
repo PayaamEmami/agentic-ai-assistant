@@ -29,9 +29,10 @@ import {
 } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import type { RetrievalCitation } from './retrieval-bridge.js';
+import type { RetrievalCitation, RetrievalResponse } from './retrieval-bridge.js';
 import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
+import { decideRetrieval } from './retrieval-policy.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
@@ -39,7 +40,7 @@ const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
-const MAX_CITATIONS = 4;
+const MAX_CITATIONS = 6;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE =
@@ -277,6 +278,85 @@ function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<s
     uri: citation.uri,
     score: citation.score,
   }));
+}
+
+function truncateCitationExcerpt(content: string, maxLength = 300): string {
+  const normalized = content.trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  const slice = normalized.slice(0, maxLength);
+  const lastSpace = slice.lastIndexOf(' ');
+  if (lastSpace <= 0) {
+    return slice.trimEnd();
+  }
+
+  return slice.slice(0, lastSpace).trimEnd();
+}
+
+function extractExplicitCitationIndexes(text: string): number[] {
+  const matches = text.matchAll(/\[Sources?\s+([^\]]+)\]/gi);
+  const indexes = new Set<number>();
+
+  for (const match of matches) {
+    const body = match[1];
+    if (!body) {
+      continue;
+    }
+
+    const numberMatches = body.matchAll(/\d+/g);
+    for (const numberMatch of numberMatches) {
+      const rawValue = numberMatch[0];
+      if (!rawValue) {
+        continue;
+      }
+
+      const parsed = Number.parseInt(rawValue, 10);
+      if (Number.isInteger(parsed) && parsed > 0) {
+        indexes.add(parsed);
+      }
+    }
+  }
+
+  return Array.from(indexes).sort((a, b) => a - b);
+}
+
+function selectDisplayedCitations(
+  assistantResponse: string,
+  retrieval: RetrievalResponse,
+): RetrievalCitation[] {
+  const citedIndexes = extractExplicitCitationIndexes(assistantResponse);
+  if (citedIndexes.length === 0) {
+    return [];
+  }
+
+  const citationsBySource = new Map<string, RetrievalCitation>();
+
+  for (const citedIndex of citedIndexes) {
+    const result = retrieval.results[citedIndex - 1];
+    if (!result) {
+      continue;
+    }
+
+    const citation: RetrievalCitation = {
+      sourceId: result.sourceId,
+      chunkId: result.chunkId,
+      documentTitle: result.documentTitle,
+      excerpt: truncateCitationExcerpt(result.content),
+      score: result.score,
+      uri: result.uri,
+    };
+
+    const current = citationsBySource.get(citation.sourceId);
+    if (!current || citation.score > current.score) {
+      citationsBySource.set(citation.sourceId, citation);
+    }
+  }
+
+  return Array.from(citationsBySource.values())
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_CITATIONS);
 }
 
 function toNativeAvailableTools(): AvailableTool[] {
@@ -540,12 +620,29 @@ export class ChatService {
         await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
       }
 
-      const retrieval = await this.retrievalBridge.search(
-        content,
-        userId,
-        MAX_RETRIEVAL_CONTEXT,
-        signal,
+      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
+      throwIfAborted(signal);
+
+      const retrievalDecision = decideRetrieval(content, recentMessages);
+      logger.debug(
+        {
+          event: 'chat.retrieval_decided',
+          outcome: retrievalDecision.shouldRetrieve ? 'search' : 'skip',
+          conversationId: conversation.id,
+          reason: retrievalDecision.reason,
+          hasRecentCitationContext: retrievalDecision.hasRecentCitationContext,
+        },
+        'Retrieval decision evaluated',
       );
+
+      const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
+        ? await this.retrievalBridge.search(
+            content,
+            userId,
+            MAX_RETRIEVAL_CONTEXT,
+            signal,
+          )
+        : { results: [], citations: [] };
       throwIfAborted(signal);
 
       const retrievalContext = retrieval.results.map((result) => {
@@ -560,8 +657,6 @@ export class ChatService {
 
         return lines.join('\n');
       });
-      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
-      throwIfAborted(signal);
 
       const personalContext = await this.personalizationService.getPersonalContext(userId);
       throwIfAborted(signal);
@@ -700,11 +795,12 @@ export class ChatService {
         assistantTextBlock['verificationIssues'] = verificationIssues;
       }
 
+      const displayedCitations = selectDisplayedCitations(assistantResponse, retrieval);
       const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
       if (toolResultBlocks.length > 0) {
         assistantContent.push(...toolResultBlocks);
       } else {
-        assistantContent.push(...toCitationContentBlocks(retrieval.citations));
+        assistantContent.push(...toCitationContentBlocks(displayedCitations));
       }
 
       const assistantMessage = await messageRepository.create(
@@ -755,7 +851,9 @@ export class ChatService {
           historySize: recentMessages.length,
           attachmentCount: attachments.length,
           retrievalResultCount: retrieval.results.length,
-          citationCount: retrieval.citations.length,
+          retrievalCitationCount: retrieval.citations.length,
+          displayedCitationCount: displayedCitations.length,
+          explicitCitationIndexes: extractExplicitCitationIndexes(assistantResponse),
           toolCallCount: toolCalls.length,
           approvalRequestCount: approvalEvents.length,
           verificationStatus,

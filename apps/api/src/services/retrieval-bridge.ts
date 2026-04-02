@@ -2,6 +2,7 @@ import { OpenAIProvider } from '@aaa/ai';
 import {
   chunkRepository,
   documentRepository,
+  type EmbeddingSearchFilters,
   embeddingRepository,
   sourceRepository,
 } from '@aaa/db';
@@ -36,6 +37,8 @@ const QUERY_STOPWORDS = new Set([
   'me',
   'my',
 ]);
+const GOOGLE_DOCS_CONNECTOR_HINT = /\b(google drive|google docs?)\b/i;
+const GITHUB_CONNECTOR_HINT = /\bgithub\b/i;
 
 function isAbortError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') {
@@ -91,6 +94,10 @@ function tokenize(text: string): string[] {
   return Array.from(new Set(normalized));
 }
 
+function normalizeText(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
   const keywords = tokenize(query);
   if (keywords.length === 0) {
@@ -106,6 +113,63 @@ function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
   }
 
   return (matches / keywords.length) * maxBoost;
+}
+
+function inferSearchFilters(query: string): EmbeddingSearchFilters | undefined {
+  const connectorKinds = new Set<string>();
+
+  if (GOOGLE_DOCS_CONNECTOR_HINT.test(query)) {
+    connectorKinds.add('google_docs');
+  }
+
+  if (GITHUB_CONNECTOR_HINT.test(query)) {
+    connectorKinds.add('github');
+  }
+
+  if (connectorKinds.size === 0) {
+    return undefined;
+  }
+
+  return { connectorKinds: Array.from(connectorKinds) };
+}
+
+function titleMatchBoost(query: string, title: string): number {
+  const queryTokens = tokenize(query);
+  const titleTokens = tokenize(title);
+  if (queryTokens.length === 0 || titleTokens.length === 0) {
+    return 0;
+  }
+
+  const queryTokenSet = new Set(queryTokens);
+  const sharedTokens = titleTokens.filter((token) => queryTokenSet.has(token));
+  if (sharedTokens.length === 0) {
+    return 0;
+  }
+
+  const normalizedQuery = normalizeText(query);
+  const normalizedTitle = normalizeText(title);
+  let boost = 0;
+
+  if (
+    normalizedTitle.length > 0 &&
+    (normalizedQuery.includes(normalizedTitle) || normalizedTitle.includes(normalizedQuery))
+  ) {
+    boost += 1.25;
+  }
+
+  const titleCoverage = sharedTokens.length / titleTokens.length;
+  const queryCoverage = sharedTokens.length / queryTokens.length;
+  boost += titleCoverage * 1.25;
+  boost += queryCoverage * 0.75;
+
+  const distinctiveSharedTokens = sharedTokens.filter((token) => token.length >= 5);
+  if (distinctiveSharedTokens.length >= 2) {
+    boost += 0.75;
+  } else if (distinctiveSharedTokens.length === 1 && titleCoverage >= 0.5) {
+    boost += 0.35;
+  }
+
+  return Math.min(boost, 2.5);
 }
 
 function truncateOnWordBoundary(content: string, maxLength: number): string {
@@ -144,6 +208,7 @@ export class RetrievalBridge {
     }
 
     const normalizedLimit = normalizeLimit(limit);
+    const searchFilters = inferSearchFilters(trimmedQuery);
 
     try {
       const embeddingResponse = await this.modelProvider.embed({
@@ -162,6 +227,7 @@ export class RetrievalBridge {
         queryVector,
         candidateLimit,
         userId,
+        searchFilters,
       );
 
       if (vectorMatches.length === 0) {
@@ -200,6 +266,7 @@ export class RetrievalBridge {
           outcome: 'failure',
           component: 'retrieval-bridge',
           error,
+          connectorKinds: searchFilters?.connectorKinds,
           queryLength: trimmedQuery.length,
         },
         'Retrieval search failed',
@@ -236,14 +303,18 @@ export class RetrievalBridge {
     const baseScore = totalCandidates <= 1 ? 1 : 1 - index / (totalCandidates - 1);
     const contentScore = keywordBoost(query, chunk.content);
     const titleScore = keywordBoost(query, document.title, 0.75);
+    const titleMatchScore = titleMatchBoost(query, document.title);
 
     return {
       chunkId: chunk.id,
       documentId: chunk.documentId,
       sourceId,
       content: chunk.content,
-      score: baseScore + contentScore + titleScore,
-      metadata: chunk.metadata,
+      score: baseScore + contentScore + titleScore + titleMatchScore,
+      metadata: {
+        ...chunk.metadata,
+        ...(source?.connectorKind ? { connectorKind: source.connectorKind } : {}),
+      },
       documentTitle: document.title,
       uri: source?.uri ?? null,
     };
