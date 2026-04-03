@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
@@ -32,12 +32,31 @@ export function InputBar() {
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const liveVoice = useLiveVoiceSession({
     startSession: startLiveVoiceSession,
     appendVoiceMessage,
     syncConversation: syncConversationState,
   });
+
+  useEffect(() => {
+    const textarea = messageInputRef.current;
+    if (!textarea) {
+      return;
+    }
+
+    textarea.style.height = 'auto';
+
+    const computedStyle = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computedStyle.lineHeight) || 20;
+    const paddingTop = Number.parseFloat(computedStyle.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(computedStyle.paddingBottom) || 0;
+    const maxHeight = lineHeight * 5 + paddingTop + paddingBottom;
+
+    textarea.style.height = `${Math.min(textarea.scrollHeight, maxHeight)}px`;
+    textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [message]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -174,7 +193,7 @@ export function InputBar() {
           ))}
         </div>
       )}
-      <div className="flex items-center gap-2">
+      <div className="flex items-end gap-2">
         <button
           type="button"
           onClick={handleFilePicker}
@@ -193,12 +212,19 @@ export function InputBar() {
         >
           <MicIcon />
         </button>
-        <input
-          type="text"
+        <textarea
+          ref={messageInputRef}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
+          rows={1}
           placeholder="Type a message or attach files..."
-          className="flex-1 rounded-lg border border-border-subtle bg-surface-input px-4 py-2 text-sm text-foreground placeholder:text-foreground-inactive focus:border-accent focus:outline-none"
+          className="min-h-10 flex-1 resize-none rounded-lg border border-border-subtle bg-surface-input px-4 py-2 text-sm text-foreground placeholder:text-foreground-inactive focus:border-accent focus:outline-none"
         />
         {loading.isSendingMessage ? (
           <button

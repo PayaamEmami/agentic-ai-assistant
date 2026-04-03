@@ -714,6 +714,7 @@ export class ChatService {
         availableTools.map((tool) => [tool.name, tool] as const),
       );
       const toolResultBlocks: Array<Record<string, unknown>> = [];
+      const toolExecutionIds: string[] = [];
       const approvalEvents: ApprovalRequestedEvent[] = [];
       let hasApprovalRequest = false;
 
@@ -733,6 +734,7 @@ export class ChatService {
           toolInput,
           tool.origin,
         );
+        toolExecutionIds.push(toolExecution.id);
 
         if (tool.requiresApproval) {
           hasApprovalRequest = true;
@@ -749,7 +751,7 @@ export class ChatService {
             type: 'tool_result',
             toolExecutionId: toolExecution.id,
             toolName: toolCall.name,
-            status: 'planned',
+            status: 'pending',
           });
 
           approvalEvents.push({
@@ -808,6 +810,13 @@ export class ChatService {
         'assistant',
         assistantContent,
       );
+      if (toolExecutionIds.length > 0) {
+        await Promise.all(
+          toolExecutionIds.map((toolExecutionId) =>
+            toolExecutionRepository.setMessage(toolExecutionId, assistantMessage.id),
+          ),
+        );
+      }
 
       const event: AssistantTextDoneEvent = {
         type: 'assistant.text.done',

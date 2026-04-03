@@ -23,8 +23,59 @@ interface GitHubReviewCommentReplyResponse {
   body: string;
 }
 
+interface GitHubRepositoryListItem {
+  id: number;
+  name: string;
+  full_name: string;
+  private: boolean;
+  default_branch: string;
+  owner: {
+    login: string;
+  };
+}
+
+export interface GitHubRepositoryReference {
+  id: number;
+  name: string;
+  fullName: string;
+  owner: string;
+  private: boolean;
+  defaultBranch: string;
+}
+
 export class GitHubActionsProvider {
   constructor(private readonly token: string) {}
+
+  async listRepositories(): Promise<GitHubRepositoryReference[]> {
+    const repositories: GitHubRepositoryReference[] = [];
+    let page = 1;
+
+    while (true) {
+      const pageItems = await requestJson<GitHubRepositoryListItem[]>(
+        `https://api.github.com/user/repos?per_page=100&page=${page}&sort=updated`,
+        {
+          headers: this.headers(),
+        },
+      );
+
+      repositories.push(
+        ...pageItems.map((repo) => ({
+          id: repo.id,
+          name: repo.name,
+          fullName: repo.full_name,
+          owner: repo.owner.login,
+          private: repo.private,
+          defaultBranch: repo.default_branch,
+        })),
+      );
+
+      if (pageItems.length < 100) {
+        return repositories;
+      }
+
+      page += 1;
+    }
+  }
 
   async getRepository(repo: string): Promise<unknown> {
     return requestJson(`https://api.github.com/repos/${repo}`, {

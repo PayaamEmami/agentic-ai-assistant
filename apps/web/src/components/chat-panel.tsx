@@ -52,7 +52,7 @@ export function ChatPanel() {
         </div>
       )}
       {toolActivities
-        .filter((activity) => activity.status === 'planned' || activity.status === 'running')
+        .filter((activity) => activity.status === 'running')
         .map((activity) => (
           <ToolActivity
             key={activity.id}

@@ -1,6 +1,6 @@
 interface ToolActivityProps {
   name: string;
-  status: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
+  status: 'planned' | 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed';
   detail?: string;
 }
 
@@ -8,6 +8,8 @@ export function ToolActivity({ name, status, detail }: ToolActivityProps) {
   const statusColors: Record<string, string> = {
     planned: 'bg-accent/20 text-accent',
     pending: 'bg-surface-input text-foreground-muted',
+    approved: 'bg-success/20 text-success',
+    rejected: 'bg-error/20 text-error',
     running: 'bg-warning/20 text-warning',
     completed: 'bg-success/20 text-success',
     failed: 'bg-error/20 text-error',
@@ -15,6 +17,8 @@ export function ToolActivity({ name, status, detail }: ToolActivityProps) {
   const statusLabels: Record<string, string> = {
     planned: 'Planned by model',
     pending: 'Waiting',
+    approved: 'Approved',
+    rejected: 'Declined',
     running: 'Running now',
     completed: 'Completed',
     failed: 'Failed',

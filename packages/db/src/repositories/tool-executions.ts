@@ -29,6 +29,7 @@ export interface ToolExecutionRepository {
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
   setApproval(id: string, approvalId: string): Promise<void>;
+  setMessage(id: string, messageId: string): Promise<void>;
   findPendingApproval(conversationId: string): Promise<ToolExecution | null>;
 }
 
@@ -115,6 +116,16 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        SET approval_id = $1
        WHERE id = $2`,
       [approvalId, id],
+    );
+  },
+
+  async setMessage(id: string, messageId: string): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE tool_executions
+       SET message_id = $1
+       WHERE id = $2`,
+      [messageId, id],
     );
   },
 

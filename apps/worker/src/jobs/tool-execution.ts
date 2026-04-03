@@ -6,7 +6,11 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import { CodingTaskRunner, GitHubActionsProvider, GoogleDriveActionsProvider } from '@aaa/actions';
+import {
+  CodingTaskRunner,
+  GitHubActionsProvider,
+  GoogleDriveActionsProvider,
+} from '@aaa/actions';
 import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
 import { getConfiguredToolRegistry } from '@aaa/mcp';
 import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
@@ -54,6 +58,48 @@ function toStringArray(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
+async function resolveGitHubRepo(
+  repo: string,
+  provider: GitHubActionsProvider,
+): Promise<string> {
+  const trimmedRepo = repo.trim();
+  if (!trimmedRepo) {
+    throw new Error('Expected "repo" to be a non-empty string');
+  }
+
+  if (trimmedRepo.includes('/')) {
+    return trimmedRepo;
+  }
+
+  const normalizedRepo = trimmedRepo.toLowerCase();
+  const accessibleRepos = await provider.listRepositories();
+  const accessibleMatches = accessibleRepos.filter((repoRef) => {
+    const normalizedName = repoRef.name.toLowerCase();
+    const normalizedFullName = repoRef.fullName.toLowerCase();
+    return (
+      normalizedName === normalizedRepo ||
+      normalizedFullName === normalizedRepo ||
+      normalizedFullName.endsWith(`/${normalizedRepo}`)
+    );
+  });
+
+  if (accessibleMatches.length === 1) {
+    return accessibleMatches[0]!.fullName;
+  }
+
+  if (accessibleMatches.length > 1) {
+    throw new Error(
+      `Repository "${trimmedRepo}" is ambiguous. Use the full GitHub repository name (owner/repo). Matches: ${accessibleMatches
+        .map((repoRef) => repoRef.fullName)
+        .join(', ')}`,
+    );
+  }
+
+  throw new Error(
+    `Repository "${trimmedRepo}" did not match any GitHub repository accessible to this connector. Use the full GitHub repository name (owner/repo).`,
+  );
+}
+
 async function executeNativeTool(
   userId: string,
   conversationId: string,
@@ -85,39 +131,44 @@ async function executeNativeTool(
         },
       };
     case 'github.get_repository':
-      return withGitHubProvider(userId, (provider) =>
-        provider.getRepository(requireString(input, 'repo')),
+      return withGitHubProvider(userId, async (provider) =>
+        provider.getRepository(
+          await resolveGitHubRepo(requireString(input, 'repo'), provider),
+        ),
       );
     case 'github.get_file':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.getFile(
-          requireString(input, 'repo'),
+          await resolveGitHubRepo(requireString(input, 'repo'), provider),
           requireString(input, 'path'),
           asString(input['ref']),
         ),
       );
     case 'github.get_branch':
-      return withGitHubProvider(userId, (provider) =>
-        provider.getBranch(requireString(input, 'repo'), requireString(input, 'branch')),
+      return withGitHubProvider(userId, async (provider) =>
+        provider.getBranch(
+          await resolveGitHubRepo(requireString(input, 'repo'), provider),
+          requireString(input, 'branch'),
+        ),
       );
     case 'github.get_pull_request':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.getPullRequest(
-          requireString(input, 'repo'),
+          await resolveGitHubRepo(requireString(input, 'repo'), provider),
           requireNumber(input, 'pullNumber'),
         ),
       );
     case 'github.list_pull_request_files':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.listPullRequestFiles(
-          requireString(input, 'repo'),
+          await resolveGitHubRepo(requireString(input, 'repo'), provider),
           requireNumber(input, 'pullNumber'),
         ),
       );
     case 'github.create_pull_request':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.createPullRequest({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), provider),
           title: requireString(input, 'title'),
           body: asString(input['body']),
           head: requireString(input, 'head'),
@@ -126,35 +177,35 @@ async function executeNativeTool(
         }),
       );
     case 'github.update_pull_request':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.updatePullRequest({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), provider),
           pullNumber: requireNumber(input, 'pullNumber'),
           title: asString(input['title']),
           body: asString(input['body']),
         }),
       );
     case 'github.add_pull_request_comment':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.addPullRequestComment({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), provider),
           pullNumber: requireNumber(input, 'pullNumber'),
           body: requireString(input, 'body'),
         }),
       );
     case 'github.reply_to_review_comment':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.replyToReviewComment({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), provider),
           pullNumber: requireNumber(input, 'pullNumber'),
           commentId: requireNumber(input, 'commentId'),
           body: requireString(input, 'body'),
         }),
       );
     case 'github.submit_pull_request_review':
-      return withGitHubProvider(userId, (provider) =>
+      return withGitHubProvider(userId, async (provider) =>
         provider.submitPullRequestReview({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), provider),
           pullNumber: requireNumber(input, 'pullNumber'),
           event: requireReviewEvent(input['event']),
           body: asString(input['body']),
@@ -182,7 +233,7 @@ async function executeNativeTool(
         });
 
         return runner.run({
-          repo: requireString(input, 'repo'),
+          repo: await resolveGitHubRepo(requireString(input, 'repo'), _provider),
           task: requireString(input, 'task'),
           toolExecutionId,
           baseBranch: asString(input['baseBranch']),
@@ -386,7 +437,7 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   }
 
   await toolExecutionRepository.updateStatus(toolExecutionId, 'running');
-  await messageRepository.create(conversationId, 'tool', [
+  const toolStatusMessage = await messageRepository.create(conversationId, 'tool', [
     {
       type: 'tool_result',
       toolExecutionId,
@@ -415,15 +466,12 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
 
   if (result.success) {
     await toolExecutionRepository.updateStatus(toolExecutionId, 'completed', result.result);
-    await messageRepository.create(conversationId, 'tool', [
-      {
-        type: 'tool_result',
-        toolExecutionId,
-        toolName,
-        status: 'completed',
-        output: result.result,
-      },
-    ]);
+    await messageRepository.updateToolResultStatus(
+      toolStatusMessage.id,
+      toolExecutionId,
+      'completed',
+      result.result,
+    );
 
     const doneEvent: ToolDoneEvent = {
       type: 'tool.done',
@@ -450,15 +498,12 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
 
   const errorOutput = { error: result.error ?? 'Tool execution failed' };
   await toolExecutionRepository.updateStatus(toolExecutionId, 'failed', errorOutput);
-  await messageRepository.create(conversationId, 'tool', [
-    {
-      type: 'tool_result',
-      toolExecutionId,
-      toolName,
-      status: 'failed',
-      output: errorOutput,
-    },
-  ]);
+  await messageRepository.updateToolResultStatus(
+    toolStatusMessage.id,
+    toolExecutionId,
+    'failed',
+    errorOutput,
+  );
 
   const doneEvent: ToolDoneEvent = {
     type: 'tool.done',

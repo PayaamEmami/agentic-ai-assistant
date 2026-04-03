@@ -325,7 +325,13 @@ export const api = {
   approvals: {
     listPending() {
       return request<{
-        approvals: Array<{ id: string; description: string; status: string; createdAt: string }>;
+        approvals: Array<{
+          id: string;
+          toolExecutionId: string;
+          description: string;
+          status: string;
+          createdAt: string;
+        }>;
       }>('/api/approvals');
     },
     decide(id: string, status: 'approved' | 'rejected') {

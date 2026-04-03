@@ -42,6 +42,14 @@ export class ApprovalService {
     }
 
     if (status === 'approved') {
+      await toolExecutionRepository.updateStatus(approval.toolExecutionId, 'pending');
+      if (toolExecution.messageId) {
+        await messageRepository.updateToolResultStatus(
+          toolExecution.messageId,
+          toolExecution.id,
+          'approved',
+        );
+      }
       await enqueueToolExecutionJob({
         toolExecutionId: toolExecution.id,
         toolName: toolExecution.toolName,
@@ -57,15 +65,13 @@ export class ApprovalService {
         'failed',
         rejectionOutput,
       );
-      await messageRepository.create(approval.conversationId, 'tool', [
-        {
-          type: 'tool_result',
-          toolExecutionId: toolExecution.id,
-          toolName: toolExecution.toolName,
-          status: 'failed',
-          output: rejectionOutput,
-        },
-      ]);
+      if (toolExecution.messageId) {
+        await messageRepository.updateToolResultStatus(
+          toolExecution.messageId,
+          toolExecution.id,
+          'rejected',
+        );
+      }
 
       const doneEvent: ToolDoneEvent = {
         type: 'tool.done',
@@ -82,6 +88,7 @@ export class ApprovalService {
       type: 'approval.resolved',
       conversationId: approval.conversationId,
       approvalId: approval.id,
+      toolExecutionId: toolExecution.id,
       status,
     };
     broadcast(approval.conversationId, event);

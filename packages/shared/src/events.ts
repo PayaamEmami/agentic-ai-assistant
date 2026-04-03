@@ -65,6 +65,7 @@ export interface ApprovalResolvedEvent {
   type: 'approval.resolved';
   conversationId: string;
   approvalId: string;
+  toolExecutionId: string;
   status: 'approved' | 'rejected';
 }
 

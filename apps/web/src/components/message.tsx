@@ -1,6 +1,10 @@
 'use client';
 
-import type { CitationContentBlock, MessageContentBlock } from '@/lib/chat-context';
+import {
+  type CitationContentBlock,
+  type MessageContentBlock,
+  useChatContext,
+} from '@/lib/chat-context';
 import { CitationCard } from './citation-card';
 
 interface MessageProps {
@@ -23,6 +27,10 @@ function getToolStatusLabel(status: string | undefined): string {
   switch (status) {
     case 'planned':
       return 'Planned by model';
+    case 'approved':
+      return 'Approved';
+    case 'rejected':
+      return 'Declined';
     case 'running':
       return 'Currently running';
     case 'pending':
@@ -40,6 +48,10 @@ function getToolStatusClass(status: string | undefined): string {
   switch (status) {
     case 'planned':
       return 'bg-accent/20 text-accent';
+    case 'approved':
+      return 'bg-success/20 text-success';
+    case 'rejected':
+      return 'bg-error/20 text-error';
     case 'running':
       return 'bg-warning/20 text-warning';
     case 'pending':
@@ -53,84 +65,28 @@ function getToolStatusClass(status: string | undefined): string {
   }
 }
 
-function renderContentBlock(block: MessageContentBlock, index: number) {
-  if (block.type === 'text') {
-    return (
-      <p key={index} className="whitespace-pre-wrap leading-relaxed">
-        {block.text}
-      </p>
-    );
+function getDisplayToolStatus(
+  status: string | undefined,
+  approvalStatus: string | undefined,
+): string | undefined {
+  if (
+    approvalStatus &&
+    (status === 'pending' || status === 'planned') &&
+    approvalStatus !== 'expired'
+  ) {
+    return approvalStatus;
   }
 
-  if (block.type === 'attachment_ref') {
-    const label =
-      block.attachmentKind === 'image'
-        ? 'Image'
-        : block.attachmentKind === 'document'
-          ? 'Document'
-          : block.attachmentKind === 'audio'
-            ? 'Audio'
-            : 'File';
-
-    return (
-      <div
-        key={index}
-        className="rounded border border-border bg-surface-input px-3 py-2 text-xs text-foreground-muted"
-      >
-        [{label}] {block.fileName ?? block.attachmentId ?? 'attachment'}
-        {block.indexedForRag ? ' - indexed for RAG' : ''}
-      </div>
-    );
-  }
-
-  if (block.type === 'tool_result') {
-    return (
-      <div key={index} className="rounded border border-border bg-surface-input p-2">
-        <div className="mb-1 flex items-center justify-between gap-2">
-          <p className="text-xs font-medium text-foreground">
-            Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
-          </p>
-          <span
-            className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(block.status)}`}
-          >
-            {getToolStatusLabel(block.status)}
-          </span>
-        </div>
-        {typeof block.output === 'undefined' ? null : (
-          <pre className="overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
-        )}
-      </div>
-    );
-  }
-
-  if (block.type === 'transcript') {
-    return (
-      <p key={index} className="text-xs italic text-foreground-muted">
-        Transcript: {block.text}
-      </p>
-    );
-  }
-
-  if (block.type === 'status') {
-    return (
-      <div
-        key={index}
-        className="inline-flex items-center gap-2 text-xs font-medium text-foreground-muted"
-      >
-        <span className="h-2 w-2 rounded-full bg-warning" />
-        <span>{block.label ?? 'Response stopped'}</span>
-      </div>
-    );
-  }
-
-  return (
-    <pre key={index} className="overflow-x-auto text-xs text-foreground-muted">
-      {stringify(block)}
-    </pre>
-  );
+  return status;
 }
 
 export function Message({ role, content }: MessageProps) {
+  const {
+    pendingApprovals,
+    approvalStatusesByToolExecution,
+    approveAction,
+    rejectAction,
+  } = useChatContext();
   const isUser = role === 'user';
   const isSystem = role === 'system';
   const visibleContent = content.filter((block) => block.type !== 'citation');
@@ -141,6 +97,127 @@ export function Message({ role, content }: MessageProps) {
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
+  const pendingApprovalsByToolExecution = new Map(
+    pendingApprovals.map((approval) => [approval.toolExecutionId, approval] as const),
+  );
+
+  const renderContentBlock = (block: MessageContentBlock, index: number) => {
+    if (block.type === 'text') {
+      return (
+        <p key={index} className="whitespace-pre-wrap leading-relaxed">
+          {block.text}
+        </p>
+      );
+    }
+
+    if (block.type === 'attachment_ref') {
+      const label =
+        block.attachmentKind === 'image'
+          ? 'Image'
+          : block.attachmentKind === 'document'
+            ? 'Document'
+            : block.attachmentKind === 'audio'
+              ? 'Audio'
+              : 'File';
+
+      return (
+        <div
+          key={index}
+          className="rounded border border-border bg-surface-input px-3 py-2 text-xs text-foreground-muted"
+        >
+          [{label}] {block.fileName ?? block.attachmentId ?? 'attachment'}
+          {block.indexedForRag ? ' - indexed for RAG' : ''}
+        </div>
+      );
+    }
+
+    if (block.type === 'tool_result') {
+      const approval = block.toolExecutionId
+        ? pendingApprovalsByToolExecution.get(block.toolExecutionId)
+        : undefined;
+      const displayStatus = getDisplayToolStatus(
+        block.status,
+        block.toolExecutionId
+          ? approvalStatusesByToolExecution[block.toolExecutionId]
+          : undefined,
+      );
+
+      return (
+        <div key={index} className="rounded border border-border bg-surface-input p-2">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <p className="text-xs font-medium text-foreground">
+              Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
+            </p>
+            <span
+              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(displayStatus)}`}
+            >
+              {getToolStatusLabel(displayStatus)}
+            </span>
+          </div>
+          {displayStatus === 'pending' && approval ? (
+            <div className="mt-2">
+              <p className="text-xs text-foreground-muted">{approval.description}</p>
+              <div className="mt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => void approveAction(approval.id)}
+                  className="rounded bg-success px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+                >
+                  Approve
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void rejectAction(approval.id)}
+                  className="rounded bg-error px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+                >
+                  Reject
+                </button>
+              </div>
+            </div>
+          ) : null}
+          {displayStatus === 'approved' ? (
+            <p className="mt-2 text-xs text-foreground-muted">
+              Approved. Live execution updates appear below.
+            </p>
+          ) : null}
+          {displayStatus === 'rejected' ? (
+            <p className="mt-2 text-xs text-foreground-muted">
+              Declined. This tool run will not execute.
+            </p>
+          ) : null}
+          {typeof block.output === 'undefined' ? null : (
+            <pre className="mt-2 overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
+          )}
+        </div>
+      );
+    }
+
+    if (block.type === 'transcript') {
+      return (
+        <p key={index} className="text-xs italic text-foreground-muted">
+          Transcript: {block.text}
+        </p>
+      );
+    }
+
+    if (block.type === 'status') {
+      return (
+        <div
+          key={index}
+          className="inline-flex items-center gap-2 text-xs font-medium text-foreground-muted"
+        >
+          <span className="h-2 w-2 rounded-full bg-warning" />
+          <span>{block.label ?? 'Response stopped'}</span>
+        </div>
+      );
+    }
+
+    return (
+      <pre key={index} className="overflow-x-auto text-xs text-foreground-muted">
+        {stringify(block)}
+      </pre>
+    );
+  };
 
   const bubbleClassName = `max-w-[70%] rounded-lg px-4 py-2 text-sm ${
     isUser

@@ -13,6 +13,12 @@ export interface MessageRepository {
   findById(id: string): Promise<Message | null>;
   listByConversation(conversationId: string, limit?: number, offset?: number): Promise<Message[]>;
   create(conversationId: string, role: string, content: unknown[]): Promise<Message>;
+  updateToolResultStatus(
+    id: string,
+    toolExecutionId: string,
+    status: string,
+    output?: unknown,
+  ): Promise<void>;
 }
 
 export const messageRepository: MessageRepository = {
@@ -57,5 +63,48 @@ export const messageRepository: MessageRepository = {
       [id, conversationId, role, JSON.stringify(content)],
     );
     return result.rows[0]!;
+  },
+
+  async updateToolResultStatus(
+    id: string,
+    toolExecutionId: string,
+    status: string,
+    output?: unknown,
+  ): Promise<void> {
+    const existing = await messageRepository.findById(id);
+    if (!existing) {
+      return;
+    }
+
+    const nextContent = existing.content.map((block) => {
+      if (
+        block &&
+        typeof block === 'object' &&
+        !Array.isArray(block) &&
+        (block as Record<string, unknown>).type === 'tool_result' &&
+        (block as Record<string, unknown>).toolExecutionId === toolExecutionId
+      ) {
+        const nextBlock: Record<string, unknown> = {
+          ...(block as Record<string, unknown>),
+          status,
+        };
+
+        if (typeof output !== 'undefined') {
+          nextBlock['output'] = output;
+        }
+
+        return nextBlock;
+      }
+
+      return block;
+    });
+
+    const pool = getPool();
+    await pool.query(
+      `UPDATE messages
+       SET content = $1
+       WHERE id = $2`,
+      [JSON.stringify(nextContent), id],
+    );
   },
 };

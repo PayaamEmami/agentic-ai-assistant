@@ -5,6 +5,12 @@ export interface NativeToolDefinition {
   requiresApproval: boolean;
 }
 
+const GITHUB_REPO_PARAMETER = {
+  type: 'string',
+  description:
+    'GitHub repository identifier. A full owner/repo name is always valid. A bare repo name is also allowed when it uniquely matches a repository accessible to the authenticated GitHub actions connection.',
+};
+
 export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
   {
     name: 'time.now',
@@ -67,7 +73,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
       },
       required: ['repo'],
       additionalProperties: false,
@@ -80,7 +86,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         path: { type: 'string' },
         ref: { type: 'string' },
       },
@@ -95,7 +101,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         branch: { type: 'string' },
       },
       required: ['repo', 'branch'],
@@ -109,7 +115,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
       },
       required: ['repo', 'pullNumber'],
@@ -123,7 +129,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
       },
       required: ['repo', 'pullNumber'],
@@ -137,7 +143,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         title: { type: 'string' },
         body: { type: 'string' },
         head: { type: 'string' },
@@ -155,7 +161,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
         title: { type: 'string' },
         body: { type: 'string' },
@@ -171,7 +177,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
         body: { type: 'string' },
       },
@@ -186,7 +192,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
         commentId: { type: 'number' },
         body: { type: 'string' },
@@ -202,7 +208,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         pullNumber: { type: 'number' },
         event: { type: 'string', enum: ['APPROVE', 'COMMENT', 'REQUEST_CHANGES'] },
         body: { type: 'string' },
@@ -219,7 +225,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     parameters: {
       type: 'object',
       properties: {
-        repo: { type: 'string' },
+        repo: GITHUB_REPO_PARAMETER,
         task: { type: 'string' },
         baseBranch: { type: 'string' },
         targetPullNumber: { type: 'number' },

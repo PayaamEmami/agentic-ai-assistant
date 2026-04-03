@@ -34,7 +34,14 @@ export interface ToolResultContentBlock {
   type: 'tool_result';
   toolExecutionId?: string;
   toolName?: string;
-  status?: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
+  status?:
+    | 'planned'
+    | 'pending'
+    | 'approved'
+    | 'rejected'
+    | 'running'
+    | 'completed'
+    | 'failed';
   output?: unknown;
 }
 
@@ -82,15 +89,20 @@ export interface ConversationSummary {
 
 export interface PendingApproval {
   id: string;
+  toolExecutionId: string;
   description: string;
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   createdAt: string;
 }
 
+export interface ApprovalStatusByToolExecution {
+  [toolExecutionId: string]: 'pending' | 'approved' | 'rejected' | 'expired';
+}
+
 export interface ToolActivityItem {
   id: string;
   name: string;
-  status: 'planned' | 'pending' | 'running' | 'completed' | 'failed';
+  status: 'planned' | 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed';
   output?: unknown;
   detail?: string;
 }
@@ -126,6 +138,7 @@ interface ChatContextValue {
   currentConversationId?: string;
   messages: ChatMessage[];
   pendingApprovals: PendingApproval[];
+  approvalStatusesByToolExecution: ApprovalStatusByToolExecution;
   toolActivities: ToolActivityItem[];
   citations: CitationItem[];
   loading: ChatLoadingState;
@@ -185,10 +198,12 @@ function parseRole(role: string): ChatRole {
 
 function parseToolStatus(
   value: unknown,
-): 'planned' | 'pending' | 'running' | 'completed' | 'failed' {
+): 'planned' | 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed' {
   if (
     value === 'planned' ||
     value === 'pending' ||
+    value === 'approved' ||
+    value === 'rejected' ||
     value === 'running' ||
     value === 'completed' ||
     value === 'failed'
@@ -460,6 +475,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(undefined);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
+  const [approvalStatusesByToolExecution, setApprovalStatusesByToolExecution] =
+    useState<ApprovalStatusByToolExecution>({});
   const [toolActivities, setToolActivities] = useState<ToolActivityItem[]>([]);
   const [citations, setCitations] = useState<CitationItem[]>([]);
 
@@ -481,12 +498,28 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       const approvals = response.approvals
         .map((item) => ({
           id: item.id,
+          toolExecutionId: item.toolExecutionId,
           description: item.description,
           status: parseApprovalStatus(item.status),
           createdAt: item.createdAt ?? new Date().toISOString(),
         }))
         .filter((item) => item.status === 'pending');
       setPendingApprovals(approvals);
+      setApprovalStatusesByToolExecution((previous) => {
+        const next = { ...previous };
+
+        for (const [toolExecutionId, status] of Object.entries(next)) {
+          if (status === 'pending') {
+            delete next[toolExecutionId];
+          }
+        }
+
+        for (const approval of approvals) {
+          next[approval.toolExecutionId] = approval.status;
+        }
+
+        return next;
+      });
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Failed to load approvals');
     } finally {
@@ -688,8 +721,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     async (approvalId: string, status: 'approved' | 'rejected') => {
       setError(null);
       try {
+        const matchingApproval = pendingApprovals.find((item) => item.id === approvalId);
         await api.approvals.decide(approvalId, status);
         setPendingApprovals((previous) => previous.filter((item) => item.id !== approvalId));
+        if (matchingApproval) {
+          setApprovalStatusesByToolExecution((previous) => ({
+            ...previous,
+            [matchingApproval.toolExecutionId]: status,
+          }));
+        }
       } catch (requestError) {
         setError(
           requestError instanceof Error ? requestError.message : 'Failed to decide approval',
@@ -697,7 +737,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         throw requestError;
       }
     },
-    [],
+    [pendingApprovals],
   );
 
   const approveAction = useCallback(
@@ -866,10 +906,27 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           void refreshConversation(currentConversationId);
           return;
         case 'approval.requested':
-        case 'approval.resolved':
           void loadPendingApprovals();
           void refreshConversation(currentConversationId);
           return;
+        case 'approval.resolved': {
+          const resolved = parsed as {
+            toolExecutionId?: string;
+            status?: 'approved' | 'rejected';
+          };
+          if (
+            resolved.toolExecutionId &&
+            (resolved.status === 'approved' || resolved.status === 'rejected')
+          ) {
+            setApprovalStatusesByToolExecution((previous) => ({
+              ...previous,
+              [resolved.toolExecutionId as string]: resolved.status as 'approved' | 'rejected',
+            }));
+          }
+          void loadPendingApprovals();
+          void refreshConversation(currentConversationId);
+          return;
+        }
         case 'error':
           setError('Realtime connection was rejected.');
           return;
@@ -922,6 +979,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       currentConversationId,
       messages,
       pendingApprovals,
+      approvalStatusesByToolExecution,
       toolActivities,
       citations,
       loading,
@@ -941,6 +999,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       approveAction,
+      approvalStatusesByToolExecution,
       citations,
       conversations,
       currentConversationId,

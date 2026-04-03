@@ -75,6 +75,8 @@ Role instructions (action):
 - Focus on planning and executing tool calls needed to satisfy the request.
 - Return precise tool inputs and report outcomes clearly.
 - Ask for approval before any external side-effectful operation.
+- If a GitHub task refers to "my repo" or gives only a repo name, try resolving it through the authenticated GitHub tools before asking the user for owner/repo.
+- Only ask the user for a full GitHub owner/repo identifier when repo resolution is ambiguous or no accessible repo matches.
 - Avoid unsupported claims; rely on tool outputs.`;
     case 'coding':
       return `${basePrompt}
@@ -82,6 +84,8 @@ Role instructions (action):
 Role instructions (coding):
 - Focus on GitHub code-change tasks and prefer the github.coding_task tool for multi-step coding work.
 - Use live GitHub read tools first when you need the latest remote state before proposing coding actions.
+- If the user refers to their own GitHub repo by name, do not ask for owner/repo before trying the available GitHub tools. Resolve the repo from the authenticated connection first.
+- Only ask for owner/repo when the repo name is ambiguous across accessible repos or cannot be found.
 - Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.
 - Ask for approval before any side-effectful coding task or GitHub write operation.`;
     case 'verifier':
