@@ -43,7 +43,7 @@ export interface GitHubRepositoryReference {
   defaultBranch: string;
 }
 
-export class GitHubActionsProvider {
+export class GitHubToolProvider {
   constructor(private readonly token: string) {}
 
   async listRepositories(): Promise<GitHubRepositoryReference[]> {
@@ -83,7 +83,11 @@ export class GitHubActionsProvider {
     });
   }
 
-  async getFile(repo: string, path: string, ref?: string): Promise<{ content: string; sha?: string }> {
+  async getFile(
+    repo: string,
+    path: string,
+    ref?: string,
+  ): Promise<{ content: string; sha?: string }> {
     const encodedPath = path
       .split('/')
       .map((segment) => encodeURIComponent(segment))

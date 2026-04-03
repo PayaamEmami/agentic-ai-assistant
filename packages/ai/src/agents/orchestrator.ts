@@ -34,14 +34,13 @@ export class OrchestratorAgent implements Agent {
     });
 
     const toolCalls = parseToolCalls(completion.toolCalls);
-    const delegateTo =
-      shouldDelegateToCoding(context)
-        ? 'coding'
-        : toolCalls.length > 0
-          ? 'action'
-          : shouldDelegateToResearch(context)
-            ? 'research'
-            : null;
+    const delegateTo = shouldDelegateToCoding(context)
+      ? 'coding'
+      : toolCalls.length > 0
+        ? 'tool'
+        : shouldDelegateToResearch(context)
+          ? 'research'
+          : null;
 
     return {
       response: completion.content,

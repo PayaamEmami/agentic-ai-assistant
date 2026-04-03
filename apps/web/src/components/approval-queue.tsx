@@ -24,15 +24,11 @@ export function ApprovalQueue() {
         <div>
           <p className="text-sm font-semibold text-foreground">Pending approvals</p>
           <p className="mt-1 text-xs text-foreground-muted">
-            Review tool actions without leaving the conversation.
+            Review tool runs without leaving the conversation.
           </p>
         </div>
         {pendingApprovals.map((approval) => (
-          <ApprovalCard
-            key={approval.id}
-            id={approval.id}
-            description={approval.description}
-          />
+          <ApprovalCard key={approval.id} id={approval.id} description={approval.description} />
         ))}
       </div>
     </section>

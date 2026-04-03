@@ -1,20 +1,20 @@
 # Agentic AI Assistant
 
-A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, MCP-based tool integration, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
+A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, optional MCP integration, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| Backend | Node.js, TypeScript, Fastify 5 |
-| Database | PostgreSQL 16 with pgvector |
-| Cache/Queue | Redis 7, BullMQ |
-| Storage | AWS S3 |
-| AI | OpenAI API |
-| Tools | MCP (Model Context Protocol) |
-| Infrastructure | AWS, Terraform, Docker, Kubernetes |
-| Monorepo | pnpm workspaces |
+| Layer          | Technology                                     |
+| -------------- | ---------------------------------------------- |
+| Frontend       | Next.js 15, React 19, TypeScript, Tailwind CSS |
+| Backend        | Node.js, TypeScript, Fastify 5                 |
+| Database       | PostgreSQL 16 with pgvector                    |
+| Cache/Queue    | Redis 7, BullMQ                                |
+| Storage        | AWS S3                                         |
+| AI             | OpenAI API                                     |
+| Tools          | Native tool handlers, optional MCP             |
+| Infrastructure | AWS, Terraform, Docker, Kubernetes             |
+| Monorepo       | pnpm workspaces                                |
 
 ## Architecture Overview
 
@@ -24,27 +24,30 @@ The assistant uses a small multi-agent architecture:
 
 - **Orchestrator** — Routes requests, decides which agents to delegate to
 - **Research Agent** — Handles RAG queries, searches personal data sources
-- **Action Agent** — Executes tools (native and MCP), handles external actions
+- **Tool Agent** — Executes tools (native and optional MCP), handles external operations
 - **Verifier Agent** — Validates outputs, checks approval requirements
 
 ### Connectors
 
-Current data source connectors:
+The connector layer is intentionally split into two separate concerns:
 
-- **GitHub** — Repository and code access
-- **Google Docs** — Native Google Docs indexing for RAG
+- **Knowledge connectors** — Used for sync, indexing, and retrieval
+- **Tool connectors** — Used for live tool access and side-effectful operations
 
-Current connector behavior:
+Even when both connector types target the same external provider, they should stay loosely coupled and should not depend on each other.
 
-- **Google Docs** — RAG enabled
-- **GitHub** — RAG enabled, with user-selected repositories
+Current behavior:
+
+- Knowledge connectors back RAG over connected sources
+- Tool connectors back native tools for live reads and writes
+- A knowledge connector and a tool connector may exist for the same provider without depending on each other
 
 ### Tool System
 
-Tools are unified through a single registry that handles both:
+The assistant exposes a unified tool surface that can include both:
 
-- **Native tools** — Built-in functions with direct handlers
-- **MCP tools** — External tools accessed via the Model Context Protocol
+- **Native tools** — Built-in functions with direct handlers; this is the primary tool path today
+- **MCP tools** — Optional external tools accessed via the Model Context Protocol when MCP servers are configured
 
 Tools requiring user confirmation go through an approval flow before execution.
 
@@ -61,7 +64,7 @@ Current live voice behavior:
 
 - Automatic turn detection and interruption are enabled
 - Live voice is conversational-only in v1
-- Tools, approvals, MCP actions, and retrieval stay available in text chat
+- Native tools, approvals, optional MCP tools, and retrieval stay available in text chat
 
 ## Infrastructure
 
@@ -112,12 +115,14 @@ kubectl apply -f infra/kubernetes/
 ├── packages/
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
 │   ├── ai/                   # Model gateway, prompts, agent orchestration
-│   ├── mcp/                  # MCP client adapter and tool registry
+│   ├── tool-providers/       # Native tool providers used by tool execution
+│   ├── mcp/                  # Optional MCP client adapter and tool registry
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
-│   ├── connectors/           # GitHub and Google Docs connectors
+│   ├── connectors/           # Retrieval-oriented connectors and credential helpers
 │   ├── memory/               # Preferences, personalization, memory
 │   ├── db/                   # Database schema, migrations, repositories
-│   └── config/               # Environment parsing, constants
+│   ├── config/               # Environment parsing, constants
+│   └── observability/        # Logging, tracing, metrics, sanitization
 ├── infra/
 │   ├── terraform/            # AWS infrastructure (VPC, RDS, ElastiCache, S3)
 │   └── kubernetes/           # K8s manifests (deployments, services, ingress)

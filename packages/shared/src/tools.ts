@@ -8,7 +8,7 @@ export interface NativeToolDefinition {
 const GITHUB_REPO_PARAMETER = {
   type: 'string',
   description:
-    'GitHub repository identifier. A full owner/repo name is always valid. A bare repo name is also allowed when it uniquely matches a repository accessible to the authenticated GitHub actions connection.',
+    'GitHub repository identifier. A full owner/repo name is always valid. A bare repo name is also allowed when it uniquely matches a repository accessible to the authenticated GitHub tools connection.',
 };
 
 export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
@@ -53,23 +53,23 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     requiresApproval: false,
   },
   {
-    name: 'external.action',
+    name: 'external.execute',
     description:
-      'Execute an external side-effectful action (send, post, modify, delete). Use only when the user asks for an external action.',
+      'Execute an external side-effectful operation (send, post, modify, delete). Use only when the user asks for an external operation.',
     parameters: {
       type: 'object',
       properties: {
-        action: { type: 'string' },
+        operation: { type: 'string' },
         payload: { type: 'object' },
       },
-      required: ['action'],
+      required: ['operation'],
       additionalProperties: true,
     },
     requiresApproval: true,
   },
   {
     name: 'github.get_repository',
-    description: 'Read metadata for a GitHub repository using the live action connection.',
+    description: 'Read metadata for a GitHub repository using the live tool connection.',
     parameters: {
       type: 'object',
       properties: {
@@ -242,7 +242,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
   },
   {
     name: 'google_drive.search_files',
-    description: 'Search Google Drive files using the live action connection.',
+    description: 'Search Google Drive files using the live tool connection.',
     parameters: {
       type: 'object',
       properties: {

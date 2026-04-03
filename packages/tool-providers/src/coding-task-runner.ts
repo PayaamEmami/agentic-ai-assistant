@@ -5,7 +5,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { OpenAIProvider } from '@aaa/ai';
 import type { ToolProgressEvent } from '@aaa/shared';
-import { GitHubActionsProvider } from './github-actions.js';
+import { GitHubToolProvider } from './github-tool-provider.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_CONTEXT = 12;
@@ -35,11 +35,13 @@ export interface GitHubCodingTaskInput {
 }
 
 export interface CodingTaskProgressReporter {
-  report(event: Omit<ToolProgressEvent, 'type' | 'conversationId' | 'toolExecutionId' | 'toolName'>): Promise<void>;
+  report(
+    event: Omit<ToolProgressEvent, 'type' | 'conversationId' | 'toolExecutionId' | 'toolName'>,
+  ): Promise<void>;
 }
 
 export class CodingTaskRunner {
-  private readonly github: GitHubActionsProvider;
+  private readonly github: GitHubToolProvider;
   private readonly modelProvider: OpenAIProvider;
   private readonly progress: CodingTaskProgressReporter;
   private readonly toolExecutionId: string;
@@ -53,7 +55,7 @@ export class CodingTaskRunner {
     model?: string;
   }) {
     this.githubToken = input.githubToken;
-    this.github = new GitHubActionsProvider(input.githubToken);
+    this.github = new GitHubToolProvider(input.githubToken);
     this.modelProvider = new OpenAIProvider(
       process.env['OPENAI_API_KEY'] ?? '',
       input.model ?? process.env['OPENAI_MODEL'],
@@ -74,7 +76,15 @@ export class CodingTaskRunner {
       const branchName = targetPr?.head.ref ?? `aaa/${this.toolExecutionId}`;
       const repoUrl = `https://x-access-token:${this.githubToken}@github.com/${input.repo}.git`;
 
-      await this.execGit(['clone', '--depth', '50', '--branch', baseBranch, repoUrl, workspaceRoot]);
+      await this.execGit([
+        'clone',
+        '--depth',
+        '50',
+        '--branch',
+        baseBranch,
+        repoUrl,
+        workspaceRoot,
+      ]);
       await this.execGit(['config', 'user.name', 'Agentic AI Assistant'], workspaceRoot);
       await this.execGit(['config', 'user.email', 'assistant@agentic-ai.local'], workspaceRoot);
 
@@ -137,7 +147,10 @@ export class CodingTaskRunner {
     }
   }
 
-  private async generatePlan(workspaceRoot: string, input: GitHubCodingTaskInput): Promise<CodingPlan> {
+  private async generatePlan(
+    workspaceRoot: string,
+    input: GitHubCodingTaskInput,
+  ): Promise<CodingPlan> {
     const fileList = await this.execGit(['ls-files'], workspaceRoot);
     const candidates = fileList.stdout
       .split(/\r?\n/)
@@ -181,23 +194,24 @@ export class CodingTaskRunner {
       throw new Error('Coding task model returned an invalid patch plan');
     }
 
-    const operations = parsed.operations
-      .filter((operation): operation is CodingPlanOperation => {
-        if (!operation || typeof operation !== 'object') {
-          return false;
-        }
-        const candidate = operation as Partial<CodingPlanOperation>;
-        if (
-          (candidate.type !== 'create' && candidate.type !== 'update' && candidate.type !== 'delete') ||
-          typeof candidate.path !== 'string'
-        ) {
-          return false;
-        }
-        if (candidate.type !== 'delete' && typeof candidate.content !== 'string') {
-          return false;
-        }
-        return true;
-      });
+    const operations = parsed.operations.filter((operation): operation is CodingPlanOperation => {
+      if (!operation || typeof operation !== 'object') {
+        return false;
+      }
+      const candidate = operation as Partial<CodingPlanOperation>;
+      if (
+        (candidate.type !== 'create' &&
+          candidate.type !== 'update' &&
+          candidate.type !== 'delete') ||
+        typeof candidate.path !== 'string'
+      ) {
+        return false;
+      }
+      if (candidate.type !== 'delete' && typeof candidate.content !== 'string') {
+        return false;
+      }
+      return true;
+    });
 
     if (operations.length === 0) {
       throw new Error('Coding task model returned no valid file operations');
@@ -209,7 +223,9 @@ export class CodingTaskRunner {
       prBody: parsed.prBody.trim(),
       operations,
       validationCommands: Array.isArray(parsed.validationCommands)
-        ? parsed.validationCommands.filter((command): command is string => typeof command === 'string')
+        ? parsed.validationCommands.filter(
+            (command): command is string => typeof command === 'string',
+          )
         : [],
     };
   }
@@ -235,9 +251,7 @@ export class CodingTaskRunner {
       .slice(0, MAX_FILE_CONTEXT);
 
     const fallbackFiles = ['package.json', 'README.md'];
-    const selected = new Set(
-      scored.filter((item) => item.score > 0).map((item) => item.candidate),
-    );
+    const selected = new Set(scored.filter((item) => item.score > 0).map((item) => item.candidate));
 
     for (const file of fallbackFiles) {
       if (candidates.includes(file)) {
@@ -310,10 +324,7 @@ export class CodingTaskRunner {
     return results;
   }
 
-  private async execGit(
-    args: string[],
-    cwd?: string,
-  ): Promise<{ stdout: string; stderr: string }> {
+  private async execGit(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string }> {
     return execFileAsync('git', args, {
       cwd,
       windowsHide: true,
@@ -321,10 +332,7 @@ export class CodingTaskRunner {
     });
   }
 
-  private async report(
-    phase: ToolProgressEvent['phase'],
-    message: string,
-  ): Promise<void> {
+  private async report(phase: ToolProgressEvent['phase'], message: string): Promise<void> {
     await this.progress.report({ phase, message });
   }
 }

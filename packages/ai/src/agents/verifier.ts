@@ -75,7 +75,7 @@ function buildPreviousResultMessage(context: AgentContext): ChatMessage {
     role: 'user',
     content:
       'Validate this prior agent result against user intent, safety constraints, and any retrieved context already provided in the prompt. ' +
-      'Treat retrieved context as pre-authorized read-only evidence; only flag access claims that go beyond that evidence or imply actions that did not occur. ' +
+      'Treat retrieved context as pre-authorized read-only evidence; only flag access claims that go beyond that evidence or imply operations that did not occur. ' +
       'Reply with JSON only.\n' +
       JSON.stringify(context.previousResult),
   };

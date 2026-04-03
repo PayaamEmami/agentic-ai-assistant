@@ -38,7 +38,7 @@ export type {
 export {
   OrchestratorAgent,
   ResearchAgent,
-  ActionAgent,
+  ToolAgent,
   CodingAgent,
   VerifierAgent,
 } from './agents/index.js';

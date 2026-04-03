@@ -6,11 +6,7 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import {
-  CodingTaskRunner,
-  GitHubActionsProvider,
-  GoogleDriveActionsProvider,
-} from '@aaa/actions';
+import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
 import { getConfiguredToolRegistry } from '@aaa/mcp';
 import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
@@ -58,10 +54,7 @@ function toStringArray(value: unknown): string[] {
   return value.filter((entry): entry is string => typeof entry === 'string');
 }
 
-async function resolveGitHubRepo(
-  repo: string,
-  provider: GitHubActionsProvider,
-): Promise<string> {
+async function resolveGitHubRepo(repo: string, provider: GitHubToolProvider): Promise<string> {
   const trimmedRepo = repo.trim();
   if (!trimmedRepo) {
     throw new Error('Expected "repo" to be a non-empty string');
@@ -120,21 +113,19 @@ async function executeNativeTool(
     }
     case 'time.now':
       return { success: true, result: { iso: new Date().toISOString() } };
-    case 'external.action':
+    case 'external.execute':
       return {
         success: true,
         result: {
           accepted: true,
-          action: input['action'] ?? null,
+          operation: input['operation'] ?? null,
           payload: input['payload'] ?? null,
-          note: 'Simulated external action execution completed.',
+          note: 'Simulated external operation completed.',
         },
       };
     case 'github.get_repository':
       return withGitHubProvider(userId, async (provider) =>
-        provider.getRepository(
-          await resolveGitHubRepo(requireString(input, 'repo'), provider),
-        ),
+        provider.getRepository(await resolveGitHubRepo(requireString(input, 'repo'), provider)),
       );
     case 'github.get_file':
       return withGitHubProvider(userId, async (provider) =>
@@ -243,10 +234,7 @@ async function executeNativeTool(
       });
     case 'google_drive.search_files':
       return withGoogleProvider(userId, (provider) =>
-        provider.searchFiles(
-          requireString(input, 'query'),
-          asNumber(input['pageSize']) ?? 20,
-        ),
+        provider.searchFiles(requireString(input, 'query'), asNumber(input['pageSize']) ?? 20),
       );
     case 'google_drive.get_file_metadata':
       return withGoogleProvider(userId, (provider) =>
@@ -311,35 +299,39 @@ async function executeNativeTool(
 
 async function withGitHubProvider(
   userId: string,
-  handler: (provider: GitHubActionsProvider, token: string) => Promise<unknown>,
+  handler: (provider: GitHubToolProvider, token: string) => Promise<unknown>,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
   try {
-    const config = await connectorConfigRepository.findByUserAndKind(userId, 'github_actions');
+    const config = await connectorConfigRepository.findByUserAndKind(userId, 'github_tools');
     if (!config) {
-      throw new Error('GitHub actions connector is not connected');
+      throw new Error('GitHub tools connector is not connected');
     }
 
     const credentials = decryptConnectorCredentials(config.credentialsEncrypted);
     const token = requireString(credentials, 'accessToken');
-    const provider = new GitHubActionsProvider(token);
+    const provider = new GitHubToolProvider(token);
     return { success: true, result: await handler(provider, token) };
   } catch (error) {
-    return { success: false, result: null, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      result: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
 async function withGoogleProvider(
   userId: string,
-  handler: (provider: GoogleDriveActionsProvider) => Promise<unknown>,
+  handler: (provider: GoogleDriveToolProvider) => Promise<unknown>,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
   try {
-    const config = await connectorConfigRepository.findByUserAndKind(userId, 'google_drive_actions');
+    const config = await connectorConfigRepository.findByUserAndKind(userId, 'google_drive_tools');
     if (!config) {
-      throw new Error('Google Drive actions connector is not connected');
+      throw new Error('Google Drive tools connector is not connected');
     }
 
     const credentials = decryptConnectorCredentials(config.credentialsEncrypted);
-    const provider = new GoogleDriveActionsProvider({
+    const provider = new GoogleDriveToolProvider({
       credentials: {
         accessToken: requireString(credentials, 'accessToken'),
         refreshToken: asString(credentials['refreshToken']),
@@ -355,7 +347,11 @@ async function withGoogleProvider(
 
     return { success: true, result: await handler(provider) };
   } catch (error) {
-    return { success: false, result: null, error: error instanceof Error ? error.message : String(error) };
+    return {
+      success: false,
+      result: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 

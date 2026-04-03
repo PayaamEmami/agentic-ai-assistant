@@ -9,8 +9,8 @@ import {
   toToolDefinitions,
 } from './helpers.js';
 
-export class ActionAgent implements Agent {
-  readonly role = 'action' as const;
+export class ToolAgent implements Agent {
+  readonly role = 'tool' as const;
 
   constructor(
     private readonly modelProvider: ModelProvider,

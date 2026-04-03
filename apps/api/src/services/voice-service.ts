@@ -1,11 +1,6 @@
 import crypto from 'node:crypto';
 import { buildSystemPrompt } from '@aaa/ai';
-import {
-  type Conversation,
-  conversationRepository,
-  getPool,
-  messageRepository,
-} from '@aaa/db';
+import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
 import type { AssistantTextDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
@@ -46,11 +41,7 @@ function summarizeHistory(messages: DbMessage[]): string {
       }
 
       const speaker =
-        message.role === 'assistant'
-          ? 'Assistant'
-          : message.role === 'user'
-            ? 'User'
-            : null;
+        message.role === 'assistant' ? 'Assistant' : message.role === 'user' ? 'User' : null;
 
       if (!speaker) {
         return null;
@@ -100,7 +91,7 @@ function buildRealtimeInstructions(
     '- Respond naturally, warmly, and conversationally.',
     '- Keep spoken answers concise by default unless the user asks for depth.',
     '- Do not use tools, connectors, approvals, web lookup, or retrieval in this mode.',
-    '- If a request would normally need tools or external actions, say that live voice is conversational-only and ask the user to switch back to text chat for that task.',
+    '- If a request would normally need tools or external operations, say that live voice is conversational-only and ask the user to switch back to text chat for that task.',
   ];
 
   const historySummary = summarizeHistory(recentMessages);
@@ -182,7 +173,7 @@ export class VoiceService {
       conversation.id,
       HISTORY_LIMIT,
     );
-    const personalContext = await this.personalizationService.getPersonalContext(userId) ?? null;
+    const personalContext = (await this.personalizationService.getPersonalContext(userId)) ?? null;
     const model = process.env['OPENAI_REALTIME_MODEL'] ?? 'gpt-realtime-1.5';
     const voice = process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
     const instructions = buildRealtimeInstructions(personalContext, recentMessages);
@@ -234,7 +225,7 @@ export class VoiceService {
       conversation.id,
       HISTORY_LIMIT,
     );
-    const personalContext = await this.personalizationService.getPersonalContext(userId) ?? null;
+    const personalContext = (await this.personalizationService.getPersonalContext(userId)) ?? null;
     const model = process.env['OPENAI_REALTIME_MODEL'] ?? 'gpt-realtime-1.5';
     const voice = process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
     const instructions = buildRealtimeInstructions(personalContext, recentMessages);

@@ -10,7 +10,8 @@ Agentic AI Assistant is a pnpm monorepo for a personal AI assistant with:
 - Fastify API and WebSocket backend
 - Background workers for async processing
 - Retrieval / RAG over connected data sources
-- MCP-based tool integration
+- Native tool execution with approvals
+- Optional MCP tool integration when explicitly configured
 - Multi-agent orchestration on top of OpenAI models
 
 Primary stack:
@@ -36,12 +37,14 @@ Shared packages:
 
 - `packages/shared`: shared types, DTOs, schemas, enums
 - `packages/ai`: prompts, model gateway, orchestration logic
-- `packages/mcp`: MCP client adapter and tool registry
+- `packages/tool-providers`: native tool providers used by tool execution
+- `packages/mcp`: optional MCP client adapter and tool registry
 - `packages/retrieval`: chunking, embeddings, indexing, search
-- `packages/connectors`: external data source connectors
+- `packages/connectors`: retrieval-oriented external source connectors and credential helpers
 - `packages/memory`: personalization and memory logic
 - `packages/db`: schema, migrations, repositories
 - `packages/config`: environment parsing and constants
+- `packages/observability`: logging, tracing, metrics, sanitization
 
 Operational/infrastructure folders:
 
@@ -120,7 +123,7 @@ Optional but useful depending on the feature area:
 
 - GitHub OAuth values
 - Google OAuth values
-- `MCP_SERVERS_CONFIG_PATH`
+- `MCP_SERVERS_CONFIG_PATH` if you want to enable MCP servers
 - S3 / MinIO settings
 - `LOG_FORMAT` (`pretty` for local readability, `json` when you want machine-friendly output)
 
@@ -128,7 +131,7 @@ See `.env.example` for the full template.
 
 ## Logging Notes
 
-The repo uses a shared observability layer with structured logs across API, worker, connector HTTP calls, MCP, retrieval, OpenAI boundaries, and selected browser failures.
+The repo uses a shared observability layer with structured logs across API, worker, connector HTTP calls, retrieval, native tool execution, the optional MCP path, OpenAI boundaries, and selected browser failures.
 
 Local logging defaults:
 
@@ -160,9 +163,11 @@ When deciding where a change belongs:
 - Async jobs and queue consumers: start in `apps/worker`
 - Shared contracts between apps: check `packages/shared`
 - DB schema or persistence changes: check `packages/db`
-- Model/tool orchestration behavior: check `packages/ai` and `packages/mcp`
+- Model/tool orchestration behavior: check `packages/ai`; only involve `packages/mcp` if the work is specifically about MCP support
+- Native tool provider behavior: check `packages/tool-providers`
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/connectors`
+- Logging, tracing, sanitization, metrics: check `packages/observability`
 
 ## Guardrails For AI Agents
 
@@ -171,6 +176,8 @@ When deciding where a change belongs:
 - If an API request or response changes, verify whether `apps/web`, `apps/api`, and shared DTOs all need updates.
 - If a database shape changes, make sure the migration, repositories, and any dependent API/worker code stay aligned.
 - If a feature touches retrieval, connectors, or tools, check for downstream effects in orchestration code.
+- Treat retrieval connectors and tool connectors as separate subsystems. Even when they target the same external provider, keep them loosely coupled and avoid making one depend on the other.
+- Do not conflate native tools with MCP. Native tools are the primary execution path today; MCP is an optional extension point that only becomes active when servers are configured.
 - Prefer minimal, targeted changes over broad refactors unless the task clearly calls for one.
 - Run at least relevant validation (`pnpm lint`, `pnpm typecheck`, or a focused package command) after edits when feasible.
 
@@ -181,9 +188,10 @@ At a high level, the assistant currently supports:
 - Chat-first interaction
 - Live voice sessions using OpenAI Realtime
 - RAG over connected sources
-- MCP and native tool execution with approval flow
-- GitHub and Google Docs connectors
-- A small multi-agent pattern with orchestrator, research, action, and verifier roles
+- Native tool execution with approval flow
+- Separate knowledge connectors for retrieval and tool connectors for live tool access
+- Optional MCP support via `packages/mcp`, but not a required part of the current core product flow
+- A small multi-agent pattern with orchestrator, research, tool, and verifier roles
 
 ## Maintenance
 

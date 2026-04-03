@@ -138,7 +138,7 @@ interface AuthPayload {
 
 export interface ConnectorSummary {
   id: string;
-  kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions';
+  kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools';
   status: 'pending' | 'connected' | 'failed';
   lastSyncAt: string | null;
   lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
@@ -345,17 +345,17 @@ export const api = {
     list() {
       return request<{ connectors: ConnectorSummary[] }>('/api/connectors');
     },
-    start(kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions') {
+    start(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
       return request<{ authorizationUrl: string }>(`/api/connectors/${kind}/start`, {
         method: 'POST',
       });
     },
-    sync(kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions') {
+    sync(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
       return request<{ queued: boolean }>(`/api/connectors/${kind}/sync`, {
         method: 'POST',
       });
     },
-    disconnect(kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions') {
+    disconnect(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
       return request<{ ok: boolean }>(`/api/connectors/${kind}`, {
         method: 'DELETE',
       });

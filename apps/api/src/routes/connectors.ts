@@ -24,7 +24,7 @@ export async function connectorRoutes(app: FastifyInstance) {
 
   async function handleOAuthCallback(
     query: OAuthCallbackQuery,
-    kind: 'github' | 'github_actions' | 'google_docs' | 'google_drive_actions',
+    kind: 'github' | 'github_tools' | 'google_docs' | 'google_drive_tools',
     handler: (code: string, state: string) => Promise<string>,
     fallbackMessage: string,
   ): Promise<string> {
@@ -81,12 +81,12 @@ export async function connectorRoutes(app: FastifyInstance) {
     return reply.redirect(redirectUrl);
   });
 
-  app.get('/connectors/google/drive-actions/callback', async (request, reply) => {
+  app.get('/connectors/google/drive-tools/callback', async (request, reply) => {
     const redirectUrl = await handleOAuthCallback(
       request.query as OAuthCallbackQuery,
-      'google_drive_actions',
-      (code, state) => connectorService.handleGoogleDriveActionsCallback(code, state),
-      'Google Drive actions connection failed',
+      'google_drive_tools',
+      (code, state) => connectorService.handleGoogleDriveToolsCallback(code, state),
+      'Google Drive tools connection failed',
     );
     return reply.redirect(redirectUrl);
   });
@@ -101,33 +101,22 @@ export async function connectorRoutes(app: FastifyInstance) {
     return reply.redirect(redirectUrl);
   });
 
-  app.get('/connectors/github/actions/callback', async (request, reply) => {
+  app.get('/connectors/github/tools/callback', async (request, reply) => {
     const redirectUrl = await handleOAuthCallback(
       request.query as OAuthCallbackQuery,
-      'github_actions',
-      (code, state) => connectorService.handleGitHubActionsCallback(code, state),
-      'GitHub actions connection failed',
+      'github_tools',
+      (code, state) => connectorService.handleGitHubToolsCallback(code, state),
+      'GitHub tools connection failed',
     );
     return reply.redirect(redirectUrl);
   });
 
-  // Backward-compatible aliases for older local env values.
   app.get('/connectors/google-docs/callback', async (request, reply) => {
     const redirectUrl = await handleOAuthCallback(
       request.query as OAuthCallbackQuery,
       'google_docs',
       (code, state) => connectorService.handleGoogleCallback(code, state),
       'Google Docs connection failed',
-    );
-    return reply.redirect(redirectUrl);
-  });
-
-  app.get('/connectors/google-drive-actions/callback', async (request, reply) => {
-    const redirectUrl = await handleOAuthCallback(
-      request.query as OAuthCallbackQuery,
-      'google_drive_actions',
-      (code, state) => connectorService.handleGoogleDriveActionsCallback(code, state),
-      'Google Drive actions connection failed',
     );
     return reply.redirect(redirectUrl);
   });
@@ -142,22 +131,12 @@ export async function connectorRoutes(app: FastifyInstance) {
     return reply.redirect(redirectUrl);
   });
 
-  app.get('/connectors/github-actions/callback', async (request, reply) => {
-    const redirectUrl = await handleOAuthCallback(
-      request.query as OAuthCallbackQuery,
-      'github_actions',
-      (code, state) => connectorService.handleGitHubActionsCallback(code, state),
-      'GitHub actions connection failed',
-    );
-    return reply.redirect(redirectUrl);
-  });
-
   app.get('/connectors', { preHandler: authenticate }, async (request, reply) => {
     const connectors = await connectorService.listConnectors(request.user!.id);
     return reply.status(200).send({ connectors });
   });
 
-  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
+  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools' } }>(
     '/connectors/:kind/start',
     { preHandler: authenticate },
     async (request, reply) => {
@@ -176,7 +155,7 @@ export async function connectorRoutes(app: FastifyInstance) {
     },
   );
 
-  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
+  app.post<{ Params: { kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools' } }>(
     '/connectors/:kind/sync',
     { preHandler: authenticate },
     async (request, reply) => {
@@ -192,21 +171,19 @@ export async function connectorRoutes(app: FastifyInstance) {
     },
   );
 
-  app.delete<{ Params: { kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions' } }>(
-    '/connectors/:kind',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const parsed = ConnectorKindDto.safeParse(request.params.kind);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
+  app.delete<{
+    Params: { kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools' };
+  }>('/connectors/:kind', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = ConnectorKindDto.safeParse(request.params.kind);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
 
-      const result = await connectorService.disconnect(request.user!.id, parsed.data);
-      return reply.status(200).send(result);
-    },
-  );
+    const result = await connectorService.disconnect(request.user!.id, parsed.data);
+    return reply.status(200).send(result);
+  });
 
   app.get('/connectors/github/repos', { preHandler: authenticate }, async (request, reply) => {
     const repositories = await connectorService.listGitHubRepositories(request.user!.id);

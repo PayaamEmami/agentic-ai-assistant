@@ -158,8 +158,8 @@ export type HealthResponse = z.infer<typeof HealthResponse>;
 export const ConnectorKindDto = z.enum([
   'github',
   'google_docs',
-  'github_actions',
-  'google_drive_actions',
+  'github_tools',
+  'google_drive_tools',
 ]);
 export type ConnectorKindDto = z.infer<typeof ConnectorKindDto>;
 

@@ -1,14 +1,14 @@
 import { requestJson, requestText } from './http.js';
 
-export interface GoogleActionCredentials {
+export interface GoogleDriveToolCredentials {
   accessToken: string;
   refreshToken?: string;
   expiresAt?: string;
 }
 
-export interface GoogleDriveActionProviderOptions {
-  credentials: GoogleActionCredentials;
-  onRefresh?: (credentials: GoogleActionCredentials) => Promise<void>;
+export interface GoogleDriveToolProviderOptions {
+  credentials: GoogleDriveToolCredentials;
+  onRefresh?: (credentials: GoogleDriveToolCredentials) => Promise<void>;
 }
 
 interface GoogleDriveFile {
@@ -21,11 +21,11 @@ interface GoogleDriveFile {
   webViewLink?: string;
 }
 
-export class GoogleDriveActionsProvider {
-  private credentials: GoogleActionCredentials;
-  private readonly onRefresh?: (credentials: GoogleActionCredentials) => Promise<void>;
+export class GoogleDriveToolProvider {
+  private credentials: GoogleDriveToolCredentials;
+  private readonly onRefresh?: (credentials: GoogleDriveToolCredentials) => Promise<void>;
 
-  constructor(options: GoogleDriveActionProviderOptions) {
+  constructor(options: GoogleDriveToolProviderOptions) {
     this.credentials = { ...options.credentials };
     this.onRefresh = options.onRefresh;
   }
@@ -224,7 +224,10 @@ export class GoogleDriveActionsProvider {
   }
 
   private async getAccessToken(): Promise<string> {
-    if (!this.credentials.expiresAt || Date.parse(this.credentials.expiresAt) - Date.now() > 60_000) {
+    if (
+      !this.credentials.expiresAt ||
+      Date.parse(this.credentials.expiresAt) - Date.now() > 60_000
+    ) {
       return this.credentials.accessToken;
     }
 

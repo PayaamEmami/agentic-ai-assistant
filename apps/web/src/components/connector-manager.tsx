@@ -44,9 +44,9 @@ function connectorLabel(kind: ConnectorSummary['kind']): string {
       return 'Google Docs';
     case 'github':
       return 'GitHub';
-    case 'google_drive_actions':
+    case 'google_drive_tools':
       return 'Google Drive';
-    case 'github_actions':
+    case 'github_tools':
       return 'GitHub';
     default:
       return kind;
@@ -108,7 +108,7 @@ function isKnowledgeConnector(kind: ConnectorSummary['kind']): boolean {
 }
 
 function isToolConnector(kind: ConnectorSummary['kind']): boolean {
-  return kind === 'github_actions' || kind === 'google_drive_actions';
+  return kind === 'github_tools' || kind === 'google_drive_tools';
 }
 
 export function ConnectorManager() {
@@ -152,9 +152,7 @@ export function ConnectorManager() {
         const repoResponse = await api.connectors.listGitHubRepos();
         setGitHubRepos(repoResponse.repositories);
         setSelectedRepoIds(
-          repoResponse.repositories
-            .filter((repo) => repo.selected)
-            .map((repo) => repo.id),
+          repoResponse.repositories.filter((repo) => repo.selected).map((repo) => repo.id),
         );
       } else {
         setGitHubRepos([]);
@@ -195,7 +193,9 @@ export function ConnectorManager() {
 
       setCollapsedSections(
         Object.fromEntries(
-          Object.entries(parsed).filter((entry): entry is [string, boolean] => typeof entry[1] === 'boolean'),
+          Object.entries(parsed).filter(
+            (entry): entry is [string, boolean] => typeof entry[1] === 'boolean',
+          ),
         ),
       );
     } catch {
@@ -225,7 +225,7 @@ export function ConnectorManager() {
   }, [load]);
 
   const startConnection = async (
-    kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions',
+    kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools',
   ) => {
     setActionError(null);
     try {
@@ -243,7 +243,7 @@ export function ConnectorManager() {
   };
 
   const triggerSync = async (
-    kind: 'github' | 'google_docs' | 'github_actions' | 'google_drive_actions',
+    kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools',
   ) => {
     setActionError(null);
     try {
@@ -279,7 +279,9 @@ export function ConnectorManager() {
         message: 'Failed to save GitHub repository selection',
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to save repository selection');
+      setActionError(
+        error instanceof Error ? error.message : 'Failed to save repository selection',
+      );
     } finally {
       setSavingRepos(false);
     }
@@ -332,10 +334,10 @@ export function ConnectorManager() {
           {connectorLabel(
             connectorKind === 'github'
               ? 'github'
-              : connectorKind === 'github_actions'
-                ? 'github_actions'
-                : connectorKind === 'google_drive_actions'
-                  ? 'google_drive_actions'
+              : connectorKind === 'github_tools'
+                ? 'github_tools'
+                : connectorKind === 'google_drive_tools'
+                  ? 'google_drive_tools'
                   : 'google_docs',
           )}{' '}
           {connectorStatus === 'connected' ? 'connected.' : 'failed.'}
@@ -363,7 +365,7 @@ export function ConnectorManager() {
               id: 'tools',
               title: 'Tools',
               description:
-                'These connectors authorize live actions like creating pull requests, editing files, and updating docs.',
+                'These connectors authorize live tool use like creating pull requests, editing files, and updating docs.',
               connectors: connectors.filter((connector) => isToolConnector(connector.kind)),
             },
           ].map((group) =>
@@ -377,7 +379,10 @@ export function ConnectorManager() {
                 </div>
                 <div className="space-y-3">
                   {group.connectors.map((connector) => (
-                    <div key={connector.kind} className="rounded-xl border border-border bg-surface-overlay p-3">
+                    <div
+                      key={connector.kind}
+                      className="rounded-xl border border-border bg-surface-overlay p-3"
+                    >
                       {(() => {
                         const requiresRepoSelection = connector.kind === 'github';
                         const supportsSync = isKnowledgeConnector(connector.kind);
@@ -412,40 +417,40 @@ export function ConnectorManager() {
                                   >
                                     Connect
                                   </button>
-                                ) : (
-                                  supportsSync ? (
-                                    <button
-                                      onClick={() => void triggerSync(connector.kind)}
-                                      disabled={syncDisabled}
-                                      className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                      {connector.kind === 'github' && selectedRepoCount === 0
-                                        ? 'Select repos first'
-                                        : 'Sync now'}
-                                    </button>
-                                  ) : null
-                                )}
+                                ) : supportsSync ? (
+                                  <button
+                                    onClick={() => void triggerSync(connector.kind)}
+                                    disabled={syncDisabled}
+                                    className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                  >
+                                    {connector.kind === 'github' && selectedRepoCount === 0
+                                      ? 'Select repos first'
+                                      : 'Sync now'}
+                                  </button>
+                                ) : null}
                                 {connector.hasCredentials ? (
                                   <button
                                     onClick={() => void disconnect(connector.kind)}
                                     disabled={disconnectingKind === connector.kind}
                                     className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
                                   >
-                                    {disconnectingKind === connector.kind ? 'Disconnecting...' : 'Disconnect'}
+                                    {disconnectingKind === connector.kind
+                                      ? 'Disconnecting...'
+                                      : 'Disconnect'}
                                   </button>
                                 ) : null}
                               </div>
                             </div>
                             {showMeta ? (
                               <div>
-                              {showRepoWarning ? (
-                                <p className="mt-1 text-xs text-warning">
-                                  Select and save at least one repository before syncing.
-                                </p>
-                              ) : null}
-                              {connector.lastError ? (
-                                <p className="mt-2 text-xs text-error">{connector.lastError}</p>
-                              ) : null}
+                                {showRepoWarning ? (
+                                  <p className="mt-1 text-xs text-warning">
+                                    Select and save at least one repository before syncing.
+                                  </p>
+                                ) : null}
+                                {connector.lastError ? (
+                                  <p className="mt-2 text-xs text-error">{connector.lastError}</p>
+                                ) : null}
                               </div>
                             ) : null}
                           </div>
@@ -466,7 +471,8 @@ export function ConnectorManager() {
                               <ChevronDownIcon />
                             )}
                           </button>
-                          {isSectionCollapsed(connector.kind, 'sync-runs') ? null : connector.recentSyncRuns.length === 0 ? (
+                          {isSectionCollapsed(connector.kind, 'sync-runs') ? null : connector
+                              .recentSyncRuns.length === 0 ? (
                             <p className="text-xs text-foreground-muted">No sync history yet.</p>
                           ) : (
                             connector.recentSyncRuns.map((run) => (
@@ -515,12 +521,14 @@ export function ConnectorManager() {
                               <ChevronDownIcon />
                             )}
                           </button>
-                          {isSectionCollapsed(connector.kind, 'sources') ? null : connector.recentSources.length === 0 ? (
+                          {isSectionCollapsed(connector.kind, 'sources') ? null : connector
+                              .recentSources.length === 0 ? (
                             <p className="text-xs text-foreground-muted">No indexed sources yet.</p>
                           ) : (
                             <>
                               <p className="text-xs text-foreground-muted">
-                                Searchable means the source has finished chunking and embedding for retrieval.
+                                Searchable means the source has finished chunking and embedding for
+                                retrieval.
                               </p>
                               {connector.recentSources.map((source) => (
                                 <div
@@ -570,11 +578,13 @@ export function ConnectorManager() {
                           {isSectionCollapsed(connector.kind, 'repositories') ? null : (
                             <>
                               <p className="text-xs text-foreground-muted">
-                                Save your repository selection to update what GitHub indexes. Saving will
-                                automatically queue a sync.
+                                Save your repository selection to update what GitHub indexes. Saving
+                                will automatically queue a sync.
                               </p>
                               {githubRepos.length === 0 ? (
-                                <p className="text-xs text-foreground-muted">No repositories loaded yet.</p>
+                                <p className="text-xs text-foreground-muted">
+                                  No repositories loaded yet.
+                                </p>
                               ) : (
                                 <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
                                   {githubRepos.map((repo) => {
@@ -597,9 +607,12 @@ export function ConnectorManager() {
                                           className="mt-0.5"
                                         />
                                         <span>
-                                          <span className="block font-medium text-foreground">{repo.fullName}</span>
+                                          <span className="block font-medium text-foreground">
+                                            {repo.fullName}
+                                          </span>
                                           <span className="block text-foreground-muted">
-                                            {repo.private ? 'Private' : 'Public'} | default branch {repo.defaultBranch}
+                                            {repo.private ? 'Private' : 'Public'} | default branch{' '}
+                                            {repo.defaultBranch}
                                           </span>
                                         </span>
                                       </label>
@@ -632,7 +645,18 @@ export function ConnectorManager() {
 
 function ChevronLeftIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
@@ -640,7 +664,18 @@ function ChevronLeftIcon() {
 
 function ChevronDownIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="m6 9 6 6 6-6" />
     </svg>
   );
@@ -653,7 +688,18 @@ function ConnectedIcon() {
       aria-label="Connected"
       title="Connected"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="10"
+        height="10"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="M20 6 9 17l-5-5" />
       </svg>
     </span>
@@ -667,7 +713,18 @@ function DisconnectedIcon() {
       aria-label="Not connected"
       title="Not connected"
     >
-      <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="10"
+        height="10"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
         <path d="m18 6-12 12" />
         <path d="m6 6 12 12" />
       </svg>

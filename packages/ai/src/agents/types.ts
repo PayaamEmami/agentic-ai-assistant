@@ -1,6 +1,6 @@
 import type { ChatMessage } from '../types.js';
 
-export type AgentRole = 'orchestrator' | 'research' | 'action' | 'coding' | 'verifier';
+export type AgentRole = 'orchestrator' | 'research' | 'tool' | 'coding' | 'verifier';
 
 export interface AgentHistoryMessage {
   role: string;

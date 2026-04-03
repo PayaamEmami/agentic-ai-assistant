@@ -1,10 +1,10 @@
 import {
-  ActionAgent,
   AgentOrchestrator,
   CodingAgent,
   OpenAIProvider,
   OrchestratorAgent,
   ResearchAgent,
+  ToolAgent,
   VerifierAgent,
   type AgentHistoryMessage,
   type ChatContentPart,
@@ -42,9 +42,9 @@ const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
 const MAX_CITATIONS = 6;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
-const TOOL_ACTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
+const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE =
-  'I prepared tool calls and requested approval for protected actions.';
+  'I prepared tool calls and requested approval for protected operations.';
 const MAX_CONVERSATION_TITLE_CHARS = 80;
 const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
 const USER_CANCELLED_REASON = 'user_cancelled' as const;
@@ -384,10 +384,10 @@ function connectorLabel(kind: string): string {
       return 'GitHub';
     case 'google_docs':
       return 'Google Docs';
-    case 'github_actions':
-      return 'GitHub Actions';
-    case 'google_drive_actions':
-      return 'Google Drive Actions';
+    case 'github_tools':
+      return 'GitHub Tools';
+    case 'google_drive_tools':
+      return 'Google Drive Tools';
     default:
       return kind;
   }
@@ -420,7 +420,7 @@ function normalizeAssistantResponse(
     return DEFAULT_FALLBACK_RESPONSE;
   }
 
-  return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_ACTION_RESPONSE;
+  return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_EXECUTION_RESPONSE;
 }
 
 async function loadAvailableTools(): Promise<AvailableTool[]> {
@@ -477,7 +477,7 @@ export class ChatService {
     this.agentOrchestrator = new AgentOrchestrator([
       new OrchestratorAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new ResearchAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-      new ActionAgent(this.modelProvider, process.env['OPENAI_MODEL']),
+      new ToolAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new CodingAgent(this.modelProvider, process.env['OPENAI_MODEL']),
       new VerifierAgent(this.modelProvider, process.env['OPENAI_MODEL']),
     ]);
@@ -636,12 +636,7 @@ export class ChatService {
       );
 
       const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
-        ? await this.retrievalBridge.search(
-            content,
-            userId,
-            MAX_RETRIEVAL_CONTEXT,
-            signal,
-          )
+        ? await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT, signal)
         : { results: [], citations: [] };
       throwIfAborted(signal);
 
@@ -783,7 +778,7 @@ export class ChatService {
       if (
         hasApprovalRequest &&
         toolCalls.length > 0 &&
-        (assistantResponse === TOOL_ACTION_RESPONSE ||
+        (assistantResponse === TOOL_EXECUTION_RESPONSE ||
           (!assistantResponse.trim() && requiresApproval))
       ) {
         assistantResponse = TOOL_APPROVAL_RESPONSE;

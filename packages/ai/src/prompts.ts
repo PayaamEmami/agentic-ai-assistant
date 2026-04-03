@@ -36,13 +36,13 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
     'If you use retrieved context, explicitly cite supporting sources (for example: [Source 1], [Source 2]).',
   );
   sections.push(
-    'Retrieved context already present in the prompt is pre-authorized, read-only source material from the user\'s workspace, attachments, or connected and synced integrations.',
+    "Retrieved context already present in the prompt is pre-authorized, read-only source material from the user's workspace, attachments, or connected and synced integrations.",
   );
   sections.push(
     'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, upload, reconnect, or share a link for that same content again.',
   );
   sections.push(
-    'Before taking any external action (sending, posting, modifying, deleting, or executing side-effectful tools), request user approval first.',
+    'Before taking any external operation (sending, posting, modifying, deleting, or executing side-effectful tools), request user approval first.',
   );
 
   return sections.join('\n\n');
@@ -56,10 +56,10 @@ export function buildAgentSystemPrompt(role: AgentRole, context: SystemPromptCon
       return `${basePrompt}
 
 Role instructions (orchestrator):
-- Decide whether to answer directly, delegate to the research agent, or delegate to the action agent.
+- Decide whether to answer directly, delegate to the research agent, or delegate to the tool agent.
 - Prefer direct answers for simple conversational questions.
 - Delegate to research when the user needs evidence-backed synthesis from retrieved context.
-- Delegate to action when tool use or external operations are required.`;
+- Delegate to the tool agent when tool use or external operations are required.`;
     case 'research':
       return `${basePrompt}
 
@@ -67,11 +67,11 @@ Role instructions (research):
 - Focus on searching, reading, and synthesizing provided retrieved context.
 - Ground claims in the retrieved context and include clear source citations.
 - Be explicit about uncertainty or missing evidence.
-- Do not execute tools or external actions.`;
-    case 'action':
+- Do not execute tools or external operations.`;
+    case 'tool':
       return `${basePrompt}
 
-Role instructions (action):
+Role instructions (tool):
 - Focus on planning and executing tool calls needed to satisfy the request.
 - Return precise tool inputs and report outcomes clearly.
 - Ask for approval before any external side-effectful operation.
@@ -83,7 +83,7 @@ Role instructions (action):
 
 Role instructions (coding):
 - Focus on GitHub code-change tasks and prefer the github.coding_task tool for multi-step coding work.
-- Use live GitHub read tools first when you need the latest remote state before proposing coding actions.
+- Use live GitHub read tools first when you need the latest remote state before proposing coding operations.
 - If the user refers to their own GitHub repo by name, do not ask for owner/repo before trying the available GitHub tools. Resolve the repo from the authenticated connection first.
 - Only ask for owner/repo when the repo name is ambiguous across accessible repos or cannot be found.
 - Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.
@@ -116,9 +116,7 @@ export function buildRetrievalAugmentedMessages(
 ): ChatMessage[] {
   if (retrievedContext.length === 0) return messages;
 
-  const contextBlock = retrievedContext
-    .map((c, i) => `[Source ${i + 1}]: ${c}`)
-    .join('\n\n');
+  const contextBlock = retrievedContext.map((c, i) => `[Source ${i + 1}]: ${c}`).join('\n\n');
 
   const augmented: ChatMessage = {
     role: 'system',

@@ -56,9 +56,9 @@ function extractErrorDetail(body: string): string | null {
 async function performRequest(input: string, init?: RequestInit): Promise<Response> {
   const url = new URL(input);
   const response = await fetchWithTelemetry(input, init, {
-    component: 'native-action-http',
+    component: 'native-tool-http',
     provider: inferProvider(url.hostname),
-    eventPrefix: 'native_action.http',
+    eventPrefix: 'native_tool.http',
     logResponseBodyOnFailure: false,
   });
 

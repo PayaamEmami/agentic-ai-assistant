@@ -149,7 +149,8 @@ export function InputBar() {
           </div>
 
           <p className="mt-3 text-[11px] text-foreground-inactive">
-            Live voice is conversational-only in this version. Use text chat for tools and actions.
+            Live voice is conversational-only in this version. Use text chat for tools and
+            operations.
           </p>
         </div>
       </section>
