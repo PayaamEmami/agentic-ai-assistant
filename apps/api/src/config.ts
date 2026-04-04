@@ -23,14 +23,10 @@ export interface AppConfig {
   logFileEnabled?: boolean;
   googleClientId?: string;
   googleClientSecret?: string;
-  googleRedirectUri?: string;
   googleRedirectUriBase?: string;
-  googleDriveToolsRedirectUri?: string;
   githubClientId?: string;
   githubClientSecret?: string;
-  githubRedirectUri?: string;
   githubRedirectUriBase?: string;
-  githubToolsRedirectUri?: string;
 }
 
 declare module 'fastify' {
@@ -90,13 +86,9 @@ export function loadConfig(): AppConfig {
         : undefined,
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI,
     googleRedirectUriBase: process.env.GOOGLE_REDIRECT_URI_BASE,
-    googleDriveToolsRedirectUri: process.env.GOOGLE_DRIVE_TOOLS_REDIRECT_URI,
     githubClientId: process.env.GITHUB_CLIENT_ID,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
-    githubRedirectUri: process.env.GITHUB_REDIRECT_URI,
     githubRedirectUriBase: process.env.GITHUB_REDIRECT_URI_BASE,
-    githubToolsRedirectUri: process.env.GITHUB_TOOLS_REDIRECT_URI,
   };
 }

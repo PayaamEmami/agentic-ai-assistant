@@ -82,35 +82,17 @@ function normalizeRedirectBase(base: string): string {
 }
 
 function buildGoogleRedirectUri(kind: 'google_docs' | 'google_drive_tools'): string {
-  const base = process.env['GOOGLE_REDIRECT_URI_BASE'];
-  if (base) {
-    return new URL(
-      kind === 'google_docs' ? 'docs/callback' : 'drive-tools/callback',
-      normalizeRedirectBase(base),
-    ).toString();
-  }
-
-  if (kind === 'google_drive_tools') {
-    return process.env['GOOGLE_DRIVE_TOOLS_REDIRECT_URI'] ?? requireEnv('GOOGLE_REDIRECT_URI');
-  }
-
-  return requireEnv('GOOGLE_REDIRECT_URI');
+  return new URL(
+    kind === 'google_docs' ? 'docs/callback' : 'drive-tools/callback',
+    normalizeRedirectBase(requireEnv('GOOGLE_REDIRECT_URI_BASE')),
+  ).toString();
 }
 
 function buildGitHubRedirectUri(kind: 'github' | 'github_tools'): string {
-  const base = process.env['GITHUB_REDIRECT_URI_BASE'];
-  if (base) {
-    return new URL(
-      kind === 'github' ? 'rag/callback' : 'tools/callback',
-      normalizeRedirectBase(base),
-    ).toString();
-  }
-
-  if (kind === 'github_tools') {
-    return process.env['GITHUB_TOOLS_REDIRECT_URI'] ?? requireEnv('GITHUB_REDIRECT_URI');
-  }
-
-  return requireEnv('GITHUB_REDIRECT_URI');
+  return new URL(
+    kind === 'github' ? 'rag/callback' : 'tools/callback',
+    normalizeRedirectBase(requireEnv('GITHUB_REDIRECT_URI_BASE')),
+  ).toString();
 }
 
 function buildGitHubScope(kind: 'github' | 'github_tools'): string {
