@@ -1,11 +1,37 @@
-import type { FastifyInstance } from 'fastify';
+import crypto from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
-  McpAuthSessionCompleteRequest,
-  McpAuthSessionCreateRequest,
+  InternalPlaywrightExecuteRequest,
+  McpBrowserSessionCreateRequest,
+  McpBrowserSessionPersistRequest,
   McpConnectionCreateRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
+import { AppError } from '../lib/errors.js';
 import { McpService } from '../services/mcp-service.js';
+import { internalPlaywrightRpcDurationMs } from '../lib/telemetry.js';
+
+function getInternalServiceSecret(): string {
+  return process.env['INTERNAL_SERVICE_SECRET'] ?? 'dev-internal-service-secret';
+}
+
+async function authenticateInternal(request: FastifyRequest): Promise<void> {
+  const header = request.headers['x-internal-service-secret'];
+  const provided = typeof header === 'string' ? header : Array.isArray(header) ? header[0] : null;
+  if (!provided) {
+    throw new AppError(401, 'Internal authentication required', 'INTERNAL_AUTH_REQUIRED');
+  }
+
+  const expected = getInternalServiceSecret();
+  const providedBuffer = Buffer.from(provided);
+  const expectedBuffer = Buffer.from(expected);
+  if (
+    providedBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+  ) {
+    throw new AppError(403, 'Internal authentication failed', 'INTERNAL_AUTH_INVALID');
+  }
+}
 
 export async function mcpRoutes(app: FastifyInstance) {
   const mcpService = new McpService();
@@ -49,47 +75,91 @@ export async function mcpRoutes(app: FastifyInstance) {
     },
   );
 
+  app.get('/mcp/browser-sessions', { preHandler: authenticate }, async (request, reply) => {
+    const sessions = await mcpService.listBrowserSessions(request.user!.id);
+    return reply.status(200).send({ sessions });
+  });
+
   app.post<{ Params: { id: string } }>(
-    '/mcp/connections/:id/auth-sessions',
+    '/mcp/connections/:id/browser-sessions',
     { preHandler: authenticate },
     async (request, reply) => {
-      const parsed = McpAuthSessionCreateRequest.safeParse(request.body ?? {});
+      const parsed = McpBrowserSessionCreateRequest.safeParse(request.body ?? {});
       if (!parsed.success) {
         return reply.status(400).send({
           error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
         });
       }
 
-      const authSession = await mcpService.startAuthSession(request.user!.id, request.params.id);
-      return reply.status(200).send({ authSession });
-    },
-  );
-
-  app.get<{ Params: { id: string } }>(
-    '/mcp/auth-sessions/:id',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const authSession = await mcpService.getAuthSession(request.user!.id, request.params.id);
-      return reply.status(200).send({ authSession });
-    },
-  );
-
-  app.post<{ Params: { id: string } }>(
-    '/mcp/auth-sessions/:id/complete',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const parsed = McpAuthSessionCompleteRequest.safeParse(request.body ?? {});
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
-
-      const result = await mcpService.completeAuthSession(
+      const result = await mcpService.createBrowserSession(
         request.user!.id,
         request.params.id,
         parsed.data,
       );
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/mcp/browser-sessions/:id',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const result = await mcpService.getBrowserSession(request.user!.id, request.params.id);
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/mcp/browser-sessions/:id/persist',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const parsed = McpBrowserSessionPersistRequest.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
+
+      const result = await mcpService.persistBrowserSession(
+        request.user!.id,
+        request.params.id,
+        parsed.data,
+      );
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/mcp/browser-sessions/:id/cancel',
+    { preHandler: authenticate },
+    async (request, reply) => {
+      const result = await mcpService.cancelBrowserSession(request.user!.id, request.params.id);
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post(
+    '/mcp/internal/playwright/execute',
+    async (request, reply) => {
+      await authenticateInternal(request);
+
+      const parsed = InternalPlaywrightExecuteRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
+
+      const startedAt = Date.now();
+      const result = await mcpService.executePlaywrightTool(parsed.data.userId, parsed.data.mcpConnectionId, {
+        toolName: parsed.data.toolName,
+        arguments: parsed.data.input,
+      });
+      internalPlaywrightRpcDurationMs.observe(
+        { outcome: result.success ? 'success' : 'failure' },
+        Date.now() - startedAt,
+      );
+
       return reply.status(200).send(result);
     },
   );

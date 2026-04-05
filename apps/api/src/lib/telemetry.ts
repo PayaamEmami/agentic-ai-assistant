@@ -72,3 +72,39 @@ export const clientTelemetryAccepted = createCounter({
   help: 'Client telemetry events accepted by metric name',
   labelNames: ['metric_name'] as const,
 }) as ReturnType<typeof createCounter>;
+
+export const browserSessionsTotal = createCounter({
+  name: 'aaa_api_browser_sessions_total',
+  help: 'Browser session lifecycle events grouped by action and outcome',
+  labelNames: ['action', 'outcome'] as const,
+}) as ReturnType<typeof createCounter>;
+
+export const browserSessionsActive = createGauge({
+  name: 'aaa_api_browser_sessions_active',
+  help: 'Active in-memory browser sessions grouped by state',
+  labelNames: ['state'] as const,
+}) as ReturnType<typeof createGauge>;
+
+export const browserFramesTotal = createCounter({
+  name: 'aaa_api_browser_frames_total',
+  help: 'Browser frames sent or dropped grouped by outcome',
+  labelNames: ['outcome'] as const,
+}) as ReturnType<typeof createCounter>;
+
+export const browserFrameBytesTotal = createCounter({
+  name: 'aaa_api_browser_frame_bytes_total',
+  help: 'Total bytes of browser frame payloads sent to clients',
+}) as ReturnType<typeof createCounter>;
+
+export const browserInputEventsTotal = createCounter({
+  name: 'aaa_api_browser_input_events_total',
+  help: 'Browser input events grouped by type and outcome',
+  labelNames: ['input_type', 'outcome'] as const,
+}) as ReturnType<typeof createCounter>;
+
+export const internalPlaywrightRpcDurationMs = createHistogram({
+  name: 'aaa_api_internal_playwright_rpc_duration_ms',
+  help: 'Internal Playwright RPC duration in milliseconds grouped by outcome',
+  labelNames: ['outcome'] as const,
+  buckets: [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000],
+}) as ReturnType<typeof createHistogram>;

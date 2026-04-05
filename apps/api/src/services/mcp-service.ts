@@ -1,12 +1,15 @@
 import {
-  mcpAuthSessionRepository,
+  mcpBrowserSessionRepository,
   mcpConnectionRepository,
-  type McpAuthSession,
+  type McpBrowserSession,
   type McpConnection,
 } from '@aaa/db';
 import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
 import { getMcpRuntime, type RuntimeMcpConnection } from '@aaa/mcp';
 import { AppError } from '../lib/errors.js';
+import { getBrowserSessionManager } from './browser-session-manager.js';
+
+const SESSION_TTL_MS = 30 * 60 * 1000;
 
 function hasCredentialMaterial(credentials: Record<string, unknown>): boolean {
   return Object.keys(credentials).length > 0;
@@ -42,21 +45,54 @@ function toConnectionSummary(connection: McpConnection) {
   };
 }
 
-function toAuthSessionDto(session: McpAuthSession) {
+function toBrowserSessionDto(session: McpBrowserSession) {
   return {
     id: session.id,
+    userId: session.userId,
     mcpConnectionId: session.mcpConnectionId,
+    purpose: session.purpose,
     status: session.status,
+    conversationId: session.conversationId,
+    toolExecutionId: session.toolExecutionId,
+    selectedPageId: session.selectedPageId,
     metadata: session.metadata,
+    lastClientSeenAt: session.lastClientSeenAt?.toISOString() ?? null,
+    lastFrameAt: session.lastFrameAt?.toISOString() ?? null,
     expiresAt: session.expiresAt.toISOString(),
-    completedAt: session.completedAt?.toISOString() ?? null,
+    endedAt: session.endedAt?.toISOString() ?? null,
     createdAt: session.createdAt.toISOString(),
     updatedAt: session.updatedAt.toISOString(),
   };
 }
 
+async function requireOwnedConnection(userId: string, connectionId: string): Promise<McpConnection> {
+  const connection = await mcpConnectionRepository.findByIdForUser(connectionId, userId);
+  if (!connection) {
+    throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
+  }
+  return connection;
+}
+
+async function requireOwnedBrowserSession(
+  userId: string,
+  sessionId: string,
+): Promise<{ session: McpBrowserSession; connection: McpConnection }> {
+  const session = await mcpBrowserSessionRepository.findById(sessionId);
+  if (!session || session.userId !== userId) {
+    throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
+  }
+
+  const connection = await mcpConnectionRepository.findById(session.mcpConnectionId);
+  if (!connection || connection.userId !== userId) {
+    throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
+  }
+
+  return { session, connection };
+}
+
 export class McpService {
   private readonly runtime = getMcpRuntime();
+  private readonly browserSessionManager = getBrowserSessionManager();
 
   listCatalog() {
     return this.runtime.listCatalog();
@@ -110,9 +146,10 @@ export class McpService {
   }
 
   async deleteConnection(userId: string, connectionId: string) {
-    const connection = await mcpConnectionRepository.findByIdForUser(connectionId, userId);
-    if (!connection) {
-      throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
+    const connection = await requireOwnedConnection(userId, connectionId);
+    const activeSession = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+    if (activeSession && this.browserSessionManager.hasLiveSession(activeSession.id)) {
+      await this.browserSessionManager.cancelSession(activeSession.id, 'connection_deleted');
     }
 
     const deleted = await mcpConnectionRepository.delete(connectionId, userId);
@@ -134,110 +171,144 @@ export class McpService {
     return { ok: true as const };
   }
 
-  async startAuthSession(userId: string, connectionId: string) {
-    const connection = await mcpConnectionRepository.findByIdForUser(connectionId, userId);
-    if (!connection) {
-      throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
-    }
+  async listBrowserSessions(userId: string) {
+    const sessions = await mcpBrowserSessionRepository.listActiveByUser(userId);
+    return sessions.map(toBrowserSessionDto);
+  }
 
-    const authSession = await mcpAuthSessionRepository.create({
-      mcpConnectionId: connection.id,
-      status: 'active',
-      metadata: {},
-      expiresAt: new Date(Date.now() + 30 * 60 * 1000),
-    });
+  async createBrowserSession(
+    userId: string,
+    connectionId: string,
+    input: {
+      purpose: 'auth' | 'manual' | 'tool_takeover';
+      conversationId?: string;
+      toolExecutionId?: string;
+    },
+  ) {
+    const connection = await requireOwnedConnection(userId, connectionId);
+    const existing = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+    if (existing) {
+      if (this.browserSessionManager.hasLiveSession(existing.id)) {
+        const snapshot = await this.browserSessionManager.getSnapshot(existing.id);
+        return {
+          session: toBrowserSessionDto(existing),
+          pages: snapshot.pages.map((page) => ({
+            id: page.pageId,
+            url: page.url,
+            title: page.title,
+            isSelected: page.isSelected,
+          })),
+        };
+      }
 
-    try {
-      const startResult = await this.runtime.startManualAuthSession(
-        toRuntimeConnection(connection),
-        authSession.id,
-      );
-
-      const updated = await mcpAuthSessionRepository.update(authSession.id, {
-        status: 'active',
-        metadata: startResult.metadata,
-      });
-
-      return toAuthSessionDto(updated ?? authSession);
-    } catch (error) {
-      await mcpConnectionRepository.update(connection.id, {
-        status: 'failed',
-        lastError: error instanceof Error ? error.message : String(error),
-      });
-      await mcpAuthSessionRepository.update(authSession.id, {
-        status: 'failed',
+      await mcpBrowserSessionRepository.update(existing.id, {
+        status: 'crashed',
+        endedAt: new Date(),
         metadata: {
-          error: error instanceof Error ? error.message : String(error),
+          ...existing.metadata,
+          reason: 'live_session_not_present_on_api',
         },
       });
-      throw error;
     }
+
+    const session = await mcpBrowserSessionRepository.create({
+      userId,
+      mcpConnectionId: connection.id,
+      purpose: input.purpose,
+      conversationId: input.conversationId ?? null,
+      toolExecutionId: input.toolExecutionId ?? null,
+      metadata: {},
+      expiresAt: new Date(Date.now() + SESSION_TTL_MS),
+    });
+
+    const snapshot = await this.browserSessionManager.createSession(session, connection, {
+      startUrl:
+        input.purpose === 'auth'
+          ? (typeof connection.settings['manualAuthStartUrl'] === 'string'
+              ? connection.settings['manualAuthStartUrl']
+              : undefined)
+          : undefined,
+    });
+
+    const updatedSession = (await mcpBrowserSessionRepository.findById(session.id)) ?? session;
+    return {
+      session: toBrowserSessionDto(updatedSession),
+      pages: snapshot.pages.map((page) => ({
+        id: page.pageId,
+        url: page.url,
+        title: page.title,
+        isSelected: page.isSelected,
+      })),
+    };
   }
 
-  async getAuthSession(userId: string, authSessionId: string) {
-    const authSession = await mcpAuthSessionRepository.findById(authSessionId);
-    if (!authSession) {
-      throw new AppError(404, 'MCP auth session not found', 'MCP_AUTH_SESSION_NOT_FOUND');
+  async getBrowserSession(userId: string, sessionId: string) {
+    const { session } = await requireOwnedBrowserSession(userId, sessionId);
+
+    if (session.status === 'pending' || session.status === 'active') {
+      if (session.expiresAt.getTime() < Date.now()) {
+        if (this.browserSessionManager.hasLiveSession(session.id)) {
+          await this.browserSessionManager.expireSession(session.id, 'session_expired');
+        } else {
+          await mcpBrowserSessionRepository.update(session.id, {
+            status: 'expired',
+            endedAt: new Date(),
+          });
+        }
+      } else if (!this.browserSessionManager.hasLiveSession(session.id)) {
+        await mcpBrowserSessionRepository.update(session.id, {
+          status: 'crashed',
+          endedAt: new Date(),
+          metadata: {
+            ...session.metadata,
+            reason: 'session_not_live_on_api',
+          },
+        });
+      }
     }
 
-    const connection = await mcpConnectionRepository.findById(authSession.mcpConnectionId);
-    if (!connection || connection.userId !== userId) {
-      throw new AppError(404, 'MCP auth session not found', 'MCP_AUTH_SESSION_NOT_FOUND');
-    }
+    const refreshed = (await mcpBrowserSessionRepository.findById(sessionId)) ?? session;
+    const pages = this.browserSessionManager.hasLiveSession(sessionId)
+      ? (await this.browserSessionManager.getSnapshot(sessionId)).pages.map((page) => ({
+          id: page.pageId,
+          url: page.url,
+          title: page.title,
+          isSelected: page.isSelected,
+        }))
+      : [];
 
-    if (authSession.status === 'active' && authSession.expiresAt.getTime() < Date.now()) {
-      const expired = await mcpAuthSessionRepository.update(authSession.id, {
-        status: 'expired',
-      });
-      return toAuthSessionDto(expired ?? authSession);
-    }
-
-    return toAuthSessionDto(authSession);
+    return {
+      session: toBrowserSessionDto(refreshed),
+      pages,
+    };
   }
 
-  async completeAuthSession(
+  async persistBrowserSession(
     userId: string,
-    authSessionId: string,
+    sessionId: string,
     input: { persistAsDefault?: boolean },
   ) {
-    const authSession = await mcpAuthSessionRepository.findById(authSessionId);
-    if (!authSession) {
-      throw new AppError(404, 'MCP auth session not found', 'MCP_AUTH_SESSION_NOT_FOUND');
+    const { session, connection } = await requireOwnedBrowserSession(userId, sessionId);
+    if (session.expiresAt.getTime() < Date.now()) {
+      throw new AppError(409, 'Browser session has expired', 'MCP_BROWSER_SESSION_EXPIRED');
     }
 
-    const connection = await mcpConnectionRepository.findById(authSession.mcpConnectionId);
-    if (!connection || connection.userId !== userId) {
-      throw new AppError(404, 'MCP auth session not found', 'MCP_AUTH_SESSION_NOT_FOUND');
+    if (!this.browserSessionManager.hasLiveSession(session.id)) {
+      throw new AppError(
+        409,
+        'Browser session is no longer live on this API instance',
+        'MCP_BROWSER_SESSION_NOT_LIVE',
+      );
     }
 
-    if (authSession.expiresAt.getTime() < Date.now()) {
-      await mcpAuthSessionRepository.update(authSession.id, { status: 'expired' });
-      throw new AppError(409, 'MCP auth session has expired', 'MCP_AUTH_SESSION_EXPIRED');
-    }
-
-    const completion = await this.runtime.completeManualAuthSession(
-      toRuntimeConnection(connection),
-      authSession.id,
-    );
-
+    const storageState = await this.browserSessionManager.persistSession(session.id);
     const currentCredentials = decryptConnectorCredentials(connection.encryptedCredentials);
-    const nextCredentials = completion.connectionUpdate?.credentials
-      ? {
-          ...currentCredentials,
-          ...completion.connectionUpdate.credentials,
-        }
-      : currentCredentials;
-    const nextSettings = completion.connectionUpdate?.settings
-      ? {
-          ...connection.settings,
-          ...completion.connectionUpdate.settings,
-        }
-      : connection.settings;
-
     const updatedConnection = await mcpConnectionRepository.update(connection.id, {
       status: 'connected',
-      encryptedCredentials: encryptConnectorCredentials(nextCredentials),
-      settings: nextSettings,
+      encryptedCredentials: encryptConnectorCredentials({
+        ...currentCredentials,
+        storageState,
+      }),
       lastError: null,
       isDefaultActive: input.persistAsDefault ? true : connection.isDefaultActive,
     });
@@ -246,18 +317,77 @@ export class McpService {
       await mcpConnectionRepository.setDefaultActive(connection.id, userId);
     }
 
-    const updatedSession = await mcpAuthSessionRepository.update(authSession.id, {
-      status: 'completed',
-      metadata: {
-        ...authSession.metadata,
-        ...completion.metadata,
-      },
-      completedAt: new Date(),
+    const updatedSession = await mcpBrowserSessionRepository.findById(session.id);
+    return {
+      session: toBrowserSessionDto(updatedSession ?? session),
+      connection: toConnectionSummary(updatedConnection ?? connection),
+      pages: [],
+    };
+  }
+
+  async cancelBrowserSession(userId: string, sessionId: string) {
+    const { session } = await requireOwnedBrowserSession(userId, sessionId);
+    if (this.browserSessionManager.hasLiveSession(session.id)) {
+      await this.browserSessionManager.cancelSession(session.id);
+    } else {
+      await mcpBrowserSessionRepository.update(session.id, {
+        status: 'cancelled',
+        endedAt: new Date(),
+      });
+    }
+
+    const updated = (await mcpBrowserSessionRepository.findById(session.id)) ?? session;
+    return {
+      ok: true as const,
+      session: toBrowserSessionDto(updated),
+    };
+  }
+
+  async executePlaywrightTool(
+    userId: string,
+    connectionId: string,
+    input: {
+      toolName: string;
+      arguments: Record<string, unknown>;
+    },
+  ) {
+    const connection = await requireOwnedConnection(userId, connectionId);
+    const activeSession = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+    if (activeSession && activeSession.status !== 'completed') {
+      return {
+        success: false,
+        result: null,
+        error: 'BROWSER_SESSION_BUSY',
+      };
+    }
+
+    const runtimeConnection = toRuntimeConnection(connection);
+    const result = await this.runtime.executeTool({
+      toolName: input.toolName,
+      arguments: input.arguments,
+      connection: runtimeConnection,
     });
 
-    return {
-      authSession: toAuthSessionDto(updatedSession ?? authSession),
-      connection: toConnectionSummary(updatedConnection ?? connection),
-    };
+    if (result.success && result.connectionUpdate) {
+      const nextCredentials = result.connectionUpdate.credentials
+        ? encryptConnectorCredentials({
+            ...runtimeConnection.credentials,
+            ...result.connectionUpdate.credentials,
+          })
+        : undefined;
+      const nextSettings = result.connectionUpdate.settings
+        ? {
+            ...connection.settings,
+            ...result.connectionUpdate.settings,
+          }
+        : undefined;
+
+      await mcpConnectionRepository.update(connection.id, {
+        encryptedCredentials: nextCredentials,
+        settings: nextSettings,
+      });
+    }
+
+    return result;
   }
 }

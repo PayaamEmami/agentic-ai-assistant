@@ -1,13 +1,13 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   api,
   type ConnectorSyncRunSummary,
   type ConnectorSummary,
   type GitHubRepositorySummary,
-  type McpAuthSessionSummary,
+  type McpBrowserSessionSummary,
   type McpCatalogEntrySummary,
   type McpConnectionSummary,
 } from '@/lib/api-client';
@@ -124,12 +124,13 @@ function mcpIntegrationLabel(kind: McpConnectionSummary['integrationKind']): str
 }
 
 export function ConnectorManager() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntrySummary[]>([]);
   const [mcpConnections, setMcpConnections] = useState<McpConnectionSummary[]>([]);
-  const [mcpAuthSessionsByConnection, setMcpAuthSessionsByConnection] = useState<
-    Record<string, McpAuthSessionSummary>
+  const [mcpBrowserSessionsByConnection, setMcpBrowserSessionsByConnection] = useState<
+    Record<string, McpBrowserSessionSummary>
   >({});
   const [githubRepos, setGitHubRepos] = useState<GitHubRepositorySummary[]>([]);
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
@@ -161,15 +162,26 @@ export function ConnectorManager() {
     }
 
     try {
-      const [connectorResponse, mcpCatalogResponse, mcpConnectionsResponse] = await Promise.all([
+      const [
+        connectorResponse,
+        mcpCatalogResponse,
+        mcpConnectionsResponse,
+        mcpBrowserSessionsResponse,
+      ] = await Promise.all([
         api.connectors.list(),
         api.mcp.catalog(),
         api.mcp.listConnections(),
+        api.mcp.listBrowserSessions(),
       ]);
       const response = connectorResponse;
       setConnectors(response.connectors);
       setMcpCatalog(mcpCatalogResponse.integrations);
       setMcpConnections(mcpConnectionsResponse.connections);
+      setMcpBrowserSessionsByConnection(
+        Object.fromEntries(
+          mcpBrowserSessionsResponse.sessions.map((session) => [session.mcpConnectionId, session]),
+        ),
+      );
 
       const github = response.connectors.find((connector) => connector.kind === 'github');
       if (github?.status === 'connected') {
@@ -249,7 +261,7 @@ export function ConnectorManager() {
   }, [load]);
 
   useEffect(() => {
-    const activeSessions = Object.values(mcpAuthSessionsByConnection).filter(
+    const activeSessions = Object.values(mcpBrowserSessionsByConnection).filter(
       (session) => session.status === 'active' || session.status === 'pending',
     );
     if (activeSessions.length === 0) {
@@ -260,10 +272,10 @@ export function ConnectorManager() {
       void Promise.all(
         activeSessions.map(async (session) => {
           try {
-            const response = await api.mcp.getAuthSession(session.id);
-            setMcpAuthSessionsByConnection((previous) => ({
+            const response = await api.mcp.getBrowserSession(session.id);
+            setMcpBrowserSessionsByConnection((previous) => ({
               ...previous,
-              [response.authSession.mcpConnectionId]: response.authSession,
+              [response.session.mcpConnectionId]: response.session,
             }));
           } catch {
             // Ignore background polling failures; explicit actions surface them.
@@ -273,7 +285,7 @@ export function ConnectorManager() {
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [mcpAuthSessionsByConnection]);
+  }, [mcpBrowserSessionsByConnection]);
 
   const startConnection = async (
     kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools',
@@ -420,48 +432,27 @@ export function ConnectorManager() {
     }
   };
 
-  const startMcpAuthSession = async (connection: McpConnectionSummary) => {
+  const openEmbeddedBrowser = async (
+    connection: McpConnectionSummary,
+    purpose: 'auth' | 'manual' | 'tool_takeover' = 'auth',
+  ) => {
     setActionError(null);
     try {
-      const response = await api.mcp.startAuthSession(connection.id);
-      setMcpAuthSessionsByConnection((previous) => ({
+      const response = await api.mcp.createBrowserSession(connection.id, { purpose });
+      setMcpBrowserSessionsByConnection((previous) => ({
         ...previous,
-        [connection.id]: response.authSession,
+        [connection.id]: response.session,
       }));
-      const instructions =
-        typeof response.authSession.metadata['instructions'] === 'string'
-          ? response.authSession.metadata['instructions']
-          : 'A local browser window has been opened for sign-in.';
-      window.alert(instructions);
+      router.push(`/chat/browser/${response.session.id}`);
       await load(false);
     } catch (error) {
       void reportClientError({
-        event: 'client.mcp.auth_session_start_failed',
+        event: 'client.mcp.browser_session_start_failed',
         component: 'connector-manager',
-        message: `Failed to start auth session for ${connection.id}`,
+        message: `Failed to start browser session for ${connection.id}`,
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to start auth session');
-    }
-  };
-
-  const completeMcpAuthSession = async (connectionId: string, authSessionId: string) => {
-    setActionError(null);
-    try {
-      const response = await api.mcp.completeAuthSession(authSessionId, true);
-      setMcpAuthSessionsByConnection((previous) => ({
-        ...previous,
-        [connectionId]: response.authSession,
-      }));
-      await load(false);
-    } catch (error) {
-      void reportClientError({
-        event: 'client.mcp.auth_session_complete_failed',
-        component: 'connector-manager',
-        message: `Failed to complete auth session ${authSessionId}`,
-        error,
-      });
-      setActionError(error instanceof Error ? error.message : 'Failed to save browser session');
+      setActionError(error instanceof Error ? error.message : 'Failed to start browser session');
     }
   };
 
@@ -492,7 +483,7 @@ export function ConnectorManager() {
     setActionError(null);
     try {
       await api.mcp.deleteConnection(connection.id);
-      setMcpAuthSessionsByConnection((previous) => {
+      setMcpBrowserSessionsByConnection((previous) => {
         const next = { ...previous };
         delete next[connection.id];
         return next;
@@ -869,7 +860,7 @@ export function ConnectorManager() {
                           </p>
                         ) : (
                           connectionsForKind.map((connection) => {
-                            const authSession = mcpAuthSessionsByConnection[connection.id];
+                            const browserSession = mcpBrowserSessionsByConnection[connection.id];
                             return (
                               <div
                                 key={connection.id}
@@ -902,10 +893,10 @@ export function ConnectorManager() {
                                       </button>
                                     ) : null}
                                     <button
-                                      onClick={() => void startMcpAuthSession(connection)}
+                                      onClick={() => void openEmbeddedBrowser(connection, 'auth')}
                                       className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
                                     >
-                                      Launch sign-in
+                                      Open embedded sign-in
                                     </button>
                                     <button
                                       onClick={() => void deleteMcpConnection(connection)}
@@ -915,25 +906,23 @@ export function ConnectorManager() {
                                     </button>
                                   </div>
                                 </div>
-                                {authSession ? (
+                                {browserSession ? (
                                   <div className="mt-3 rounded-lg bg-surface px-3 py-2 text-xs text-foreground-muted">
                                     <p className="font-medium text-foreground">
-                                      Auth session: {authSession.status}
+                                      Browser session: {browserSession.status}
                                     </p>
-                                    {typeof authSession.metadata['instructions'] === 'string' ? (
-                                      <p className="mt-1">{authSession.metadata['instructions']}</p>
-                                    ) : null}
                                     <p className="mt-1">
-                                      Expires {formatRunTimestamp(authSession.expiresAt)}
+                                      Expires {formatRunTimestamp(browserSession.expiresAt)}
                                     </p>
-                                    {authSession.status === 'active' ? (
+                                    {browserSession.status === 'active' ||
+                                    browserSession.status === 'pending' ? (
                                       <button
                                         onClick={() =>
-                                          void completeMcpAuthSession(connection.id, authSession.id)
+                                          router.push(`/chat/browser/${browserSession.id}`)
                                         }
                                         className="mt-2 rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover"
                                       >
-                                        Save session
+                                        Reopen browser workspace
                                       </button>
                                     ) : null}
                                   </div>

@@ -32,6 +32,7 @@ import { mcpRoutes } from './routes/mcp.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
 import { wsHandler } from './ws/handler.js';
+import { browserWsHandler } from './ws/browser-handler.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -154,6 +155,7 @@ export async function buildServer(config: AppConfig) {
   await app.register(clientLogRoutes, { prefix: '/api' });
   await app.register(clientTelemetryRoutes, { prefix: '/api' });
   await app.register(wsHandler, { prefix: '/ws' });
+  await app.register(browserWsHandler, { prefix: '/ws' });
 
   return app;
 }

@@ -3,14 +3,17 @@ import {
   conversationRepository,
   connectorConfigRepository,
   getPool,
-  mcpConnectionRepository,
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
 import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
-import { getMcpRuntime, type RuntimeMcpConnection } from '@aaa/mcp';
-import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
+import type {
+  InternalPlaywrightExecuteResponse,
+  ToolDoneEvent,
+  ToolProgressEvent,
+  ToolStartEvent,
+} from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 
 export interface ToolExecutionJobData {
@@ -22,6 +25,14 @@ export interface ToolExecutionJobData {
 }
 
 const TOOL_EVENT_CHANNEL = 'tool_execution_events';
+
+function getInternalApiBaseUrl(): string {
+  return process.env['INTERNAL_API_BASE_URL'] ?? process.env['API_BASE_URL'] ?? 'http://localhost:3001';
+}
+
+function getInternalServiceSecret(): string {
+  return process.env['INTERNAL_SERVICE_SECRET'] ?? 'dev-internal-service-secret';
+}
 
 async function publishToolEvent(
   event: ToolStartEvent | ToolProgressEvent | ToolDoneEvent,
@@ -379,6 +390,52 @@ function requireReviewEvent(value: unknown): 'APPROVE' | 'COMMENT' | 'REQUEST_CH
   throw new Error('Expected "event" to be APPROVE, COMMENT, or REQUEST_CHANGES');
 }
 
+async function executePlaywrightViaApi(
+  userId: string,
+  mcpConnectionId: string,
+  conversationId: string,
+  toolExecutionId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+): Promise<{ success: boolean; result: unknown; error?: string }> {
+  const response = await fetch(`${getInternalApiBaseUrl()}/api/mcp/internal/playwright/execute`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-internal-service-secret': getInternalServiceSecret(),
+    },
+    body: JSON.stringify({
+      userId,
+      mcpConnectionId,
+      conversationId,
+      toolExecutionId,
+      toolName,
+      input,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    return {
+      success: false,
+      result: null,
+      error:
+        typeof body?.error?.message === 'string'
+          ? body.error.message
+          : `Internal Playwright execution failed with status ${response.status}`,
+    };
+  }
+
+  const body = (await response.json()) as InternalPlaywrightExecuteResponse;
+  return {
+    success: body.success,
+    result: body.result,
+    error: body.error,
+  };
+}
+
 async function executeTool(
   userId: string,
   conversationId: string,
@@ -396,48 +453,18 @@ async function executeTool(
       return { success: false, result: null, error: 'MCP execution is missing connection binding' };
     }
 
-    const connection = await mcpConnectionRepository.findById(execution.mcpConnectionId);
-    if (!connection || connection.userId !== userId) {
-      return { success: false, result: null, error: 'MCP connection is not available for this user' };
+    if (execution.integrationKind === 'playwright') {
+      return executePlaywrightViaApi(
+        userId,
+        execution.mcpConnectionId,
+        conversationId,
+        toolExecutionId,
+        toolName,
+        input,
+      );
     }
 
-    const runtimeConnection: RuntimeMcpConnection = {
-      id: connection.id,
-      userId: connection.userId,
-      integrationKind: connection.integrationKind as RuntimeMcpConnection['integrationKind'],
-      instanceLabel: connection.instanceLabel,
-      status: connection.status,
-      settings: connection.settings,
-      credentials: decryptConnectorCredentials(connection.encryptedCredentials),
-    };
-
-    const result = await getMcpRuntime().executeTool({
-      toolName,
-      arguments: input,
-      connection: runtimeConnection,
-    });
-
-    if (result.success && result.connectionUpdate) {
-      const nextCredentials = result.connectionUpdate.credentials
-        ? encryptConnectorCredentials({
-            ...runtimeConnection.credentials,
-            ...result.connectionUpdate.credentials,
-          })
-        : undefined;
-      const nextSettings = result.connectionUpdate.settings
-        ? {
-            ...connection.settings,
-            ...result.connectionUpdate.settings,
-          }
-        : undefined;
-
-      await mcpConnectionRepository.update(connection.id, {
-        encryptedCredentials: nextCredentials,
-        settings: nextSettings,
-      });
-    }
-
-    return result;
+    return { success: false, result: null, error: 'Unsupported MCP integration for worker execution' };
   }
 
   return executeNativeTool(userId, conversationId, toolExecutionId, toolName, input);

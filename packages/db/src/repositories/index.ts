@@ -43,5 +43,5 @@ export type { ConnectorSyncRun, ConnectorSyncRunRepository } from './connector-s
 export { mcpConnectionRepository } from './mcp-connections.js';
 export type { McpConnection, McpConnectionRepository } from './mcp-connections.js';
 
-export { mcpAuthSessionRepository } from './mcp-auth-sessions.js';
-export type { McpAuthSession, McpAuthSessionRepository } from './mcp-auth-sessions.js';
+export { mcpBrowserSessionRepository } from './mcp-browser-sessions.js';
+export type { McpBrowserSession, McpBrowserSessionRepository } from './mcp-browser-sessions.js';

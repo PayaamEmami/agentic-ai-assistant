@@ -99,6 +99,126 @@ export interface ErrorEvent {
   message: string;
 }
 
+export interface BrowserPageEvent {
+  pageId: string;
+  url: string;
+  title: string;
+  isSelected: boolean;
+}
+
+export interface BrowserSessionAttachedEvent {
+  type: 'browser.session.attached';
+  sessionId: string;
+  mcpConnectionId: string;
+  status: string;
+  purpose: 'auth' | 'manual' | 'tool_takeover';
+  selectedPageId: string | null;
+  controlGranted: boolean;
+  pages: BrowserPageEvent[];
+  viewport: { width: number; height: number } | null;
+}
+
+export interface BrowserSessionUpdatedEvent {
+  type: 'browser.session.updated';
+  sessionId: string;
+  status: string;
+  selectedPageId: string | null;
+  pages: BrowserPageEvent[];
+  viewport: { width: number; height: number } | null;
+}
+
+export interface BrowserFrameMetaEvent {
+  type: 'browser.frame.meta';
+  sessionId: string;
+  pageId: string;
+  mimeType: string;
+  width: number;
+  height: number;
+  timestamp: string;
+}
+
+export interface BrowserControlStateEvent {
+  type: 'browser.control.state';
+  sessionId: string;
+  controlGranted: boolean;
+}
+
+export interface BrowserSessionEndedEvent {
+  type: 'browser.session.ended';
+  sessionId: string;
+  status: 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
+  reason: string;
+}
+
+export interface BrowserErrorEvent {
+  type: 'browser.error';
+  sessionId?: string;
+  code: string;
+  message: string;
+}
+
+export interface BrowserAttachRequestEvent {
+  type: 'browser.attach';
+  sessionId: string;
+}
+
+export interface BrowserHeartbeatEvent {
+  type: 'browser.heartbeat';
+  sessionId: string;
+}
+
+export interface BrowserResizeEvent {
+  type: 'browser.resize';
+  sessionId: string;
+  width: number;
+  height: number;
+}
+
+export interface BrowserNavigateEvent {
+  type: 'browser.navigate';
+  sessionId: string;
+  url: string;
+}
+
+export interface BrowserPageSelectEvent {
+  type: 'browser.page.select';
+  sessionId: string;
+  pageId: string;
+}
+
+export interface BrowserHistoryEvent {
+  type: 'browser.history';
+  sessionId: string;
+  action: 'back' | 'forward' | 'reload';
+}
+
+export interface BrowserPointerEvent {
+  type: 'browser.pointer';
+  sessionId: string;
+  action: 'move' | 'down' | 'up';
+  x: number;
+  y: number;
+  button?: 'left' | 'middle' | 'right';
+  buttons?: number;
+}
+
+export interface BrowserWheelEvent {
+  type: 'browser.wheel';
+  sessionId: string;
+  deltaX: number;
+  deltaY: number;
+  x: number;
+  y: number;
+}
+
+export interface BrowserKeyboardEvent {
+  type: 'browser.keyboard';
+  sessionId: string;
+  action: 'down' | 'up' | 'press';
+  key: string;
+  text?: string;
+}
+
 export type RealtimeEvent =
   | AssistantTextEvent
   | AssistantTextDoneEvent
@@ -112,3 +232,22 @@ export type RealtimeEvent =
   | VoiceTranscriptEvent
   | VoiceSessionEndedEvent
   | ErrorEvent;
+
+export type BrowserServerEvent =
+  | BrowserSessionAttachedEvent
+  | BrowserSessionUpdatedEvent
+  | BrowserFrameMetaEvent
+  | BrowserControlStateEvent
+  | BrowserSessionEndedEvent
+  | BrowserErrorEvent;
+
+export type BrowserClientEvent =
+  | BrowserAttachRequestEvent
+  | BrowserHeartbeatEvent
+  | BrowserResizeEvent
+  | BrowserNavigateEvent
+  | BrowserPageSelectEvent
+  | BrowserHistoryEvent
+  | BrowserPointerEvent
+  | BrowserWheelEvent
+  | BrowserKeyboardEvent;

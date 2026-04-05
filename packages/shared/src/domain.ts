@@ -219,13 +219,20 @@ export interface McpConnection {
   updatedAt: Date;
 }
 
-export interface McpAuthSession {
+export interface McpBrowserSession {
   id: string;
+  userId: string;
   mcpConnectionId: string;
-  status: 'pending' | 'active' | 'completed' | 'failed' | 'expired';
+  purpose: 'auth' | 'manual' | 'tool_takeover';
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
+  conversationId: string | null;
+  toolExecutionId: string | null;
+  selectedPageId: string | null;
   metadata: Record<string, unknown>;
+  lastClientSeenAt: Date | null;
+  lastFrameAt: Date | null;
   expiresAt: Date;
-  completedAt: Date | null;
+  endedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

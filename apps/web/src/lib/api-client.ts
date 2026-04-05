@@ -204,13 +204,27 @@ export interface McpConnectionSummary {
   updatedAt: string;
 }
 
-export interface McpAuthSessionSummary {
+export interface BrowserPageSummary {
   id: string;
+  url: string;
+  title: string;
+  isSelected: boolean;
+}
+
+export interface McpBrowserSessionSummary {
+  id: string;
+  userId: string;
   mcpConnectionId: string;
-  status: 'pending' | 'active' | 'completed' | 'failed' | 'expired';
+  purpose: 'auth' | 'manual' | 'tool_takeover';
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'failed' | 'expired' | 'crashed';
+  conversationId: string | null;
+  toolExecutionId: string | null;
+  selectedPageId: string | null;
   metadata: Record<string, unknown>;
+  lastClientSeenAt: string | null;
+  lastFrameAt: string | null;
   expiresAt: string;
-  completedAt: string | null;
+  endedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -250,6 +264,18 @@ export function buildWebSocketUrl(
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/ws/events';
+  base.searchParams.set('token', token);
+  base.searchParams.set('correlationId', correlationId);
+  return base.toString();
+}
+
+export function buildBrowserWebSocketUrl(
+  token: string,
+  correlationId = createCorrelationId('browser-ws'),
+): string {
+  const base = new URL(API_BASE);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  base.pathname = '/ws/browser';
   base.searchParams.set('token', token);
   base.searchParams.set('correlationId', correlationId);
   return base.toString();
@@ -433,26 +459,48 @@ export const api = {
         method: 'DELETE',
       });
     },
-    startAuthSession(connectionId: string) {
-      return request<{ authSession: McpAuthSessionSummary }>(
-        `/api/mcp/connections/${connectionId}/auth-sessions`,
-        {
-          method: 'POST',
-          body: JSON.stringify({ mode: 'manual_browser' }),
-        },
-      );
+    listBrowserSessions() {
+      return request<{ sessions: McpBrowserSessionSummary[] }>('/api/mcp/browser-sessions');
     },
-    getAuthSession(id: string) {
-      return request<{ authSession: McpAuthSessionSummary }>(`/api/mcp/auth-sessions/${id}`);
-    },
-    completeAuthSession(id: string, persistAsDefault = true) {
+    createBrowserSession(
+      connectionId: string,
+      input: {
+        purpose?: 'auth' | 'manual' | 'tool_takeover';
+        conversationId?: string;
+        toolExecutionId?: string;
+      },
+    ) {
       return request<{
-        authSession: McpAuthSessionSummary;
+        session: McpBrowserSessionSummary;
+        pages: BrowserPageSummary[];
+      }>(`/api/mcp/connections/${connectionId}/browser-sessions`, {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    getBrowserSession(id: string) {
+      return request<{
+        session: McpBrowserSessionSummary;
+        pages: BrowserPageSummary[];
+      }>(`/api/mcp/browser-sessions/${id}`);
+    },
+    persistBrowserSession(id: string, persistAsDefault = true) {
+      return request<{
+        session: McpBrowserSessionSummary;
         connection: McpConnectionSummary;
-      }>(`/api/mcp/auth-sessions/${id}/complete`, {
+        pages: BrowserPageSummary[];
+      }>(`/api/mcp/browser-sessions/${id}/persist`, {
         method: 'POST',
         body: JSON.stringify({ persistAsDefault }),
       });
+    },
+    cancelBrowserSession(id: string) {
+      return request<{ ok: true; session: McpBrowserSessionSummary }>(
+        `/api/mcp/browser-sessions/${id}/cancel`,
+        {
+          method: 'POST',
+        },
+      );
     },
   },
   voice: {

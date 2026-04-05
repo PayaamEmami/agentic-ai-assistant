@@ -84,13 +84,20 @@ CREATE TABLE mcp_connections (
   UNIQUE(user_id, integration_kind, instance_label)
 );
 
-CREATE TABLE mcp_auth_sessions (
+CREATE TABLE mcp_browser_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   mcp_connection_id UUID NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL DEFAULT 'manual',
   status TEXT NOT NULL DEFAULT 'pending',
+  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
+  tool_execution_id UUID,
+  selected_page_id TEXT,
   metadata JSONB NOT NULL DEFAULT '{}',
+  last_client_seen_at TIMESTAMPTZ,
+  last_frame_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
-  completed_at TIMESTAMPTZ,
+  ended_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -208,7 +215,13 @@ CREATE INDEX idx_connector_configs_user ON connector_configs(user_id);
 CREATE INDEX idx_connector_sync_runs_user_kind_started
   ON connector_sync_runs(user_id, connector_kind, started_at DESC);
 CREATE INDEX idx_mcp_connections_user ON mcp_connections(user_id);
-CREATE INDEX idx_mcp_auth_sessions_connection ON mcp_auth_sessions(mcp_connection_id, created_at DESC);
+CREATE INDEX idx_mcp_browser_sessions_connection
+  ON mcp_browser_sessions(mcp_connection_id, created_at DESC);
+CREATE INDEX idx_mcp_browser_sessions_user_status_updated
+  ON mcp_browser_sessions(user_id, status, updated_at DESC);
+CREATE UNIQUE INDEX idx_mcp_browser_sessions_active_connection
+  ON mcp_browser_sessions(mcp_connection_id)
+  WHERE status IN ('pending', 'active');
 CREATE UNIQUE INDEX idx_mcp_connections_default_active
   ON mcp_connections(user_id, integration_kind)
   WHERE is_default_active = TRUE;
