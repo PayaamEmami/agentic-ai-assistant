@@ -1,6 +1,6 @@
 # Agentic AI Assistant
 
-A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, optional MCP integration, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
+A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, per-user MCP integrations, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 | Cache/Queue    | Redis 7, BullMQ                                |
 | Storage        | AWS S3                                         |
 | AI             | OpenAI API                                     |
-| Tools          | Native tool handlers, optional MCP             |
+| Tools          | Native tool handlers, per-user MCP integrations |
 | Infrastructure | AWS, Terraform, Docker, Kubernetes             |
 | Monorepo       | pnpm workspaces                                |
 
@@ -24,7 +24,7 @@ The assistant uses a small multi-agent architecture:
 
 - **Orchestrator** — Routes requests, decides which agents to delegate to
 - **Research Agent** — Handles RAG queries, searches personal data sources
-- **Tool Agent** — Executes tools (native and optional MCP), handles external operations
+- **Tool Agent** — Executes tools (native and per-user MCP), handles external operations
 - **Verifier Agent** — Validates outputs, checks approval requirements
 
 ### Connectors
@@ -47,7 +47,7 @@ Current behavior:
 The assistant exposes a unified tool surface that can include both:
 
 - **Native tools** — Built-in functions with direct handlers; this is the primary tool path today
-- **MCP tools** — Optional external tools accessed via the Model Context Protocol when MCP servers are configured
+- **MCP tools** — First-party per-user integrations managed by the app, starting with Playwright browser automation
 
 Tools requiring user confirmation go through an approval flow before execution.
 
@@ -64,7 +64,7 @@ Current live voice behavior:
 
 - Automatic turn detection and interruption are enabled
 - Live voice is conversational-only in v1
-- Native tools, approvals, optional MCP tools, and retrieval stay available in text chat
+- Native tools, approvals, per-user MCP tools, and retrieval stay available in text chat
 
 ## Infrastructure
 
@@ -116,7 +116,7 @@ kubectl apply -f infra/kubernetes/
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
 │   ├── ai/                   # Model gateway, prompts, agent orchestration
 │   ├── tool-providers/       # Native tool providers used by tool execution
-│   ├── mcp/                  # Optional MCP client adapter and tool registry
+│   ├── mcp/                  # Per-user MCP runtime and built-in integrations
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
 │   ├── connectors/           # Retrieval-oriented connectors and credential helpers
 │   ├── memory/               # Preferences, personalization, memory

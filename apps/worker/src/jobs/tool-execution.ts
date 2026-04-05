@@ -3,12 +3,13 @@ import {
   conversationRepository,
   connectorConfigRepository,
   getPool,
+  mcpConnectionRepository,
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
 import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
-import { getConfiguredToolRegistry } from '@aaa/mcp';
+import { getMcpRuntime, type RuntimeMcpConnection } from '@aaa/mcp';
 import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 
@@ -382,16 +383,61 @@ async function executeTool(
   userId: string,
   conversationId: string,
   toolExecutionId: string,
-  origin: string,
+  execution: Awaited<ReturnType<typeof toolExecutionRepository.findById>>,
   toolName: string,
   input: Record<string, unknown>,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
-  if (origin === 'mcp') {
-    const registry = await getConfiguredToolRegistry();
-    return registry.executeTool({
+  if (!execution) {
+    return { success: false, result: null, error: 'Tool execution not found' };
+  }
+
+  if (execution.origin === 'mcp') {
+    if (!execution.mcpConnectionId || !execution.integrationKind) {
+      return { success: false, result: null, error: 'MCP execution is missing connection binding' };
+    }
+
+    const connection = await mcpConnectionRepository.findById(execution.mcpConnectionId);
+    if (!connection || connection.userId !== userId) {
+      return { success: false, result: null, error: 'MCP connection is not available for this user' };
+    }
+
+    const runtimeConnection: RuntimeMcpConnection = {
+      id: connection.id,
+      userId: connection.userId,
+      integrationKind: connection.integrationKind as RuntimeMcpConnection['integrationKind'],
+      instanceLabel: connection.instanceLabel,
+      status: connection.status,
+      settings: connection.settings,
+      credentials: decryptConnectorCredentials(connection.encryptedCredentials),
+    };
+
+    const result = await getMcpRuntime().executeTool({
       toolName,
       arguments: input,
+      connection: runtimeConnection,
     });
+
+    if (result.success && result.connectionUpdate) {
+      const nextCredentials = result.connectionUpdate.credentials
+        ? encryptConnectorCredentials({
+            ...runtimeConnection.credentials,
+            ...result.connectionUpdate.credentials,
+          })
+        : undefined;
+      const nextSettings = result.connectionUpdate.settings
+        ? {
+            ...connection.settings,
+            ...result.connectionUpdate.settings,
+          }
+        : undefined;
+
+      await mcpConnectionRepository.update(connection.id, {
+        encryptedCredentials: nextCredentials,
+        settings: nextSettings,
+      });
+    }
+
+    return result;
   }
 
   return executeNativeTool(userId, conversationId, toolExecutionId, toolName, input);
@@ -455,7 +501,7 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     conversation.userId,
     conversationId,
     toolExecutionId,
-    execution.origin,
+    execution,
     toolName,
     job.data.input,
   );

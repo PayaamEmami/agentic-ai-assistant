@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@aaa/observability": "workspace:*",
-    "@modelcontextprotocol/sdk": "^1.0.0"
+    "playwright": "^1.55.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

@@ -35,8 +35,6 @@ const envSchema = z.object({
   OPENAI_REALTIME_MODEL: z.string().default('gpt-realtime-1.5'),
   OPENAI_REALTIME_VOICE: z.string().default('marin'),
 
-  MCP_SERVERS_CONFIG_PATH: z.string().optional(),
-
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),

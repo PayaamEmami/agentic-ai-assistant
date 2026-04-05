@@ -183,6 +183,38 @@ export interface GitHubRepositorySummary {
   selected: boolean;
 }
 
+export interface McpCatalogEntrySummary {
+  kind: 'playwright';
+  displayName: string;
+  description: string;
+  supportsMultipleInstances: boolean;
+  requiresDefaultActive: boolean;
+  authModes: Array<'manual_browser' | 'stored_secret'>;
+}
+
+export interface McpConnectionSummary {
+  id: string;
+  integrationKind: 'playwright';
+  instanceLabel: string;
+  status: 'pending' | 'connected' | 'failed';
+  hasCredentials: boolean;
+  lastError: string | null;
+  isDefaultActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface McpAuthSessionSummary {
+  id: string;
+  mcpConnectionId: string;
+  status: 'pending' | 'active' | 'completed' | 'failed' | 'expired';
+  metadata: Record<string, unknown>;
+  expiresAt: string;
+  completedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type PersonalizationMemoryKind =
   | 'fact'
   | 'preference'
@@ -367,6 +399,59 @@ export const api = {
       return request<{ ok: boolean }>('/api/connectors/github/repos', {
         method: 'POST',
         body: JSON.stringify({ repositoryIds }),
+      });
+    },
+  },
+  mcp: {
+    catalog() {
+      return request<{ integrations: McpCatalogEntrySummary[] }>('/api/mcp/catalog');
+    },
+    listConnections() {
+      return request<{ connections: McpConnectionSummary[] }>('/api/mcp/connections');
+    },
+    createConnection(input: {
+      integrationKind: 'playwright';
+      instanceLabel: string;
+      authMode?: 'manual_browser' | 'stored_secret';
+      secretProfile?: Record<string, unknown>;
+    }) {
+      return request<{ connection: McpConnectionSummary }>('/api/mcp/connections', {
+        method: 'POST',
+        body: JSON.stringify(input),
+      });
+    },
+    setDefaultConnection(id: string) {
+      return request<{ ok: true; connection: McpConnectionSummary }>(
+        `/api/mcp/connections/${id}/default`,
+        {
+          method: 'POST',
+        },
+      );
+    },
+    deleteConnection(id: string) {
+      return request<{ ok: true }>(`/api/mcp/connections/${id}`, {
+        method: 'DELETE',
+      });
+    },
+    startAuthSession(connectionId: string) {
+      return request<{ authSession: McpAuthSessionSummary }>(
+        `/api/mcp/connections/${connectionId}/auth-sessions`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ mode: 'manual_browser' }),
+        },
+      );
+    },
+    getAuthSession(id: string) {
+      return request<{ authSession: McpAuthSessionSummary }>(`/api/mcp/auth-sessions/${id}`);
+    },
+    completeAuthSession(id: string, persistAsDefault = true) {
+      return request<{
+        authSession: McpAuthSessionSummary;
+        connection: McpConnectionSummary;
+      }>(`/api/mcp/auth-sessions/${id}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ persistAsDefault }),
       });
     },
   },

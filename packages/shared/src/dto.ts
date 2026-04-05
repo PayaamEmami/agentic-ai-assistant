@@ -163,6 +163,9 @@ export const ConnectorKindDto = z.enum([
 ]);
 export type ConnectorKindDto = z.infer<typeof ConnectorKindDto>;
 
+export const McpIntegrationKindDto = z.enum(['playwright']);
+export type McpIntegrationKindDto = z.infer<typeof McpIntegrationKindDto>;
+
 export const MemoryKindDto = z.enum([
   'fact',
   'preference',
@@ -238,6 +241,97 @@ export const ConnectorDisconnectResponse = z.object({
   ok: z.literal(true),
 });
 export type ConnectorDisconnectResponse = z.infer<typeof ConnectorDisconnectResponse>;
+
+export const McpConnectionStatusDto = z.enum(['pending', 'connected', 'failed']);
+export type McpConnectionStatusDto = z.infer<typeof McpConnectionStatusDto>;
+
+export const McpAuthSessionStatusDto = z.enum([
+  'pending',
+  'active',
+  'completed',
+  'failed',
+  'expired',
+]);
+export type McpAuthSessionStatusDto = z.infer<typeof McpAuthSessionStatusDto>;
+
+export const McpCatalogEntryDto = z.object({
+  kind: McpIntegrationKindDto,
+  displayName: z.string(),
+  description: z.string(),
+  supportsMultipleInstances: z.boolean(),
+  requiresDefaultActive: z.boolean(),
+  authModes: z.array(z.enum(['manual_browser', 'stored_secret'])),
+});
+export type McpCatalogEntryDto = z.infer<typeof McpCatalogEntryDto>;
+
+export const McpCatalogResponse = z.object({
+  integrations: z.array(McpCatalogEntryDto),
+});
+export type McpCatalogResponse = z.infer<typeof McpCatalogResponse>;
+
+export const McpConnectionSummaryDto = z.object({
+  id: z.string().uuid(),
+  integrationKind: McpIntegrationKindDto,
+  instanceLabel: z.string(),
+  status: McpConnectionStatusDto,
+  hasCredentials: z.boolean(),
+  lastError: z.string().nullable(),
+  isDefaultActive: z.boolean(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type McpConnectionSummaryDto = z.infer<typeof McpConnectionSummaryDto>;
+
+export const McpConnectionListResponse = z.object({
+  connections: z.array(McpConnectionSummaryDto),
+});
+export type McpConnectionListResponse = z.infer<typeof McpConnectionListResponse>;
+
+export const McpConnectionCreateRequest = z.object({
+  integrationKind: McpIntegrationKindDto,
+  instanceLabel: z.string().trim().min(1).max(120),
+  authMode: z.enum(['manual_browser', 'stored_secret']).optional(),
+  secretProfile: z.record(z.unknown()).optional(),
+});
+export type McpConnectionCreateRequest = z.infer<typeof McpConnectionCreateRequest>;
+
+export const McpConnectionCreateResponse = z.object({
+  connection: McpConnectionSummaryDto,
+});
+export type McpConnectionCreateResponse = z.infer<typeof McpConnectionCreateResponse>;
+
+export const McpConnectionDefaultResponse = z.object({
+  ok: z.literal(true),
+  connection: McpConnectionSummaryDto,
+});
+export type McpConnectionDefaultResponse = z.infer<typeof McpConnectionDefaultResponse>;
+
+export const McpAuthSessionDto = z.object({
+  id: z.string().uuid(),
+  mcpConnectionId: z.string().uuid(),
+  status: McpAuthSessionStatusDto,
+  metadata: z.record(z.unknown()),
+  expiresAt: z.string().datetime(),
+  completedAt: z.string().datetime().nullable(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+});
+export type McpAuthSessionDto = z.infer<typeof McpAuthSessionDto>;
+
+export const McpAuthSessionResponse = z.object({
+  authSession: McpAuthSessionDto,
+});
+export type McpAuthSessionResponse = z.infer<typeof McpAuthSessionResponse>;
+
+export const McpAuthSessionCreateRequest = z.object({
+  mode: z.enum(['manual_browser']).default('manual_browser'),
+});
+export type McpAuthSessionCreateRequest = z.infer<typeof McpAuthSessionCreateRequest>;
+
+export const McpAuthSessionCompleteRequest = z.object({
+  persistAsDefault: z.boolean().optional(),
+});
+export type McpAuthSessionCompleteRequest = z.infer<typeof McpAuthSessionCompleteRequest>;
 
 export const GitHubRepositoryDto = z.object({
   id: z.number().int(),

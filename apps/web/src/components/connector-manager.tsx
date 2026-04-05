@@ -7,6 +7,9 @@ import {
   type ConnectorSyncRunSummary,
   type ConnectorSummary,
   type GitHubRepositorySummary,
+  type McpAuthSessionSummary,
+  type McpCatalogEntrySummary,
+  type McpConnectionSummary,
 } from '@/lib/api-client';
 import { reportClientError } from '@/lib/client-logging';
 
@@ -111,9 +114,23 @@ function isToolConnector(kind: ConnectorSummary['kind']): boolean {
   return kind === 'github_tools' || kind === 'google_drive_tools';
 }
 
+function mcpIntegrationLabel(kind: McpConnectionSummary['integrationKind']): string {
+  switch (kind) {
+    case 'playwright':
+      return 'Playwright Browser';
+    default:
+      return kind;
+  }
+}
+
 export function ConnectorManager() {
   const searchParams = useSearchParams();
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
+  const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntrySummary[]>([]);
+  const [mcpConnections, setMcpConnections] = useState<McpConnectionSummary[]>([]);
+  const [mcpAuthSessionsByConnection, setMcpAuthSessionsByConnection] = useState<
+    Record<string, McpAuthSessionSummary>
+  >({});
   const [githubRepos, setGitHubRepos] = useState<GitHubRepositorySummary[]>([]);
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [loading, setLoading] = useState(true);
@@ -144,8 +161,15 @@ export function ConnectorManager() {
     }
 
     try {
-      const response = await api.connectors.list();
+      const [connectorResponse, mcpCatalogResponse, mcpConnectionsResponse] = await Promise.all([
+        api.connectors.list(),
+        api.mcp.catalog(),
+        api.mcp.listConnections(),
+      ]);
+      const response = connectorResponse;
       setConnectors(response.connectors);
+      setMcpCatalog(mcpCatalogResponse.integrations);
+      setMcpConnections(mcpConnectionsResponse.connections);
 
       const github = response.connectors.find((connector) => connector.kind === 'github');
       if (github?.status === 'connected') {
@@ -223,6 +247,33 @@ export function ConnectorManager() {
 
     return () => window.clearInterval(interval);
   }, [load]);
+
+  useEffect(() => {
+    const activeSessions = Object.values(mcpAuthSessionsByConnection).filter(
+      (session) => session.status === 'active' || session.status === 'pending',
+    );
+    if (activeSessions.length === 0) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void Promise.all(
+        activeSessions.map(async (session) => {
+          try {
+            const response = await api.mcp.getAuthSession(session.id);
+            setMcpAuthSessionsByConnection((previous) => ({
+              ...previous,
+              [response.authSession.mcpConnectionId]: response.authSession,
+            }));
+          } catch {
+            // Ignore background polling failures; explicit actions surface them.
+          }
+        }),
+      );
+    }, 5000);
+
+    return () => window.clearInterval(interval);
+  }, [mcpAuthSessionsByConnection]);
 
   const startConnection = async (
     kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools',
@@ -318,6 +369,143 @@ export function ConnectorManager() {
       setActionError(error instanceof Error ? error.message : 'Failed to disconnect connector');
     } finally {
       setDisconnectingKind(null);
+    }
+  };
+
+  const createMcpConnection = async (catalogEntry: McpCatalogEntrySummary) => {
+    const instanceLabel = window.prompt(
+      `Name this ${catalogEntry.displayName} instance`,
+      `${catalogEntry.displayName} ${mcpConnections.filter((connection) => connection.integrationKind === catalogEntry.kind).length + 1}`,
+    );
+    if (!instanceLabel || !instanceLabel.trim()) {
+      return;
+    }
+
+    const secretProfileInput = window.prompt(
+      'Optional: paste a JSON secret profile for stored-secret login. Leave blank to create a manual sign-in connection.',
+      '',
+    );
+
+    let secretProfile: Record<string, unknown> | undefined;
+    if (secretProfileInput && secretProfileInput.trim()) {
+      try {
+        const parsed = JSON.parse(secretProfileInput) as unknown;
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+          throw new Error('Secret profile must be a JSON object');
+        }
+        secretProfile = parsed as Record<string, unknown>;
+      } catch (error) {
+        setActionError(error instanceof Error ? error.message : 'Invalid secret profile JSON');
+        return;
+      }
+    }
+
+    setActionError(null);
+    try {
+      await api.mcp.createConnection({
+        integrationKind: catalogEntry.kind,
+        instanceLabel: instanceLabel.trim(),
+        authMode: secretProfile ? 'stored_secret' : 'manual_browser',
+        secretProfile,
+      });
+      await load(false);
+    } catch (error) {
+      void reportClientError({
+        event: 'client.mcp.create_failed',
+        component: 'connector-manager',
+        message: `Failed to create ${catalogEntry.kind} MCP connection`,
+        error,
+      });
+      setActionError(error instanceof Error ? error.message : 'Failed to create MCP connection');
+    }
+  };
+
+  const startMcpAuthSession = async (connection: McpConnectionSummary) => {
+    setActionError(null);
+    try {
+      const response = await api.mcp.startAuthSession(connection.id);
+      setMcpAuthSessionsByConnection((previous) => ({
+        ...previous,
+        [connection.id]: response.authSession,
+      }));
+      const instructions =
+        typeof response.authSession.metadata['instructions'] === 'string'
+          ? response.authSession.metadata['instructions']
+          : 'A local browser window has been opened for sign-in.';
+      window.alert(instructions);
+      await load(false);
+    } catch (error) {
+      void reportClientError({
+        event: 'client.mcp.auth_session_start_failed',
+        component: 'connector-manager',
+        message: `Failed to start auth session for ${connection.id}`,
+        error,
+      });
+      setActionError(error instanceof Error ? error.message : 'Failed to start auth session');
+    }
+  };
+
+  const completeMcpAuthSession = async (connectionId: string, authSessionId: string) => {
+    setActionError(null);
+    try {
+      const response = await api.mcp.completeAuthSession(authSessionId, true);
+      setMcpAuthSessionsByConnection((previous) => ({
+        ...previous,
+        [connectionId]: response.authSession,
+      }));
+      await load(false);
+    } catch (error) {
+      void reportClientError({
+        event: 'client.mcp.auth_session_complete_failed',
+        component: 'connector-manager',
+        message: `Failed to complete auth session ${authSessionId}`,
+        error,
+      });
+      setActionError(error instanceof Error ? error.message : 'Failed to save browser session');
+    }
+  };
+
+  const setDefaultMcpConnection = async (connectionId: string) => {
+    setActionError(null);
+    try {
+      await api.mcp.setDefaultConnection(connectionId);
+      await load(false);
+    } catch (error) {
+      void reportClientError({
+        event: 'client.mcp.set_default_failed',
+        component: 'connector-manager',
+        message: `Failed to set default MCP connection ${connectionId}`,
+        error,
+      });
+      setActionError(error instanceof Error ? error.message : 'Failed to set default browser');
+    }
+  };
+
+  const deleteMcpConnection = async (connection: McpConnectionSummary) => {
+    const confirmed = window.confirm(
+      `Remove the ${mcpIntegrationLabel(connection.integrationKind)} instance "${connection.instanceLabel}"?`,
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setActionError(null);
+    try {
+      await api.mcp.deleteConnection(connection.id);
+      setMcpAuthSessionsByConnection((previous) => {
+        const next = { ...previous };
+        delete next[connection.id];
+        return next;
+      });
+      await load(false);
+    } catch (error) {
+      void reportClientError({
+        event: 'client.mcp.delete_failed',
+        component: 'connector-manager',
+        message: `Failed to delete MCP connection ${connection.id}`,
+        error,
+      });
+      setActionError(error instanceof Error ? error.message : 'Failed to remove browser');
     }
   };
 
@@ -637,6 +825,130 @@ export function ConnectorManager() {
               </section>
             ),
           )}
+          {mcpCatalog.length > 0 ? (
+            <section className="space-y-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
+                  MCP Integrations
+                </p>
+                <p className="mt-1 text-sm text-foreground-muted">
+                  These per-user integrations expose runtime tools directly to chat. Playwright is
+                  the first built-in MCP and can persist browser sign-in state for later tool runs.
+                </p>
+              </div>
+              <div className="space-y-3">
+                {mcpCatalog.map((catalogEntry) => {
+                  const connectionsForKind = mcpConnections.filter(
+                    (connection) => connection.integrationKind === catalogEntry.kind,
+                  );
+                  return (
+                    <div
+                      key={catalogEntry.kind}
+                      className="rounded-xl border border-border bg-surface-overlay p-3"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">
+                            {catalogEntry.displayName}
+                          </p>
+                          <p className="mt-1 text-xs text-foreground-muted">
+                            {catalogEntry.description}
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => void createMcpConnection(catalogEntry)}
+                          className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
+                        >
+                          Add instance
+                        </button>
+                      </div>
+                      <div className="mt-3 space-y-3">
+                        {connectionsForKind.length === 0 ? (
+                          <p className="text-xs text-foreground-muted">
+                            No instances configured yet.
+                          </p>
+                        ) : (
+                          connectionsForKind.map((connection) => {
+                            const authSession = mcpAuthSessionsByConnection[connection.id];
+                            return (
+                              <div
+                                key={connection.id}
+                                className="rounded-lg border border-border px-3 py-3 text-xs"
+                              >
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <p className="font-medium text-foreground">
+                                      {connection.instanceLabel}
+                                    </p>
+                                    <p className="mt-1 text-foreground-muted">
+                                      {connection.status === 'connected'
+                                        ? 'Ready for chat tool use'
+                                        : connection.status === 'failed'
+                                          ? 'Needs attention'
+                                          : 'Waiting for sign-in or credentials'}
+                                      {connection.isDefaultActive ? ' | Default active' : ''}
+                                    </p>
+                                    {connection.lastError ? (
+                                      <p className="mt-2 text-error">{connection.lastError}</p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex flex-wrap justify-end gap-2">
+                                    {!connection.isDefaultActive ? (
+                                      <button
+                                        onClick={() => void setDefaultMcpConnection(connection.id)}
+                                        className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+                                      >
+                                        Make default
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      onClick={() => void startMcpAuthSession(connection)}
+                                      className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+                                    >
+                                      Launch sign-in
+                                    </button>
+                                    <button
+                                      onClick={() => void deleteMcpConnection(connection)}
+                                      className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error"
+                                    >
+                                      Remove
+                                    </button>
+                                  </div>
+                                </div>
+                                {authSession ? (
+                                  <div className="mt-3 rounded-lg bg-surface px-3 py-2 text-xs text-foreground-muted">
+                                    <p className="font-medium text-foreground">
+                                      Auth session: {authSession.status}
+                                    </p>
+                                    {typeof authSession.metadata['instructions'] === 'string' ? (
+                                      <p className="mt-1">{authSession.metadata['instructions']}</p>
+                                    ) : null}
+                                    <p className="mt-1">
+                                      Expires {formatRunTimestamp(authSession.expiresAt)}
+                                    </p>
+                                    {authSession.status === 'active' ? (
+                                      <button
+                                        onClick={() =>
+                                          void completeMcpAuthSession(connection.id, authSession.id)
+                                        }
+                                        className="mt-2 rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover"
+                                      >
+                                        Save session
+                                      </button>
+                                    ) : null}
+                                  </div>
+                                ) : null}
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
         </>
       )}
     </div>

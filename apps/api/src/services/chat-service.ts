@@ -14,12 +14,18 @@ import {
   attachmentRepository,
   connectorConfigRepository,
   conversationRepository,
+  mcpConnectionRepository,
   getPool,
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
+import { decryptConnectorCredentials } from '@aaa/connectors';
 import { getLogContext } from '@aaa/observability';
-import { getConfiguredToolRegistry, type UnifiedToolDescriptor } from '@aaa/mcp';
+import {
+  getMcpRuntime,
+  type RuntimeMcpConnection,
+  type UnifiedToolDescriptor,
+} from '@aaa/mcp';
 import {
   NATIVE_TOOL_DEFINITIONS,
   type ApprovalRequestedEvent,
@@ -65,6 +71,9 @@ type AvailableTool = {
   parameters: Record<string, unknown>;
   requiresApproval: boolean;
   origin: 'native' | 'mcp';
+  mcpConnectionId?: string;
+  integrationKind?: string;
+  instanceLabel?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -199,6 +208,7 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
   const repoSuffix = repo ? ` in ${repo}` : '';
   const pullNumber = getNumberField(input, 'pullNumber');
   const pullSuffix = pullNumber !== null ? ` for PR #${pullNumber}` : '';
+  const instanceSuffix = tool.instanceLabel ? ` using ${tool.instanceLabel}` : '';
 
   switch (tool.name) {
     case 'external.execute': {
@@ -257,6 +267,32 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
     }
     case 'google_docs.batch_update_document':
       return 'Allow updating this Google Doc';
+    case 'playwright.navigate':
+      return `Allow navigating the browser${instanceSuffix}`;
+    case 'playwright.extract_text':
+      return `Allow reading page text${instanceSuffix}`;
+    case 'playwright.screenshot':
+      return `Allow capturing a screenshot${instanceSuffix}`;
+    case 'playwright.click': {
+      const selector = getStringField(input, 'selector');
+      return selector
+        ? `Allow clicking "${selector}"${instanceSuffix}`
+        : `Allow clicking in the browser${instanceSuffix}`;
+    }
+    case 'playwright.fill': {
+      const selector = getStringField(input, 'selector');
+      return selector
+        ? `Allow filling "${selector}"${instanceSuffix}`
+        : `Allow filling a browser input${instanceSuffix}`;
+    }
+    case 'playwright.submit_form':
+      return `Allow submitting a browser form${instanceSuffix}`;
+    case 'playwright.login_with_profile': {
+      const profileName = getStringField(input, 'profileName');
+      return profileName
+        ? `Allow browser login with profile "${profileName}"${instanceSuffix}`
+        : `Allow browser login${instanceSuffix}`;
+    }
     default:
       return `Allow ${tool.description.charAt(0).toLowerCase()}${tool.description.slice(1)}`;
   }
@@ -508,15 +544,50 @@ function normalizeAssistantResponse(
   return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_EXECUTION_RESPONSE;
 }
 
-async function loadAvailableTools(): Promise<AvailableTool[]> {
+function toRuntimeMcpConnection(connection: Awaited<ReturnType<typeof mcpConnectionRepository.listConnectedByUser>>[number]): RuntimeMcpConnection {
+  return {
+    id: connection.id,
+    userId: connection.userId,
+    integrationKind: connection.integrationKind as RuntimeMcpConnection['integrationKind'],
+    instanceLabel: connection.instanceLabel,
+    status: connection.status,
+    settings: connection.settings,
+    credentials: decryptConnectorCredentials(connection.encryptedCredentials),
+  };
+}
+
+async function loadAvailableTools(userId: string, requestContent: string): Promise<AvailableTool[]> {
   const tools = [...toNativeAvailableTools()];
 
   try {
-    const registry = await getConfiguredToolRegistry();
-    const mcpTools = registry.listTools().map<AvailableTool>((tool) => toAvailableTool(tool));
+    const runtime = getMcpRuntime();
+    const connectedMcpConnections = await mcpConnectionRepository.listConnectedByUser(userId);
+    const requestContentLower = requestContent.toLowerCase();
+    const byKind = new Map<string, typeof connectedMcpConnections>();
+
+    for (const connection of connectedMcpConnections) {
+      const existing = byKind.get(connection.integrationKind) ?? [];
+      existing.push(connection);
+      byKind.set(connection.integrationKind, existing);
+    }
+
+    const selectedConnections: RuntimeMcpConnection[] = [];
+    for (const connections of byKind.values()) {
+      const explicit = connections.find((connection) =>
+        requestContentLower.includes(connection.instanceLabel.toLowerCase()),
+      );
+      const selected = explicit ?? connections.find((connection) => connection.isDefaultActive) ?? connections[0];
+      if (selected) {
+        selectedConnections.push(toRuntimeMcpConnection(selected));
+      }
+    }
+
+    const mcpTools = runtime
+      .listTools(selectedConnections)
+      .map<AvailableTool>((tool) => toAvailableTool(tool));
     tools.push(...mcpTools);
   } catch {
-    // Fall back to native tools only if MCP config is unavailable or startup fails.
+    // Fall back to native tools only if MCP loading fails.
   }
 
   return tools;
@@ -529,6 +600,9 @@ function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
     parameters: tool.parameters,
     requiresApproval: tool.requiresApproval,
     origin: tool.origin,
+    mcpConnectionId: tool.mcpConnectionId,
+    integrationKind: tool.integrationKind,
+    instanceLabel: tool.instanceLabel,
   };
 }
 
@@ -744,9 +818,13 @@ export class ChatService {
       const activeConnectors = (await connectorConfigRepository.listByUser(userId))
         .filter((connector) => connector.status === 'connected')
         .map((connector) => connectorLabel(connector.kind));
+      const activeMcpConnections = (await mcpConnectionRepository.listConnectedByUser(userId)).map(
+        (connection) => `MCP ${connection.integrationKind}: ${connection.instanceLabel}`,
+      );
+      activeConnectors.push(...activeMcpConnections);
       throwIfAborted(signal);
 
-      const availableTools = await loadAvailableTools();
+      const availableTools = await loadAvailableTools(userId, content);
       throwIfAborted(signal);
 
       let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
@@ -813,6 +891,8 @@ export class ChatService {
           toolCall.name,
           toolInput,
           tool.origin,
+          tool.mcpConnectionId ?? null,
+          tool.integrationKind ?? null,
         );
         toolExecutionIds.push(toolExecution.id);
 

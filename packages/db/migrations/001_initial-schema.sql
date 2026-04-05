@@ -69,6 +69,32 @@ CREATE TABLE connector_sync_runs (
   completed_at TIMESTAMPTZ
 );
 
+CREATE TABLE mcp_connections (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  integration_kind TEXT NOT NULL,
+  instance_label TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  encrypted_credentials TEXT NOT NULL,
+  settings JSONB NOT NULL DEFAULT '{}',
+  last_error TEXT,
+  is_default_active BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE(user_id, integration_kind, instance_label)
+);
+
+CREATE TABLE mcp_auth_sessions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  mcp_connection_id UUID NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'pending',
+  metadata JSONB NOT NULL DEFAULT '{}',
+  expires_at TIMESTAMPTZ NOT NULL,
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
@@ -122,6 +148,8 @@ CREATE TABLE tool_executions (
   output JSONB,
   status TEXT NOT NULL DEFAULT 'pending',
   origin TEXT NOT NULL DEFAULT 'native',
+  mcp_connection_id UUID REFERENCES mcp_connections(id) ON DELETE SET NULL,
+  integration_kind TEXT,
   approval_id UUID,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ
@@ -179,3 +207,8 @@ CREATE UNIQUE INDEX idx_documents_source_unique
 CREATE INDEX idx_connector_configs_user ON connector_configs(user_id);
 CREATE INDEX idx_connector_sync_runs_user_kind_started
   ON connector_sync_runs(user_id, connector_kind, started_at DESC);
+CREATE INDEX idx_mcp_connections_user ON mcp_connections(user_id);
+CREATE INDEX idx_mcp_auth_sessions_connection ON mcp_auth_sessions(mcp_connection_id, created_at DESC);
+CREATE UNIQUE INDEX idx_mcp_connections_default_active
+  ON mcp_connections(user_id, integration_kind)
+  WHERE is_default_active = TRUE;

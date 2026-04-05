@@ -10,6 +10,8 @@ interface ToolExecutionRow {
   output: unknown | null;
   status: string;
   origin: string;
+  mcpConnectionId: string | null;
+  integrationKind: string | null;
   approvalId: string | null;
   startedAt: Date;
   completedAt: Date | null;
@@ -26,6 +28,8 @@ export interface ToolExecutionRepository {
     toolName: string,
     input: unknown,
     origin: string,
+    mcpConnectionId?: string | null,
+    integrationKind?: string | null,
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
   setApproval(id: string, approvalId: string): Promise<void>;
@@ -38,7 +42,8 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
       `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, approval_id AS "approvalId", started_at AS "startedAt",
+              input, output, status, origin, mcp_connection_id AS "mcpConnectionId",
+              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
               completed_at AS "completedAt"
        FROM tool_executions
        WHERE id = $1`,
@@ -55,7 +60,8 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
       `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, approval_id AS "approvalId", started_at AS "startedAt",
+              input, output, status, origin, mcp_connection_id AS "mcpConnectionId",
+              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
               completed_at AS "completedAt"
        FROM tool_executions
        WHERE conversation_id = $1
@@ -72,16 +78,30 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     toolName: string,
     input: unknown,
     origin: string,
+    mcpConnectionId: string | null = null,
+    integrationKind: string | null = null,
   ): Promise<ToolExecution> {
     const pool = getPool();
     const id = crypto.randomUUID();
     const result = await pool.query<ToolExecutionRow>(
-      `INSERT INTO tool_executions (id, conversation_id, message_id, tool_name, input, origin)
-       VALUES ($1, $2, $3, $4, $5, $6)
+      `INSERT INTO tool_executions (
+         id, conversation_id, message_id, tool_name, input, origin, mcp_connection_id, integration_kind
+       )
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-                 input, output, status, origin, approval_id AS "approvalId", started_at AS "startedAt",
+                 input, output, status, origin, mcp_connection_id AS "mcpConnectionId",
+                 integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
                  completed_at AS "completedAt"`,
-      [id, conversationId, messageId, toolName, JSON.stringify(input), origin],
+      [
+        id,
+        conversationId,
+        messageId,
+        toolName,
+        JSON.stringify(input),
+        origin,
+        mcpConnectionId,
+        integrationKind,
+      ],
     );
     return result.rows[0]!;
   },
@@ -133,7 +153,8 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
       `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, approval_id AS "approvalId", started_at AS "startedAt",
+              input, output, status, origin, mcp_connection_id AS "mcpConnectionId",
+              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
               completed_at AS "completedAt"
        FROM tool_executions
        WHERE conversation_id = $1 AND status = 'requires_approval'

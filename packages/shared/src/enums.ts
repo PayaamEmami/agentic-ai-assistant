@@ -47,6 +47,11 @@ export const ConnectorKind = {
 } as const;
 export type ConnectorKind = (typeof ConnectorKind)[keyof typeof ConnectorKind];
 
+export const McpIntegrationKind = {
+  Playwright: 'playwright',
+} as const;
+export type McpIntegrationKind = (typeof McpIntegrationKind)[keyof typeof McpIntegrationKind];
+
 export const MemoryKind = {
   Fact: 'fact',
   Preference: 'preference',

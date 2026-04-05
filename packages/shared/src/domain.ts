@@ -5,6 +5,7 @@ import type {
   ToolExecutionStatus,
   SourceKind,
   ConnectorKind,
+  McpIntegrationKind,
   MemoryKind,
   AgentRole,
 } from './enums.js';
@@ -110,6 +111,9 @@ export interface ToolDescriptor {
   parameters: Record<string, unknown>;
   origin: 'native' | 'mcp';
   mcpServerId?: string;
+  mcpConnectionId?: string;
+  integrationKind?: McpIntegrationKind;
+  instanceLabel?: string;
   requiresApproval: boolean;
 }
 
@@ -122,6 +126,8 @@ export interface ToolExecution {
   output: unknown | null;
   status: ToolExecutionStatus;
   origin: 'native' | 'mcp';
+  mcpConnectionId: string | null;
+  integrationKind: McpIntegrationKind | null;
   approvalId: string | null;
   startedAt: Date;
   completedAt: Date | null;
@@ -195,6 +201,31 @@ export interface ConnectorConfig {
   lastSyncAt: Date | null;
   lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
   lastError: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface McpConnection {
+  id: string;
+  userId: string;
+  integrationKind: McpIntegrationKind;
+  instanceLabel: string;
+  status: 'pending' | 'connected' | 'failed';
+  encryptedCredentials: string;
+  settings: Record<string, unknown>;
+  lastError: string | null;
+  isDefaultActive: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface McpAuthSession {
+  id: string;
+  mcpConnectionId: string;
+  status: 'pending' | 'active' | 'completed' | 'failed' | 'expired';
+  metadata: Record<string, unknown>;
+  expiresAt: Date;
+  completedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
