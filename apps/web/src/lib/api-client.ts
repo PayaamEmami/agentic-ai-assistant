@@ -229,6 +229,12 @@ export interface McpBrowserSessionSummary {
   updatedAt: string;
 }
 
+export interface BrowserSessionListFilters {
+  conversationId?: string;
+  includeEnded?: boolean;
+  limit?: number;
+}
+
 export type PersonalizationMemoryKind =
   | 'fact'
   | 'preference'
@@ -459,8 +465,21 @@ export const api = {
         method: 'DELETE',
       });
     },
-    listBrowserSessions() {
-      return request<{ sessions: McpBrowserSessionSummary[] }>('/api/mcp/browser-sessions');
+    listBrowserSessions(filters?: BrowserSessionListFilters) {
+      const params = new URLSearchParams();
+      if (filters?.conversationId) {
+        params.set('conversationId', filters.conversationId);
+      }
+      if (filters?.includeEnded) {
+        params.set('includeEnded', 'true');
+      }
+      if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit)) {
+        params.set('limit', String(filters.limit));
+      }
+      const search = params.toString();
+      return request<{ sessions: McpBrowserSessionSummary[] }>(
+        `/api/mcp/browser-sessions${search ? `?${search}` : ''}`,
+      );
     },
     createBrowserSession(
       connectionId: string,

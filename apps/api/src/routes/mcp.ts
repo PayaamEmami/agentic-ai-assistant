@@ -75,8 +75,27 @@ export async function mcpRoutes(app: FastifyInstance) {
     },
   );
 
-  app.get('/mcp/browser-sessions', { preHandler: authenticate }, async (request, reply) => {
-    const sessions = await mcpService.listBrowserSessions(request.user!.id);
+  app.get<{
+    Querystring: {
+      conversationId?: string;
+      includeEnded?: string;
+      limit?: string;
+    };
+  }>('/mcp/browser-sessions', { preHandler: authenticate }, async (request, reply) => {
+    const rawLimit =
+      typeof request.query.limit === 'string' ? Number.parseInt(request.query.limit, 10) : null;
+    const sessions = await mcpService.listBrowserSessionsByFilter(request.user!.id, {
+      conversationId:
+        typeof request.query.conversationId === 'string' &&
+        request.query.conversationId.trim().length > 0
+          ? request.query.conversationId.trim()
+          : undefined,
+      includeEnded: request.query.includeEnded === 'true',
+      limit:
+        rawLimit && Number.isFinite(rawLimit) && rawLimit > 0
+          ? Math.min(rawLimit, 50)
+          : undefined,
+    });
     return reply.status(200).send({ sessions });
   });
 

@@ -172,7 +172,26 @@ export class McpService {
   }
 
   async listBrowserSessions(userId: string) {
-    const sessions = await mcpBrowserSessionRepository.listActiveByUser(userId);
+    const sessions = await mcpBrowserSessionRepository.listByUser(userId, {
+      includeEnded: false,
+      limit: 20,
+    });
+    return sessions.map(toBrowserSessionDto);
+  }
+
+  async listBrowserSessionsByFilter(
+    userId: string,
+    input?: {
+      conversationId?: string;
+      includeEnded?: boolean;
+      limit?: number;
+    },
+  ) {
+    const sessions = await mcpBrowserSessionRepository.listByUser(userId, {
+      conversationId: input?.conversationId,
+      includeEnded: input?.includeEnded ?? false,
+      limit: input?.limit ?? 20,
+    });
     return sessions.map(toBrowserSessionDto);
   }
 

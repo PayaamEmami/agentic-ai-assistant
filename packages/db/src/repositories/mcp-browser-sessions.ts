@@ -38,6 +38,14 @@ export interface McpBrowserSessionRepository {
   }): Promise<McpBrowserSession>;
   findById(id: string): Promise<McpBrowserSession | null>;
   findActiveByConnection(mcpConnectionId: string): Promise<McpBrowserSession | null>;
+  listByUser(
+    userId: string,
+    input?: {
+      conversationId?: string;
+      includeEnded?: boolean;
+      limit?: number;
+    },
+  ): Promise<McpBrowserSession[]>;
   listActiveByUser(userId: string): Promise<McpBrowserSession[]>;
   markActiveAsCrashed(): Promise<number>;
   update(
@@ -130,8 +138,12 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
 
-  async listActiveByUser(userId): Promise<McpBrowserSession[]> {
+  async listByUser(
+    userId,
+    input = {},
+  ): Promise<McpBrowserSession[]> {
     const pool = getPool();
+    const limit = input.limit ?? 20;
     const result = await pool.query<McpBrowserSessionRow>(
       `SELECT id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
               purpose, status, conversation_id AS "conversationId",
@@ -140,11 +152,23 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
               expires_at AS "expiresAt", ended_at AS "endedAt",
               created_at AS "createdAt", updated_at AS "updatedAt"
        FROM mcp_browser_sessions
-       WHERE user_id = $1 AND status IN ('pending', 'active')
-       ORDER BY updated_at DESC`,
-      [userId],
+       WHERE user_id = $1
+         AND ($2::uuid IS NULL OR conversation_id = $2)
+         AND ($3::boolean OR status IN ('pending', 'active'))
+       ORDER BY updated_at DESC, created_at DESC
+       LIMIT $4`,
+      [
+        userId,
+        input.conversationId ?? null,
+        input.includeEnded ?? false,
+        limit,
+      ],
     );
     return result.rows.map(mapRow);
+  },
+
+  async listActiveByUser(userId): Promise<McpBrowserSession[]> {
+    return mcpBrowserSessionRepository.listByUser(userId, { includeEnded: false, limit: 20 });
   },
 
   async markActiveAsCrashed(): Promise<number> {

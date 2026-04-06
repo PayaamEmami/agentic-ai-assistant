@@ -443,7 +443,7 @@ export function ConnectorManager() {
         ...previous,
         [connection.id]: response.session,
       }));
-      router.push(`/chat/browser/${response.session.id}`);
+      router.push(`/chat?browserSessionId=${response.session.id}`);
       await load(false);
     } catch (error) {
       void reportClientError({
@@ -917,11 +917,11 @@ export function ConnectorManager() {
                                     browserSession.status === 'pending' ? (
                                       <button
                                         onClick={() =>
-                                          router.push(`/chat/browser/${browserSession.id}`)
+                                          router.push(`/chat?browserSessionId=${browserSession.id}`)
                                         }
                                         className="mt-2 rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover"
                                       >
-                                        Reopen browser workspace
+                                        Reopen in chat
                                       </button>
                                     ) : null}
                                   </div>
