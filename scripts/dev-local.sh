@@ -40,6 +40,23 @@ wait_for_docker() {
   return 1
 }
 
+wait_for_postgres() {
+  local timeout="${1:-60}"
+  local elapsed=0
+
+  while (( elapsed < timeout )); do
+    if docker compose -f docker/docker-compose.yml exec -T postgres \
+      pg_isready -U "${POSTGRES_USER:-aaa}" -d "${POSTGRES_DB:-aaa}" >/dev/null 2>&1; then
+      return 0
+    fi
+
+    sleep 2
+    elapsed=$((elapsed + 2))
+  done
+
+  return 1
+}
+
 start_docker_engine() {
   if docker info >/dev/null 2>&1; then
     return 0
@@ -128,6 +145,12 @@ docker compose -f docker/docker-compose.yml up -d --remove-orphans \
   tempo \
   otel-collector \
   grafana
+
+echo "Waiting for PostgreSQL..."
+if ! wait_for_postgres "$DOCKER_START_TIMEOUT_SECONDS"; then
+  echo "PostgreSQL did not become ready within ${DOCKER_START_TIMEOUT_SECONDS}s."
+  exit 1
+fi
 
 echo "Running database migrations..."
 pnpm --filter @aaa/db migrate:up
