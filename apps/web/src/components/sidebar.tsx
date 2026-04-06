@@ -54,7 +54,7 @@ export function Sidebar({
   const [isConversationListCollapsed, setIsConversationListCollapsed] =
     useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
-  const isMemoryPage = pathname === '/chat/memory';
+  const isPersonalizationPage = pathname === '/chat/personalization';
   const isConnectorsPage = pathname === '/chat/connectors';
 
   useEffect(() => {
@@ -148,7 +148,9 @@ export function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col overflow-hidden border-r border-border bg-surface transition-transform duration-200 md:static md:z-20 md:translate-x-0 ${
+      className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:translate-x-0 ${
+        isAccountMenuOpen ? 'overflow-visible md:z-50' : 'overflow-hidden md:z-20'
+      } ${
         collapsed ? 'md:w-20' : 'md:w-72'
       } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
@@ -350,15 +352,15 @@ export function Sidebar({
           >
             <button
               type="button"
-              onClick={() => navigateTo('/chat/memory')}
+              onClick={() => navigateTo('/chat/personalization')}
               className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                isMemoryPage
+                isPersonalizationPage
                   ? 'bg-surface-accent text-foreground'
                   : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
               }`}
             >
-              <MemoryIcon />
-              Memory
+              <PersonalizationIcon />
+              Personalization
             </button>
             <button
               type="button"
@@ -422,7 +424,7 @@ function PlusIcon() {
   );
 }
 
-function MemoryIcon() {
+function PersonalizationIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 5H8a2 2 0 0 0-2 2v10" />

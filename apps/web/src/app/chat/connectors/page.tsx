@@ -7,10 +7,7 @@ export default function ConnectorsPage() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
           <section>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-              Workspace Data
-            </p>
-            <div className="mt-2 flex items-center justify-between gap-4">
+            <div className="flex items-center justify-between gap-4">
               <h1 className="text-3xl font-semibold text-foreground">Connectors</h1>
               <Link
                 href="/chat"
@@ -22,8 +19,7 @@ export default function ConnectorsPage() {
               </Link>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-              Manage connectors for both workspace knowledge and live tool access
-              without taking over the main chat screen.
+              Connect knowledge sources, tools, and environments for this workspace.
             </p>
           </section>
 

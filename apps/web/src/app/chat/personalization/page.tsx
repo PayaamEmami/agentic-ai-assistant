@@ -45,7 +45,7 @@ function sortMemories(memories: PersonalizationMemory[]) {
   });
 }
 
-export default function MemoryPage() {
+export default function PersonalizationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -220,24 +220,19 @@ export default function MemoryPage() {
       <div className="flex-1 overflow-y-auto p-6">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
           <section>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-              Personalization
-            </p>
-            <div className="mt-2 flex items-center justify-between gap-4">
-              <h1 className="text-3xl font-semibold text-foreground">Memory</h1>
+            <div className="flex items-center justify-between gap-4">
+              <h1 className="text-3xl font-semibold text-foreground">Personalization</h1>
               <Link
                 href="/chat"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle bg-surface text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground"
-                aria-label="Close memory"
+                aria-label="Close personalization"
                 title="Close"
               >
                 <CloseIcon />
               </Link>
             </div>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-              Manage the profile details and saved memories the assistant should
-              use when it responds to you. This version is manual-first and only
-              saves what you add here.
+              Manage profile details and memories for this workspace.
             </p>
           </section>
 
