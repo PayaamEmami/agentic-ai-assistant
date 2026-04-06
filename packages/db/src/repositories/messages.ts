@@ -19,6 +19,11 @@ export interface MessageRepository {
     status: string,
     output?: unknown,
   ): Promise<void>;
+  updateBrowserSessionBlock(
+    id: string,
+    browserSessionId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void>;
 }
 
 export const messageRepository: MessageRepository = {
@@ -94,6 +99,42 @@ export const messageRepository: MessageRepository = {
         }
 
         return nextBlock;
+      }
+
+      return block;
+    });
+
+    const pool = getPool();
+    await pool.query(
+      `UPDATE messages
+       SET content = $1
+       WHERE id = $2`,
+      [JSON.stringify(nextContent), id],
+    );
+  },
+
+  async updateBrowserSessionBlock(
+    id: string,
+    browserSessionId: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> {
+    const existing = await messageRepository.findById(id);
+    if (!existing) {
+      return;
+    }
+
+    const nextContent = existing.content.map((block) => {
+      if (
+        block &&
+        typeof block === 'object' &&
+        !Array.isArray(block) &&
+        (block as Record<string, unknown>).type === 'browser_session' &&
+        (block as Record<string, unknown>).browserSessionId === browserSessionId
+      ) {
+        return {
+          ...(block as Record<string, unknown>),
+          ...patch,
+        };
       }
 
       return block;

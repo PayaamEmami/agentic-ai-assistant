@@ -29,6 +29,7 @@ export type {
   TextContent,
   AttachmentRefContent,
   TranscriptContent,
+  BrowserSessionContent,
   ToolResultContent,
   CitationContent,
   Attachment,

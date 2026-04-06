@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type McpBrowserSessionSummary, api } from '@/lib/api-client';
 import { useChatContext } from '@/lib/chat-context';
@@ -37,7 +37,7 @@ function upsertBrowserSession(
 export function ChatWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentConversationId } = useChatContext();
+  const { currentConversationId, syncConversationState } = useChatContext();
   const [conversationSessions, setConversationSessions] = useState<McpBrowserSessionSummary[]>([]);
   const [standaloneSessions, setStandaloneSessions] = useState<McpBrowserSessionSummary[]>([]);
   const [explicitSessionSummary, setExplicitSessionSummary] =
@@ -194,6 +194,7 @@ export function ChatWorkspace() {
   ]);
 
   const activeSessionId = explicitSessionId ?? activeConversationSession?.id ?? null;
+  const previousConversationSessionSignatureRef = useRef<string | null>(null);
 
   const rememberSession = useCallback((session: McpBrowserSessionSummary) => {
     if (session.conversationId) {
@@ -287,10 +288,29 @@ export function ChatWorkspace() {
     collapseActiveSession(activeSessionSummary);
   }, [activeSessionSummary, collapseActiveSession]);
 
+  useEffect(() => {
+    if (!currentConversationId) {
+      previousConversationSessionSignatureRef.current = null;
+      return;
+    }
+
+    const signature = conversationSessions
+      .map((session) => `${session.id}:${session.status}:${session.updatedAt}`)
+      .join('|');
+
+    if (previousConversationSessionSignatureRef.current === null) {
+      previousConversationSessionSignatureRef.current = signature;
+      return;
+    }
+
+    if (previousConversationSessionSignatureRef.current !== signature) {
+      previousConversationSessionSignatureRef.current = signature;
+      void syncConversationState(currentConversationId);
+    }
+  }, [conversationSessions, currentConversationId, syncConversationState]);
+
   const sessionCards = useMemo(() => {
-    const cards = [...standaloneSessions, ...conversationSessions].filter(
-      (session) => session.id !== activeSessionId,
-    );
+    const cards = standaloneSessions.filter((session) => session.id !== activeSessionId);
     const deduped = cards.reduce<McpBrowserSessionSummary[]>((items, session) => {
       if (items.some((item) => item.id === session.id)) {
         return items.map((item) => (item.id === session.id ? session : item));
@@ -300,7 +320,7 @@ export function ChatWorkspace() {
     }, []);
 
     return sortBrowserSessions(deduped).slice(0, 4);
-  }, [activeSessionId, conversationSessions, standaloneSessions]);
+  }, [activeSessionId, standaloneSessions]);
 
   const mobileActiveCard = !isDesktopInline && activeSessionId && activeSessionSummary ? (
     <section className="border-t border-border bg-surface px-4 py-3">

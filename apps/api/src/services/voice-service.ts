@@ -26,6 +26,27 @@ function extractMessageText(content: unknown[]): string {
       typeof candidate.text === 'string'
     ) {
       textParts.push(candidate.text.trim());
+      continue;
+    }
+
+    if (candidate.type === 'browser_session') {
+      const purpose =
+        typeof (candidate as { purpose?: unknown }).purpose === 'string'
+          ? (candidate as { purpose: string }).purpose
+          : 'manual';
+      const status =
+        typeof (candidate as { status?: unknown }).status === 'string'
+          ? (candidate as { status: string }).status
+          : 'pending';
+      textParts.push(
+        `${
+          purpose === 'auth'
+            ? 'Browser sign-in session'
+            : purpose === 'tool_takeover'
+              ? 'Browser takeover session'
+              : 'Browser session'
+        } ${status}`.trim(),
+      );
     }
   }
 

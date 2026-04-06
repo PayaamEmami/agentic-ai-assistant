@@ -5,6 +5,8 @@ import {
   type MessageContentBlock,
   useChatContext,
 } from '@/lib/chat-context';
+import { useRouter } from 'next/navigation';
+import { BrowserSessionCard } from './browser-session-card';
 import { CitationCard } from './citation-card';
 
 interface MessageProps {
@@ -81,6 +83,7 @@ function getDisplayToolStatus(
 }
 
 export function Message({ role, content }: MessageProps) {
+  const router = useRouter();
   const {
     pendingApprovals,
     approvalStatusesByToolExecution,
@@ -197,6 +200,54 @@ export function Message({ role, content }: MessageProps) {
         <p key={index} className="text-xs italic text-foreground-muted">
           Transcript: {block.text}
         </p>
+      );
+    }
+
+    if (block.type === 'browser_session') {
+      const sessionStatus = block.status ?? 'pending';
+      const sessionPurpose = block.purpose ?? 'manual';
+      const browserSessionId = block.browserSessionId;
+      const isLive = sessionStatus === 'pending' || sessionStatus === 'active';
+
+      return (
+        <BrowserSessionCard
+          key={index}
+          session={{
+            purpose: sessionPurpose,
+            status: sessionStatus,
+            expiresAt: block.expiresAt ?? null,
+            endedAt: block.endedAt ?? null,
+            metadata: {},
+          }}
+          title={block.instanceLabel ?? 'Browser session'}
+          description={
+            sessionPurpose === 'auth'
+              ? 'Authentication browser linked to this conversation'
+              : sessionPurpose === 'tool_takeover'
+                ? 'Interactive browser handoff linked to this conversation'
+                : 'Interactive browser session linked to this conversation'
+          }
+          actions={
+            browserSessionId
+              ? [
+                  ...(isLive
+                    ? [
+                        {
+                          label: 'Open in chat',
+                          onClick: () =>
+                            router.push(`/chat?browserSessionId=${browserSessionId}`),
+                          tone: 'primary' as const,
+                        },
+                      ]
+                    : []),
+                  {
+                    label: 'Open full screen',
+                    onClick: () => router.push(`/chat/browser/${browserSessionId}`),
+                  },
+                ]
+              : []
+          }
+        />
       );
     }
 

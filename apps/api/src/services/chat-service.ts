@@ -113,6 +113,28 @@ function extractTextFromContent(content: unknown[]): string {
     const type = typeof block.type === 'string' ? block.type : null;
     if ((type === 'text' || type === 'transcript') && typeof block.text === 'string') {
       parts.push(block.text);
+      continue;
+    }
+
+    if (type === 'browser_session') {
+      const purpose = typeof block.purpose === 'string' ? block.purpose : 'manual';
+      const status = typeof block.status === 'string' ? block.status : 'pending';
+      const instanceLabel =
+        typeof block.instanceLabel === 'string' && block.instanceLabel.trim().length > 0
+          ? block.instanceLabel.trim()
+          : null;
+      const purposeLabel =
+        purpose === 'auth'
+          ? 'Browser sign-in session'
+          : purpose === 'tool_takeover'
+            ? 'Browser takeover session'
+            : 'Browser session';
+
+      parts.push(
+        instanceLabel
+          ? `${purposeLabel} on ${instanceLabel} is ${status}.`
+          : `${purposeLabel} is ${status}.`,
+      );
     }
   }
 

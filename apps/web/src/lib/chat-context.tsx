@@ -59,6 +59,24 @@ export interface TranscriptContentBlock {
   durationMs?: number;
 }
 
+export interface BrowserSessionContentBlock {
+  type: 'browser_session';
+  browserSessionId?: string;
+  mcpConnectionId?: string;
+  purpose?: 'auth' | 'manual' | 'tool_takeover';
+  status?:
+    | 'pending'
+    | 'active'
+    | 'completed'
+    | 'cancelled'
+    | 'failed'
+    | 'expired'
+    | 'crashed';
+  instanceLabel?: string;
+  expiresAt?: string | null;
+  endedAt?: string | null;
+}
+
 export interface StatusContentBlock {
   type: 'status';
   status: 'interrupted';
@@ -71,6 +89,7 @@ export type MessageContentBlock =
   | ToolResultContentBlock
   | CitationContentBlock
   | TranscriptContentBlock
+  | BrowserSessionContentBlock
   | StatusContentBlock;
 
 export interface ChatMessage {
@@ -280,6 +299,31 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
       type,
       text: asString(raw.text) ?? '',
       durationMs: typeof raw.durationMs === 'number' ? raw.durationMs : undefined,
+    };
+  }
+
+  if (type === 'browser_session') {
+    return {
+      type,
+      browserSessionId: asString(raw.browserSessionId),
+      mcpConnectionId: asString(raw.mcpConnectionId),
+      purpose:
+        raw.purpose === 'auth' || raw.purpose === 'manual' || raw.purpose === 'tool_takeover'
+          ? raw.purpose
+          : undefined,
+      status:
+        raw.status === 'pending' ||
+        raw.status === 'active' ||
+        raw.status === 'completed' ||
+        raw.status === 'cancelled' ||
+        raw.status === 'failed' ||
+        raw.status === 'expired' ||
+        raw.status === 'crashed'
+          ? raw.status
+          : undefined,
+      instanceLabel: asString(raw.instanceLabel),
+      expiresAt: asString(raw.expiresAt) ?? null,
+      endedAt: asString(raw.endedAt) ?? null,
     };
   }
 

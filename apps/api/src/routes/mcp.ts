@@ -1,4 +1,3 @@
-import crypto from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import {
   InternalPlaywrightExecuteRequest,
@@ -7,30 +6,19 @@ import {
   McpConnectionCreateRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { AppError } from '../lib/errors.js';
+import { assertInternalServiceSecret } from '../lib/internal-service.js';
 import { McpService } from '../services/mcp-service.js';
 import { internalPlaywrightRpcDurationMs } from '../lib/telemetry.js';
 
-function getInternalServiceSecret(): string {
-  return process.env['INTERNAL_SERVICE_SECRET'] ?? 'dev-internal-service-secret';
-}
-
 async function authenticateInternal(request: FastifyRequest): Promise<void> {
   const header = request.headers['x-internal-service-secret'];
-  const provided = typeof header === 'string' ? header : Array.isArray(header) ? header[0] : null;
-  if (!provided) {
-    throw new AppError(401, 'Internal authentication required', 'INTERNAL_AUTH_REQUIRED');
-  }
-
-  const expected = getInternalServiceSecret();
-  const providedBuffer = Buffer.from(provided);
-  const expectedBuffer = Buffer.from(expected);
-  if (
-    providedBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
-  ) {
-    throw new AppError(403, 'Internal authentication failed', 'INTERNAL_AUTH_INVALID');
-  }
+  const provided =
+    typeof header === 'string'
+      ? header
+      : Array.isArray(header)
+        ? (header[0] ?? null)
+        : null;
+  assertInternalServiceSecret(provided);
 }
 
 export async function mcpRoutes(app: FastifyInstance) {
@@ -153,6 +141,43 @@ export async function mcpRoutes(app: FastifyInstance) {
     { preHandler: authenticate },
     async (request, reply) => {
       const result = await mcpService.cancelBrowserSession(request.user!.id, request.params.id);
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.get<{ Params: { id: string } }>(
+    '/mcp/internal/browser-sessions/:id',
+    async (request, reply) => {
+      await authenticateInternal(request);
+      const result = await mcpService.getBrowserSessionInternal(request.params.id);
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/mcp/internal/browser-sessions/:id/persist',
+    async (request, reply) => {
+      await authenticateInternal(request);
+      const parsed = McpBrowserSessionPersistRequest.safeParse(request.body ?? {});
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
+
+      const result = await mcpService.persistBrowserSessionInternal(
+        request.params.id,
+        parsed.data,
+      );
+      return reply.status(200).send(result);
+    },
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/mcp/internal/browser-sessions/:id/cancel',
+    async (request, reply) => {
+      await authenticateInternal(request);
+      const result = await mcpService.cancelBrowserSessionInternal(request.params.id);
       return reply.status(200).send(result);
     },
   );

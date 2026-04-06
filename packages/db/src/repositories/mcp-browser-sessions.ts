@@ -5,12 +5,15 @@ interface McpBrowserSessionRow {
   id: string;
   userId: string;
   mcpConnectionId: string;
+  messageId: string | null;
   purpose: 'auth' | 'manual' | 'tool_takeover';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
   conversationId: string | null;
   toolExecutionId: string | null;
   selectedPageId: string | null;
   metadata: Record<string, unknown>;
+  ownerInstanceId: string | null;
+  ownerInstanceUrl: string | null;
   lastClientSeenAt: Date | null;
   lastFrameAt: Date | null;
   expiresAt: Date;
@@ -25,12 +28,15 @@ export interface McpBrowserSessionRepository {
   create(input: {
     userId: string;
     mcpConnectionId: string;
+    messageId?: string | null;
     purpose: McpBrowserSession['purpose'];
     conversationId?: string | null;
     toolExecutionId?: string | null;
     selectedPageId?: string | null;
     status?: McpBrowserSession['status'];
     metadata?: Record<string, unknown>;
+    ownerInstanceId?: string | null;
+    ownerInstanceUrl?: string | null;
     lastClientSeenAt?: Date | null;
     lastFrameAt?: Date | null;
     expiresAt: Date;
@@ -47,16 +53,19 @@ export interface McpBrowserSessionRepository {
     },
   ): Promise<McpBrowserSession[]>;
   listActiveByUser(userId: string): Promise<McpBrowserSession[]>;
-  markActiveAsCrashed(): Promise<number>;
+  markActiveAsCrashed(ownerInstanceId?: string | null): Promise<number>;
   update(
     id: string,
     input: Partial<{
+      messageId: string | null;
       purpose: McpBrowserSession['purpose'];
       status: McpBrowserSession['status'];
       conversationId: string | null;
       toolExecutionId: string | null;
       selectedPageId: string | null;
       metadata: Record<string, unknown>;
+      ownerInstanceId: string | null;
+      ownerInstanceUrl: string | null;
       lastClientSeenAt: Date | null;
       lastFrameAt: Date | null;
       expiresAt: Date;
@@ -75,26 +84,32 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     const id = crypto.randomUUID();
     const result = await pool.query<McpBrowserSessionRow>(
       `INSERT INTO mcp_browser_sessions (
-         id, user_id, mcp_connection_id, purpose, status, conversation_id, tool_execution_id,
-         selected_page_id, metadata, last_client_seen_at, last_frame_at, expires_at, ended_at
+         id, user_id, mcp_connection_id, message_id, purpose, status, conversation_id, tool_execution_id,
+         selected_page_id, metadata, owner_instance_id, owner_instance_url,
+         last_client_seen_at, last_frame_at, expires_at, ended_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
        RETURNING id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
+                 message_id AS "messageId",
                  purpose, status, conversation_id AS "conversationId",
                  tool_execution_id AS "toolExecutionId", selected_page_id AS "selectedPageId",
-                 metadata, last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
+                 metadata, owner_instance_id AS "ownerInstanceId", owner_instance_url AS "ownerInstanceUrl",
+                 last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
                  expires_at AS "expiresAt", ended_at AS "endedAt",
                  created_at AS "createdAt", updated_at AS "updatedAt"`,
       [
         id,
         input.userId,
         input.mcpConnectionId,
+        input.messageId ?? null,
         input.purpose,
         input.status ?? 'pending',
         input.conversationId ?? null,
         input.toolExecutionId ?? null,
         input.selectedPageId ?? null,
         JSON.stringify(input.metadata ?? {}),
+        input.ownerInstanceId ?? null,
+        input.ownerInstanceUrl ?? null,
         input.lastClientSeenAt ?? null,
         input.lastFrameAt ?? null,
         input.expiresAt,
@@ -108,9 +123,11 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     const pool = getPool();
     const result = await pool.query<McpBrowserSessionRow>(
       `SELECT id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
+              message_id AS "messageId",
               purpose, status, conversation_id AS "conversationId",
               tool_execution_id AS "toolExecutionId", selected_page_id AS "selectedPageId",
-              metadata, last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
+              metadata, owner_instance_id AS "ownerInstanceId", owner_instance_url AS "ownerInstanceUrl",
+              last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
               expires_at AS "expiresAt", ended_at AS "endedAt",
               created_at AS "createdAt", updated_at AS "updatedAt"
        FROM mcp_browser_sessions
@@ -124,9 +141,11 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     const pool = getPool();
     const result = await pool.query<McpBrowserSessionRow>(
       `SELECT id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
+              message_id AS "messageId",
               purpose, status, conversation_id AS "conversationId",
               tool_execution_id AS "toolExecutionId", selected_page_id AS "selectedPageId",
-              metadata, last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
+              metadata, owner_instance_id AS "ownerInstanceId", owner_instance_url AS "ownerInstanceUrl",
+              last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
               expires_at AS "expiresAt", ended_at AS "endedAt",
               created_at AS "createdAt", updated_at AS "updatedAt"
        FROM mcp_browser_sessions
@@ -146,9 +165,11 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     const limit = input.limit ?? 20;
     const result = await pool.query<McpBrowserSessionRow>(
       `SELECT id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
+              message_id AS "messageId",
               purpose, status, conversation_id AS "conversationId",
               tool_execution_id AS "toolExecutionId", selected_page_id AS "selectedPageId",
-              metadata, last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
+              metadata, owner_instance_id AS "ownerInstanceId", owner_instance_url AS "ownerInstanceUrl",
+              last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
               expires_at AS "expiresAt", ended_at AS "endedAt",
               created_at AS "createdAt", updated_at AS "updatedAt"
        FROM mcp_browser_sessions
@@ -171,14 +192,16 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     return mcpBrowserSessionRepository.listByUser(userId, { includeEnded: false, limit: 20 });
   },
 
-  async markActiveAsCrashed(): Promise<number> {
+  async markActiveAsCrashed(ownerInstanceId = null): Promise<number> {
     const pool = getPool();
     const result = await pool.query(
       `UPDATE mcp_browser_sessions
        SET status = 'crashed',
            ended_at = NOW(),
            updated_at = NOW()
-       WHERE status IN ('pending', 'active')`,
+       WHERE status IN ('pending', 'active')
+         AND ($1::text IS NULL OR owner_instance_id = $1 OR owner_instance_id IS NULL)`,
+      [ownerInstanceId],
     );
     return result.rowCount ?? 0;
   },
@@ -187,26 +210,33 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
     const pool = getPool();
     const result = await pool.query<McpBrowserSessionRow>(
       `UPDATE mcp_browser_sessions
-       SET purpose = COALESCE($2, purpose),
-           status = COALESCE($3, status),
-           conversation_id = CASE WHEN $4 THEN $5 ELSE conversation_id END,
-           tool_execution_id = CASE WHEN $6 THEN $7 ELSE tool_execution_id END,
-           selected_page_id = CASE WHEN $8 THEN $9 ELSE selected_page_id END,
-           metadata = COALESCE($10, metadata),
-           last_client_seen_at = CASE WHEN $11 THEN $12 ELSE last_client_seen_at END,
-           last_frame_at = CASE WHEN $13 THEN $14 ELSE last_frame_at END,
-           expires_at = COALESCE($15, expires_at),
-           ended_at = CASE WHEN $16 THEN $17 ELSE ended_at END,
+       SET message_id = CASE WHEN $2 THEN $3 ELSE message_id END,
+           purpose = COALESCE($4, purpose),
+           status = COALESCE($5, status),
+           conversation_id = CASE WHEN $6 THEN $7 ELSE conversation_id END,
+           tool_execution_id = CASE WHEN $8 THEN $9 ELSE tool_execution_id END,
+           selected_page_id = CASE WHEN $10 THEN $11 ELSE selected_page_id END,
+           metadata = COALESCE($12, metadata),
+           owner_instance_id = CASE WHEN $13 THEN $14 ELSE owner_instance_id END,
+           owner_instance_url = CASE WHEN $15 THEN $16 ELSE owner_instance_url END,
+           last_client_seen_at = CASE WHEN $17 THEN $18 ELSE last_client_seen_at END,
+           last_frame_at = CASE WHEN $19 THEN $20 ELSE last_frame_at END,
+           expires_at = COALESCE($21, expires_at),
+           ended_at = CASE WHEN $22 THEN $23 ELSE ended_at END,
            updated_at = NOW()
        WHERE id = $1
        RETURNING id, user_id AS "userId", mcp_connection_id AS "mcpConnectionId",
+                 message_id AS "messageId",
                  purpose, status, conversation_id AS "conversationId",
                  tool_execution_id AS "toolExecutionId", selected_page_id AS "selectedPageId",
-                 metadata, last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
+                 metadata, owner_instance_id AS "ownerInstanceId", owner_instance_url AS "ownerInstanceUrl",
+                 last_client_seen_at AS "lastClientSeenAt", last_frame_at AS "lastFrameAt",
                  expires_at AS "expiresAt", ended_at AS "endedAt",
                  created_at AS "createdAt", updated_at AS "updatedAt"`,
       [
         id,
+        typeof input.messageId !== 'undefined',
+        input.messageId ?? null,
         input.purpose ?? null,
         input.status ?? null,
         typeof input.conversationId !== 'undefined',
@@ -216,6 +246,10 @@ export const mcpBrowserSessionRepository: McpBrowserSessionRepository = {
         typeof input.selectedPageId !== 'undefined',
         input.selectedPageId ?? null,
         typeof input.metadata === 'undefined' ? null : JSON.stringify(input.metadata),
+        typeof input.ownerInstanceId !== 'undefined',
+        input.ownerInstanceId ?? null,
+        typeof input.ownerInstanceUrl !== 'undefined',
+        input.ownerInstanceUrl ?? null,
         typeof input.lastClientSeenAt !== 'undefined',
         input.lastClientSeenAt ?? null,
         typeof input.lastFrameAt !== 'undefined',

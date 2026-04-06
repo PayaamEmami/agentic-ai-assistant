@@ -1,7 +1,12 @@
 import crypto from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { chromium, type Browser, type BrowserContext, type CDPSession, type Page } from 'playwright';
-import { mcpBrowserSessionRepository, type McpBrowserSession, type McpConnection } from '@aaa/db';
+import {
+  mcpBrowserSessionRepository,
+  messageRepository,
+  type McpBrowserSession,
+  type McpConnection,
+} from '@aaa/db';
 import { decryptConnectorCredentials } from '@aaa/connectors';
 import { getLogger } from '@aaa/observability';
 import type {
@@ -20,6 +25,8 @@ import {
   browserSessionsTotal,
 } from '../lib/telemetry.js';
 import { AppError } from '../lib/errors.js';
+import { getApiInstanceId } from '../lib/internal-service.js';
+import { buildBrowserSessionContentPatch } from './browser-session-content.js';
 
 const SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 const DEFAULT_VIEWPORT = { width: 1280, height: 900 };
@@ -49,6 +56,7 @@ interface LiveBrowserSession {
   sessionId: string;
   userId: string;
   mcpConnectionId: string;
+  messageId: string | null;
   purpose: McpBrowserSession['purpose'];
   browser: Browser;
   context: BrowserContext;
@@ -111,7 +119,9 @@ export class BrowserSessionManager {
     }
 
     this.initialized = true;
-    const crashedCount = await mcpBrowserSessionRepository.markActiveAsCrashed();
+    const crashedCount = await mcpBrowserSessionRepository.markActiveAsCrashed(
+      getApiInstanceId(),
+    );
     if (crashedCount > 0) {
       browserSessionsTotal.inc({ action: 'recover', outcome: 'crashed' }, crashedCount);
     }
@@ -146,6 +156,7 @@ export class BrowserSessionManager {
       sessionId: session.id,
       userId: session.userId,
       mcpConnectionId: session.mcpConnectionId,
+      messageId: session.messageId,
       purpose: session.purpose,
       browser,
       context,
@@ -521,11 +532,18 @@ export class BrowserSessionManager {
   ): Promise<void> {
     const live = this.liveSessions.get(sessionId);
     if (!live) {
-      await mcpBrowserSessionRepository.update(sessionId, {
+      const updated = await mcpBrowserSessionRepository.update(sessionId, {
         status,
         endedAt: new Date(),
         metadata: { reason },
       });
+      if (updated?.messageId) {
+        await messageRepository.updateBrowserSessionBlock(
+          updated.messageId,
+          updated.id,
+          buildBrowserSessionContentPatch(updated),
+        );
+      }
       return;
     }
 
@@ -533,13 +551,20 @@ export class BrowserSessionManager {
     browserSessionsActive.dec({ state: 'active' });
     browserSessionsTotal.inc({ action: 'end', outcome: status });
 
-    await mcpBrowserSessionRepository.update(sessionId, {
+    const updated = await mcpBrowserSessionRepository.update(sessionId, {
       status,
       endedAt: new Date(),
       metadata: { reason },
       lastClientSeenAt: new Date(live.lastClientSeenAt),
       lastFrameAt: live.lastFrameAt ? new Date(live.lastFrameAt) : null,
     });
+    if (updated?.messageId) {
+      await messageRepository.updateBrowserSessionBlock(
+        updated.messageId,
+        updated.id,
+        buildBrowserSessionContentPatch(updated),
+      );
+    }
 
     const endEvent: BrowserSessionEndedEvent = {
       type: 'browser.session.ended',

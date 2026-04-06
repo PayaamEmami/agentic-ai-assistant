@@ -11,6 +11,7 @@ import {
   type McpCatalogEntrySummary,
   type McpConnectionSummary,
 } from '@/lib/api-client';
+import { useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 
 const CONNECTOR_SECTION_STATE_STORAGE_KEY = 'connector-manager:collapsed-sections';
@@ -126,6 +127,7 @@ function mcpIntegrationLabel(kind: McpConnectionSummary['integrationKind']): str
 export function ConnectorManager() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { currentConversationId } = useChatContext();
   const [connectors, setConnectors] = useState<ConnectorSummary[]>([]);
   const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntrySummary[]>([]);
   const [mcpConnections, setMcpConnections] = useState<McpConnectionSummary[]>([]);
@@ -438,7 +440,10 @@ export function ConnectorManager() {
   ) => {
     setActionError(null);
     try {
-      const response = await api.mcp.createBrowserSession(connection.id, { purpose });
+      const response = await api.mcp.createBrowserSession(connection.id, {
+        purpose,
+        conversationId: currentConversationId,
+      });
       setMcpBrowserSessionsByConnection((previous) => ({
         ...previous,
         [connection.id]: response.session,

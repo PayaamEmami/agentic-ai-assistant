@@ -215,6 +215,7 @@ export interface McpBrowserSessionSummary {
   id: string;
   userId: string;
   mcpConnectionId: string;
+  messageId: string | null;
   purpose: 'auth' | 'manual' | 'tool_takeover';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'failed' | 'expired' | 'crashed';
   conversationId: string | null;

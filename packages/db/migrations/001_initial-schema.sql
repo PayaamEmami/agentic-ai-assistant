@@ -88,12 +88,15 @@ CREATE TABLE mcp_browser_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   mcp_connection_id UUID NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE,
+  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   purpose TEXT NOT NULL DEFAULT 'manual',
   status TEXT NOT NULL DEFAULT 'pending',
   conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
   tool_execution_id UUID,
   selected_page_id TEXT,
   metadata JSONB NOT NULL DEFAULT '{}',
+  owner_instance_id TEXT,
+  owner_instance_url TEXT,
   last_client_seen_at TIMESTAMPTZ,
   last_frame_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -219,6 +222,10 @@ CREATE INDEX idx_mcp_browser_sessions_connection
   ON mcp_browser_sessions(mcp_connection_id, created_at DESC);
 CREATE INDEX idx_mcp_browser_sessions_user_status_updated
   ON mcp_browser_sessions(user_id, status, updated_at DESC);
+CREATE INDEX idx_mcp_browser_sessions_message
+  ON mcp_browser_sessions(message_id);
+CREATE INDEX idx_mcp_browser_sessions_owner_status
+  ON mcp_browser_sessions(owner_instance_id, status);
 CREATE UNIQUE INDEX idx_mcp_browser_sessions_active_connection
   ON mcp_browser_sessions(mcp_connection_id)
   WHERE status IN ('pending', 'active');

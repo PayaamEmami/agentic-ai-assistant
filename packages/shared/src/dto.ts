@@ -323,6 +323,7 @@ export const McpBrowserSessionDto = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
   mcpConnectionId: z.string().uuid(),
+  messageId: z.string().uuid().nullable(),
   purpose: McpBrowserSessionPurposeDto,
   status: McpBrowserSessionStatusDto,
   conversationId: z.string().uuid().nullable(),

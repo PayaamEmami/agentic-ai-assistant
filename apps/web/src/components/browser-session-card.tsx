@@ -3,7 +3,19 @@
 import type { McpBrowserSessionSummary } from '@/lib/api-client';
 import { sessionStatusLabel } from '@/lib/use-browser-session';
 
+type BrowserSessionPurpose = McpBrowserSessionSummary['purpose'];
+type BrowserSessionStatus = McpBrowserSessionSummary['status'];
+
 type BrowserSessionActionTone = 'primary' | 'secondary' | 'danger';
+
+export interface BrowserSessionCardSession {
+  purpose: BrowserSessionPurpose;
+  status: BrowserSessionStatus;
+  conversationId?: string | null;
+  metadata?: Record<string, unknown>;
+  expiresAt?: string | null;
+  endedAt?: string | null;
+}
 
 export interface BrowserSessionCardAction {
   label: string;
@@ -13,13 +25,13 @@ export interface BrowserSessionCardAction {
 }
 
 interface BrowserSessionCardProps {
-  session: McpBrowserSessionSummary;
+  session: BrowserSessionCardSession;
   title?: string;
   description?: string;
   actions?: BrowserSessionCardAction[];
 }
 
-function purposeLabel(purpose: McpBrowserSessionSummary['purpose']): string {
+function purposeLabel(purpose: BrowserSessionPurpose): string {
   switch (purpose) {
     case 'auth':
       return 'Sign-in session';
@@ -32,7 +44,7 @@ function purposeLabel(purpose: McpBrowserSessionSummary['purpose']): string {
   }
 }
 
-function statusTone(status: McpBrowserSessionSummary['status']): string {
+function statusTone(status: BrowserSessionStatus): string {
   switch (status) {
     case 'active':
       return 'bg-accent/10 text-accent';
@@ -79,10 +91,12 @@ export function BrowserSessionCard({
   description,
   actions = [],
 }: BrowserSessionCardProps) {
-  const endedAtLabel = formatTimestamp(session.endedAt);
-  const expiresAtLabel = formatTimestamp(session.expiresAt);
+  const endedAtLabel = formatTimestamp(session.endedAt ?? null);
+  const expiresAtLabel = formatTimestamp(session.expiresAt ?? null);
   const reason =
-    typeof session.metadata['reason'] === 'string' ? session.metadata['reason'] : undefined;
+    session.metadata && typeof session.metadata['reason'] === 'string'
+      ? session.metadata['reason']
+      : undefined;
 
   return (
     <section className="rounded-2xl border border-border bg-surface px-4 py-3">

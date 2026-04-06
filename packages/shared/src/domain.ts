@@ -47,6 +47,17 @@ export interface TranscriptContent {
   durationMs: number;
 }
 
+export interface BrowserSessionContent {
+  type: 'browser_session';
+  browserSessionId: string;
+  mcpConnectionId: string;
+  purpose: 'auth' | 'manual' | 'tool_takeover';
+  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
+  instanceLabel?: string;
+  expiresAt?: string | null;
+  endedAt?: string | null;
+}
+
 export interface ToolResultContent {
   type: 'tool_result';
   toolExecutionId: string;
@@ -63,6 +74,7 @@ export type MessageContent =
   | TextContent
   | AttachmentRefContent
   | TranscriptContent
+  | BrowserSessionContent
   | ToolResultContent
   | CitationContent;
 
@@ -223,12 +235,15 @@ export interface McpBrowserSession {
   id: string;
   userId: string;
   mcpConnectionId: string;
+  messageId: string | null;
   purpose: 'auth' | 'manual' | 'tool_takeover';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
   conversationId: string | null;
   toolExecutionId: string | null;
   selectedPageId: string | null;
   metadata: Record<string, unknown>;
+  ownerInstanceId: string | null;
+  ownerInstanceUrl: string | null;
   lastClientSeenAt: Date | null;
   lastFrameAt: Date | null;
   expiresAt: Date;
