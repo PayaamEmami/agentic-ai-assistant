@@ -537,14 +537,14 @@ export function ConnectorManager() {
               id: 'knowledge',
               title: 'Knowledge',
               description:
-                'These connectors sync content into your workspace so the assistant can search it during chat.',
+                'These connectors sync content into your workspace for retrieval-augmented generation and reference during chat.',
               connectors: connectors.filter((connector) => isKnowledgeConnector(connector.kind)),
             },
             {
               id: 'tools',
               title: 'Tools',
               description:
-                'These connectors authorize live tool use like creating pull requests, editing files, and updating docs.',
+                'These connectors let the assistant use connected provider APIs during chat to perform tasks in those services.',
               connectors: connectors.filter((connector) => isToolConnector(connector.kind)),
             },
           ].map((group) =>
@@ -820,11 +820,10 @@ export function ConnectorManager() {
             <section className="space-y-3">
               <div>
                 <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-                  MCP Integrations
+                  Environments
                 </p>
                 <p className="mt-1 text-sm text-foreground-muted">
-                  These per-user integrations expose runtime tools directly to chat. Playwright is
-                  the first built-in MCP and can persist browser sign-in state for later tool runs.
+                  These connectors add extra environments powered by Model Context Protocol (MCP).
                 </p>
               </div>
               <div className="space-y-3">
