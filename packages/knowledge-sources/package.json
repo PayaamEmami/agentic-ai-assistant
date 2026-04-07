@@ -1,5 +1,5 @@
 {
-  "name": "@aaa/connectors",
+  "name": "@aaa/knowledge-sources",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",

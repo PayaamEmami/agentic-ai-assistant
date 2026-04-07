@@ -1,11 +1,12 @@
 import crypto from 'node:crypto';
 import { getPool } from '../client.js';
 
-interface ConnectorSyncRunRow {
+interface AppSyncRunRow {
   id: string;
   userId: string;
-  connectorConfigId: string | null;
-  connectorKind: string;
+  appCapabilityConfigId: string | null;
+  appKind: string;
+  capability: string;
   trigger: string;
   status: 'running' | 'completed' | 'failed';
   itemsDiscovered: number;
@@ -17,19 +18,20 @@ interface ConnectorSyncRunRow {
   completedAt: Date | null;
 }
 
-export interface ConnectorSyncRun extends ConnectorSyncRunRow {}
+export interface AppSyncRun extends AppSyncRunRow {}
 
-export interface ConnectorSyncRunRepository {
+export interface AppSyncRunRepository {
   create(
     userId: string,
-    connectorKind: string,
-    connectorConfigId?: string | null,
+    appKind: string,
+    capability: string,
+    appCapabilityConfigId?: string | null,
     trigger?: string,
-  ): Promise<ConnectorSyncRun>;
+  ): Promise<AppSyncRun>;
   complete(
     id: string,
     update: {
-      status: ConnectorSyncRun['status'];
+      status: AppSyncRun['status'];
       itemsDiscovered: number;
       itemsQueued: number;
       itemsDeleted: number;
@@ -38,17 +40,19 @@ export interface ConnectorSyncRunRepository {
       completedAt?: Date;
     },
   ): Promise<void>;
-  listRecentByUserAndKind(
+  listRecentByUserAndAppAndCapability(
     userId: string,
-    connectorKind: string,
+    appKind: string,
+    capability: string,
     limit?: number,
-  ): Promise<ConnectorSyncRun[]>;
+  ): Promise<AppSyncRun[]>;
 }
 
 const SELECT_FIELDS = `SELECT id,
                               user_id AS "userId",
-                              connector_config_id AS "connectorConfigId",
-                              connector_kind AS "connectorKind",
+                              app_capability_config_id AS "appCapabilityConfigId",
+                              app_kind AS "appKind",
+                              capability,
                               trigger,
                               status,
                               items_discovered AS "itemsDiscovered",
@@ -58,26 +62,28 @@ const SELECT_FIELDS = `SELECT id,
                               error_summary AS "errorSummary",
                               started_at AS "startedAt",
                               completed_at AS "completedAt"
-                       FROM connector_sync_runs`;
+                       FROM app_sync_runs`;
 
-export const connectorSyncRunRepository: ConnectorSyncRunRepository = {
+export const appSyncRunRepository: AppSyncRunRepository = {
   async create(
     userId: string,
-    connectorKind: string,
-    connectorConfigId: string | null = null,
+    appKind: string,
+    capability: string,
+    appCapabilityConfigId: string | null = null,
     trigger = 'manual',
-  ): Promise<ConnectorSyncRun> {
+  ): Promise<AppSyncRun> {
     const pool = getPool();
     const id = crypto.randomUUID();
-    const result = await pool.query<ConnectorSyncRunRow>(
-      `INSERT INTO connector_sync_runs (
-         id, user_id, connector_config_id, connector_kind, trigger
+    const result = await pool.query<AppSyncRunRow>(
+      `INSERT INTO app_sync_runs (
+         id, user_id, app_capability_config_id, app_kind, capability, trigger
        )
-       VALUES ($1, $2, $3, $4, $5)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING id,
                  user_id AS "userId",
-                 connector_config_id AS "connectorConfigId",
-                 connector_kind AS "connectorKind",
+                 app_capability_config_id AS "appCapabilityConfigId",
+                 app_kind AS "appKind",
+                 capability,
                  trigger,
                  status,
                  items_discovered AS "itemsDiscovered",
@@ -87,7 +93,7 @@ export const connectorSyncRunRepository: ConnectorSyncRunRepository = {
                  error_summary AS "errorSummary",
                  started_at AS "startedAt",
                  completed_at AS "completedAt"`,
-      [id, userId, connectorConfigId, connectorKind, trigger],
+      [id, userId, appCapabilityConfigId, appKind, capability, trigger],
     );
     return result.rows[0]!;
   },
@@ -95,7 +101,7 @@ export const connectorSyncRunRepository: ConnectorSyncRunRepository = {
   async complete(
     id: string,
     update: {
-      status: ConnectorSyncRun['status'];
+      status: AppSyncRun['status'];
       itemsDiscovered: number;
       itemsQueued: number;
       itemsDeleted: number;
@@ -106,7 +112,7 @@ export const connectorSyncRunRepository: ConnectorSyncRunRepository = {
   ): Promise<void> {
     const pool = getPool();
     await pool.query(
-      `UPDATE connector_sync_runs
+      `UPDATE app_sync_runs
        SET status = $1,
            items_discovered = $2,
            items_queued = $3,
@@ -128,18 +134,19 @@ export const connectorSyncRunRepository: ConnectorSyncRunRepository = {
     );
   },
 
-  async listRecentByUserAndKind(
+  async listRecentByUserAndAppAndCapability(
     userId: string,
-    connectorKind: string,
+    appKind: string,
+    capability: string,
     limit = 5,
-  ): Promise<ConnectorSyncRun[]> {
+  ): Promise<AppSyncRun[]> {
     const pool = getPool();
-    const result = await pool.query<ConnectorSyncRunRow>(
+    const result = await pool.query<AppSyncRunRow>(
       `${SELECT_FIELDS}
-       WHERE user_id = $1 AND connector_kind = $2
+       WHERE user_id = $1 AND app_kind = $2 AND capability = $3
        ORDER BY started_at DESC
-       LIMIT $3`,
-      [userId, connectorKind, limit],
+       LIMIT $4`,
+      [userId, appKind, capability, limit],
     );
     return result.rows;
   },

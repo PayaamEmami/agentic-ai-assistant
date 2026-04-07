@@ -23,7 +23,7 @@ export interface AgentContext {
   availableTools: Array<string | AgentToolContext>;
   retrievedContext: string[];
   personalContext?: string;
-  activeConnectors?: string[];
+  activeApps?: string[];
   previousResult?: AgentResult;
   signal?: AbortSignal;
 }

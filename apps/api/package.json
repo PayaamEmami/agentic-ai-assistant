@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@aaa/ai": "workspace:*",
-    "@aaa/connectors": "workspace:*",
+    "@aaa/knowledge-sources": "workspace:*",
     "@aaa/db": "workspace:*",
     "@aaa/mcp": "workspace:*",
     "@aaa/memory": "workspace:*",

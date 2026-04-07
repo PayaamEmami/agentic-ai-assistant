@@ -3,7 +3,7 @@ import type { ConnectionOptions } from 'bullmq';
 import { withLogContext, withSpan } from '@aaa/observability';
 import { handleIngestion } from './jobs/ingestion.js';
 import { handleEmbedding } from './jobs/embedding.js';
-import { handleConnectorSync } from './jobs/connector-sync.js';
+import { handleAppSync } from './jobs/app-sync.js';
 import { handleToolExecution } from './jobs/tool-execution.js';
 import { logger } from './lib/logger.js';
 import { workerJobCounter, workerJobDurationMs } from './lib/telemetry.js';
@@ -57,23 +57,24 @@ export function createWorkers(redisUrl: string): Worker[] {
             () => handleEmbedding(job),
           ),
       ), { connection }),
-    new Worker('connector-sync', (job) =>
+    new Worker('app-sync', (job) =>
       withLogContext(
         {
           queue: job.queueName,
           jobId: job.id ?? undefined,
           correlationId: job.data.correlationId,
-          connectorKind: job.data.connectorKind,
-          component: 'connector-sync-worker',
+          appKind: job.data.appKind,
+          appCapability: job.data.capability,
+          component: 'app-sync-worker',
         },
         () =>
           withSpan(
-            'worker.job.connector_sync',
+            'worker.job.app_sync',
             {
               'aaa.queue.name': job.queueName,
               'aaa.job.id': job.id ?? 'unknown',
             },
-            () => handleConnectorSync(job),
+            () => handleAppSync(job),
           ),
       ), { connection }),
     new Worker('tool-execution', (job) =>

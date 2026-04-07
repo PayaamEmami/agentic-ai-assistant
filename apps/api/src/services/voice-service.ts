@@ -111,7 +111,7 @@ function buildRealtimeInstructions(
     '- You are in a realtime spoken conversation.',
     '- Respond naturally, warmly, and conversationally.',
     '- Keep spoken answers concise by default unless the user asks for depth.',
-    '- Do not use tools, connectors, approvals, web lookup, or retrieval in this mode.',
+    '- Do not use tools, apps, approvals, web lookup, or retrieval in this mode.',
     '- If a request would normally need tools or external operations, say that live voice is conversational-only and ask the user to switch back to text chat for that task.',
   ];
 

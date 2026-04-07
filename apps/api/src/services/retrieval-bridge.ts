@@ -37,8 +37,8 @@ const QUERY_STOPWORDS = new Set([
   'me',
   'my',
 ]);
-const GOOGLE_DOCS_CONNECTOR_HINT = /\b(google drive|google docs?)\b/i;
-const GITHUB_CONNECTOR_HINT = /\bgithub\b/i;
+const GOOGLE_APP_HINT = /\b(google drive|google docs?)\b/i;
+const GITHUB_APP_HINT = /\bgithub\b/i;
 
 function isAbortError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') {
@@ -116,21 +116,21 @@ function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
 }
 
 function inferSearchFilters(query: string): EmbeddingSearchFilters | undefined {
-  const connectorKinds = new Set<string>();
+  const appKinds = new Set<string>();
 
-  if (GOOGLE_DOCS_CONNECTOR_HINT.test(query)) {
-    connectorKinds.add('google_docs');
+  if (GOOGLE_APP_HINT.test(query)) {
+    appKinds.add('google');
   }
 
-  if (GITHUB_CONNECTOR_HINT.test(query)) {
-    connectorKinds.add('github');
+  if (GITHUB_APP_HINT.test(query)) {
+    appKinds.add('github');
   }
 
-  if (connectorKinds.size === 0) {
+  if (appKinds.size === 0) {
     return undefined;
   }
 
-  return { connectorKinds: Array.from(connectorKinds) };
+  return { appKinds: Array.from(appKinds) };
 }
 
 function titleMatchBoost(query: string, title: string): number {
@@ -266,7 +266,7 @@ export class RetrievalBridge {
           outcome: 'failure',
           component: 'retrieval-bridge',
           error,
-          connectorKinds: searchFilters?.connectorKinds,
+          appKinds: searchFilters?.appKinds,
           queryLength: trimmedQuery.length,
         },
         'Retrieval search failed',
@@ -313,7 +313,7 @@ export class RetrievalBridge {
       score: baseScore + contentScore + titleScore + titleMatchScore,
       metadata: {
         ...chunk.metadata,
-        ...(source?.connectorKind ? { connectorKind: source.connectorKind } : {}),
+        ...(source?.appKind ? { appKind: source.appKind } : {}),
       },
       documentTitle: document.title,
       uri: source?.uri ?? null,

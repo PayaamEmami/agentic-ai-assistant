@@ -1,4 +1,9 @@
-import type { Connector, ConnectorAuth, ConnectorItem, SyncResult } from './types.js';
+import type {
+  KnowledgeSource,
+  KnowledgeSourceAuth,
+  KnowledgeSourceItem,
+  KnowledgeSyncResult,
+} from './types.js';
 import { requestJson, requestText } from './http.js';
 
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -173,12 +178,12 @@ function toCursorRepoState(repo: GitHubRepoSelection, sha: string): GitHubCursor
   };
 }
 
-export class GitHubConnector implements Connector {
+export class GitHubKnowledgeSource implements KnowledgeSource {
   kind = 'github' as const;
   private token = '';
   private selectedRepos: GitHubRepoSelection[] = [];
 
-  async initialize(auth: ConnectorAuth): Promise<void> {
+  async initialize(auth: KnowledgeSourceAuth): Promise<void> {
     const accessToken = asString(auth.credentials.accessToken);
     if (!accessToken) {
       throw new Error('GitHub access token is required');
@@ -224,8 +229,11 @@ export class GitHubConnector implements Connector {
       .filter((repo): repo is GitHubRepoSelection => repo !== null);
   }
 
-  async list(_cursor?: string, limit = 200): Promise<{ items: ConnectorItem[]; nextCursor: string | null }> {
-    const items: ConnectorItem[] = [];
+  async list(
+    _cursor?: string,
+    limit = 200,
+  ): Promise<{ items: KnowledgeSourceItem[]; nextCursor: string | null }> {
+    const items: KnowledgeSourceItem[] = [];
     for (const repo of this.selectedRepos) {
       const tree = await this.loadRepositoryTree(repo);
       for (const entry of tree) {
@@ -233,7 +241,7 @@ export class GitHubConnector implements Connector {
           continue;
         }
 
-        items.push(this.toConnectorItem(repo, entry));
+        items.push(this.toKnowledgeSourceItem(repo, entry));
         if (items.length >= limit) {
           return { items, nextCursor: null };
         }
@@ -243,7 +251,7 @@ export class GitHubConnector implements Connector {
     return { items, nextCursor: null };
   }
 
-  async read(externalId: string): Promise<ConnectorItem | null> {
+  async read(externalId: string): Promise<KnowledgeSourceItem | null> {
     const parsed = this.parseExternalId(externalId);
     if (!parsed) {
       return null;
@@ -302,7 +310,7 @@ export class GitHubConnector implements Connector {
     };
   }
 
-  async search(query: string, limit = 20): Promise<ConnectorItem[]> {
+  async search(query: string, limit = 20): Promise<KnowledgeSourceItem[]> {
     const trimmed = query.trim();
     if (!trimmed || this.selectedRepos.length === 0) {
       return [];
@@ -339,10 +347,10 @@ export class GitHubConnector implements Connector {
     }));
   }
 
-  async sync(cursor?: string): Promise<SyncResult> {
+  async sync(cursor?: string): Promise<KnowledgeSyncResult> {
     const previousCursor = this.parseCursor(cursor);
     const nextCursor: Record<string, GitHubCursorRepoState> = {};
-    const items: ConnectorItem[] = [];
+    const items: KnowledgeSourceItem[] = [];
     const errors: Array<{ externalId: string; error: string }> = [];
     const selectedRepoIds = new Set(this.selectedRepos.map((repo) => String(repo.id)));
 
@@ -365,7 +373,7 @@ export class GitHubConnector implements Connector {
             const currentPaths = new Set(currentEntries.map((entry) => entry.path));
             for (const entry of previousEntries) {
               if (!currentPaths.has(entry.path)) {
-                items.push(this.toDeletedConnectorItem(repo, entry.path));
+                items.push(this.toDeletedKnowledgeSourceItem(repo, entry.path));
               }
             }
           } catch {
@@ -374,7 +382,7 @@ export class GitHubConnector implements Connector {
         }
 
         for (const entry of currentEntries) {
-          items.push(this.toConnectorItem(repo, entry));
+          items.push(this.toKnowledgeSourceItem(repo, entry));
         }
       } catch (error) {
         errors.push({
@@ -399,7 +407,7 @@ export class GitHubConnector implements Connector {
           await this.loadRepositoryTree(deselectedRepo, previousRepoState.sha),
         );
         for (const entry of previousEntries) {
-          items.push(this.toDeletedConnectorItem(deselectedRepo, entry.path));
+          items.push(this.toDeletedKnowledgeSourceItem(deselectedRepo, entry.path));
         }
       } catch (error) {
         errors.push({
@@ -560,7 +568,10 @@ export class GitHubConnector implements Connector {
     };
   }
 
-  private toConnectorItem(repo: GitHubRepoSelection, entry: GitHubTreeEntry): ConnectorItem {
+  private toKnowledgeSourceItem(
+    repo: GitHubRepoSelection,
+    entry: GitHubTreeEntry,
+  ): KnowledgeSourceItem {
     return {
       externalId: `${repo.fullName}:${entry.path}`,
       sourceKind: 'code_repository',
@@ -581,7 +592,10 @@ export class GitHubConnector implements Connector {
     };
   }
 
-  private toDeletedConnectorItem(repo: GitHubRepoSelection, path: string): ConnectorItem {
+  private toDeletedKnowledgeSourceItem(
+    repo: GitHubRepoSelection,
+    path: string,
+  ): KnowledgeSourceItem {
     return {
       externalId: `${repo.fullName}:${path}`,
       sourceKind: 'code_repository',

@@ -39,13 +39,17 @@ export const SourceKind = {
 } as const;
 export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
 
-export const ConnectorKind = {
+export const AppKind = {
   GitHub: 'github',
-  GoogleDocs: 'google_docs',
-  GitHubTools: 'github_tools',
-  GoogleDriveTools: 'google_drive_tools',
+  Google: 'google',
 } as const;
-export type ConnectorKind = (typeof ConnectorKind)[keyof typeof ConnectorKind];
+export type AppKind = (typeof AppKind)[keyof typeof AppKind];
+
+export const AppCapability = {
+  Knowledge: 'knowledge',
+  Tools: 'tools',
+} as const;
+export type AppCapability = (typeof AppCapability)[keyof typeof AppCapability];
 
 export const McpIntegrationKind = {
   Playwright: 'playwright',

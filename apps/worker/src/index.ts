@@ -4,7 +4,7 @@ import { closeMcpRuntime } from '@aaa/mcp';
 import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
 import { closeJobQueues } from './lib/job-queues.js';
-import { startConnectorSyncScheduler } from './lib/sync-scheduler.js';
+import { startAppSyncScheduler } from './lib/sync-scheduler.js';
 import { initializeWorkerTelemetry, startWorkerObservabilityServer } from './lib/telemetry.js';
 import { shutdownTracing } from '@aaa/observability';
 
@@ -25,7 +25,7 @@ async function main() {
   );
 
   const workers = createWorkers(redisUrl);
-  const syncScheduler = startConnectorSyncScheduler();
+  const syncScheduler = startAppSyncScheduler();
   logger.info(
     {
       event: 'worker.started',

@@ -7,7 +7,7 @@ import {
   type McpBrowserSession,
   type McpConnection,
 } from '@aaa/db';
-import { decryptConnectorCredentials } from '@aaa/connectors';
+import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogger } from '@aaa/observability';
 import type {
   BrowserClientEvent,
@@ -90,7 +90,7 @@ function sanitizeUrl(url: string): string {
 }
 
 function getStorageState(connection: McpConnection): Record<string, unknown> | undefined {
-  const credentials = decryptConnectorCredentials(connection.encryptedCredentials);
+  const credentials = decryptCredentials(connection.encryptedCredentials);
   const state = credentials['storageState'];
   if (state && typeof state === 'object' && !Array.isArray(state)) {
     return state as Record<string, unknown>;

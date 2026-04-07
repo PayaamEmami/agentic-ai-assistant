@@ -40,7 +40,7 @@ Shared packages:
 - `packages/tool-providers`: native tool providers used by tool execution
 - `packages/mcp`: per-user MCP runtime and built-in integrations
 - `packages/retrieval`: chunking, embeddings, indexing, search
-- `packages/connectors`: retrieval-oriented external source connectors and credential helpers
+- `packages/knowledge-sources`: retrieval-oriented external source integrations and credential helpers
 - `packages/memory`: personalization and memory logic
 - `packages/db`: schema, migrations, repositories
 - `packages/config`: environment parsing and constants
@@ -117,7 +117,7 @@ Important local dependencies and secrets:
 - `LOCAL_REDIS_PORT` when `6379` is already in use
 - `OPENAI_API_KEY`
 - `JWT_SECRET`
-- `CONNECTOR_CREDENTIALS_SECRET`
+- `APP_CREDENTIALS_SECRET`
 
 Optional but useful depending on the feature area:
 
@@ -130,7 +130,7 @@ See `.env.example` for the full template.
 
 ## Logging Notes
 
-The repo uses a shared observability layer with structured logs across API, worker, connector HTTP calls, retrieval, native tool execution, the per-user MCP path, OpenAI boundaries, and selected browser failures.
+The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, the per-user MCP path, OpenAI boundaries, and selected browser failures.
 
 Local logging defaults:
 
@@ -146,12 +146,12 @@ Useful fields to grep for:
 - `requestId`: one HTTP request
 - `correlationId`: one cross-boundary flow across API, queues, worker, and package calls
 - `voiceSessionId`: live voice session lifecycle
-- `connectorConfigId`, `connectorKind`, `conversationId`, `toolExecutionId`, `jobId`
+- `appCapabilityConfigId`, `appKind`, `conversationId`, `toolExecutionId`, `jobId`
 - `event`, `component`, `outcome`
 
 Important safety rule:
 
-- Logs are structured and sanitized by default. Do not intentionally add raw bearer tokens, OAuth codes, connector credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads to log objects.
+- Logs are structured and sanitized by default. Do not intentionally add raw bearer tokens, OAuth codes, app credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads to log objects.
 
 ## Change Routing Guide
 
@@ -165,7 +165,7 @@ When deciding where a change belongs:
 - Model/tool orchestration behavior: check `packages/ai`; involve `packages/mcp` for per-user MCP discovery or execution
 - Native tool provider behavior: check `packages/tool-providers`
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
-- External source integrations: check `packages/connectors`
+- External source integrations: check `packages/knowledge-sources`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 
 ## Guardrails For AI Agents
@@ -174,8 +174,8 @@ When deciding where a change belongs:
 - Prefer updating shared contracts in `packages/shared` instead of duplicating types.
 - If an API request or response changes, verify whether `apps/web`, `apps/api`, and shared DTOs all need updates.
 - If a database shape changes, make sure the migration, repositories, and any dependent API/worker code stay aligned.
-- If a feature touches retrieval, connectors, or tools, check for downstream effects in orchestration code.
-- Treat retrieval connectors and tool connectors as separate subsystems. Even when they target the same external provider, keep them loosely coupled and avoid making one depend on the other.
+- If a feature touches retrieval, apps, or tools, check for downstream effects in orchestration code.
+- Treat provider apps as having separate knowledge and tool capabilities internally. Even when they target the same external provider, keep those capabilities loosely coupled and avoid making one depend on the other.
 - Do not conflate native tools with MCP. Native tools are still primary, while MCP is now a per-user integration path with explicit connection state.
 - Prefer minimal, targeted changes over broad refactors unless the task clearly calls for one.
 - Run at least relevant validation (`pnpm lint`, `pnpm typecheck`, or a focused package command) after edits when feasible.
@@ -188,7 +188,7 @@ At a high level, the assistant currently supports:
 - Live voice sessions using OpenAI Realtime
 - RAG over connected sources
 - Native tool execution with approval flow
-- Separate knowledge connectors for retrieval and tool connectors for live tool access
+- Provider apps with separate knowledge and tool capabilities under one connection
 - Per-user MCP support via `packages/mcp`, beginning with Playwright browser automation
 - A small multi-agent pattern with orchestrator, research, tool, and verifier roles
 

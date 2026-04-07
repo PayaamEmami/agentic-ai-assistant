@@ -7,7 +7,7 @@ export interface RetrievalDecision {
   shouldRetrieve: boolean;
   reason:
     | 'empty_message'
-    | 'connector_or_source_hint'
+    | 'app_or_source_hint'
     | 'personal_document_hint'
     | 'explicit_document_query'
     | 'citation_follow_up'
@@ -16,7 +16,7 @@ export interface RetrievalDecision {
   hasRecentCitationContext: boolean;
 }
 
-const CONNECTOR_OR_SOURCE_HINT = /\b(google drive|google docs|github|connector|connectors|synced|indexed|searchable|source|sources|citation|citations)\b/i;
+const APP_OR_SOURCE_HINT = /\b(google drive|google docs|github|app|apps|synced|indexed|searchable|source|sources|citation|citations)\b/i;
 const DOCUMENT_TARGET_HINT = /\b(resume|cv|cover letter|document|documents|doc|docs|file|files|note|notes|repo|repository|repositories|readme|attachment|attachments|pdf)\b/i;
 const RETRIEVAL_ACTION_HINT = /\b(search|find|look up|summarize|compare|analyze|review|check|show me|according to|what does|can you see|where is|which)\b/i;
 const POSSESSIVE_HINT = /\b(my|our|mine)\b/i;
@@ -75,10 +75,10 @@ export function decideRetrieval(
     };
   }
 
-  if (CONNECTOR_OR_SOURCE_HINT.test(trimmed)) {
+  if (APP_OR_SOURCE_HINT.test(trimmed)) {
     return {
       shouldRetrieve: true,
-      reason: 'connector_or_source_hint',
+      reason: 'app_or_source_hint',
       hasRecentCitationContext: recentCitationContext,
     };
   }

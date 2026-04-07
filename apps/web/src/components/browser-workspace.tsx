@@ -36,14 +36,14 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
   const handleSave = async () => {
     const response = await persistSession(true);
     if (response?.session) {
-      router.push('/chat/connectors');
+      router.push('/chat/apps');
     }
   };
 
   const handleCancel = async () => {
     const response = await cancelSession();
     if (response?.session) {
-      router.push('/chat/connectors');
+      router.push('/chat/apps');
     }
   };
 
@@ -68,7 +68,7 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
       reconnect={reconnect}
       onSave={handleSave}
       onCancel={handleCancel}
-      onClose={() => router.push('/chat/connectors')}
+      onClose={() => router.push('/chat/apps')}
       closeLabel="Back"
     />
   );

@@ -12,14 +12,14 @@ import {
 import {
   approvalRepository,
   attachmentRepository,
-  connectorConfigRepository,
+  appCapabilityConfigRepository,
   conversationRepository,
   mcpConnectionRepository,
   getPool,
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import { decryptConnectorCredentials } from '@aaa/connectors';
+import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogContext } from '@aaa/observability';
 import {
   getMcpRuntime,
@@ -521,16 +521,12 @@ function toAgentToolContexts(tools: AvailableTool[]) {
   }));
 }
 
-function connectorLabel(kind: string): string {
+function appLabel(kind: string): string {
   switch (kind) {
     case 'github':
       return 'GitHub';
-    case 'google_docs':
-      return 'Google Docs';
-    case 'github_tools':
-      return 'GitHub Tools';
-    case 'google_drive_tools':
-      return 'Google Drive Tools';
+    case 'google':
+      return 'Google';
     default:
       return kind;
   }
@@ -574,7 +570,7 @@ function toRuntimeMcpConnection(connection: Awaited<ReturnType<typeof mcpConnect
     instanceLabel: connection.instanceLabel,
     status: connection.status,
     settings: connection.settings,
-    credentials: decryptConnectorCredentials(connection.encryptedCredentials),
+    credentials: decryptCredentials(connection.encryptedCredentials),
   };
 }
 
@@ -822,11 +818,10 @@ export class ChatService {
       throwIfAborted(signal);
 
       const retrievalContext = retrieval.results.map((result) => {
-        const connectorKind =
-          typeof result.metadata.connectorKind === 'string' ? result.metadata.connectorKind : null;
+        const appKind = typeof result.metadata.appKind === 'string' ? result.metadata.appKind : null;
         const lines = [
           `Title: ${result.documentTitle}`,
-          connectorKind ? `Connector: ${connectorKind}` : null,
+          appKind ? `App: ${appLabel(appKind)}` : null,
           result.uri ? `URI: ${result.uri}` : null,
           `Content:\n${result.content}`,
         ].filter((line): line is string => line !== null);
@@ -837,13 +832,17 @@ export class ChatService {
       const personalContext = await this.personalizationService.getPersonalContext(userId);
       throwIfAborted(signal);
 
-      const activeConnectors = (await connectorConfigRepository.listByUser(userId))
-        .filter((connector) => connector.status === 'connected')
-        .map((connector) => connectorLabel(connector.kind));
+      const activeApps = Array.from(
+        new Set(
+          (await appCapabilityConfigRepository.listByUser(userId))
+            .filter((app) => app.status === 'connected')
+            .map((app) => appLabel(app.appKind)),
+        ),
+      );
       const activeMcpConnections = (await mcpConnectionRepository.listConnectedByUser(userId)).map(
         (connection) => `MCP ${connection.integrationKind}: ${connection.instanceLabel}`,
       );
-      activeConnectors.push(...activeMcpConnections);
+      activeApps.push(...activeMcpConnections);
       throwIfAborted(signal);
 
       const availableTools = await loadAvailableTools(userId, content);
@@ -862,7 +861,7 @@ export class ChatService {
           availableTools: toAgentToolContexts(availableTools),
           retrievedContext: retrievalContext,
           personalContext,
-          activeConnectors,
+          activeApps,
           signal,
         });
         toolCalls = result.toolCalls;

@@ -5,7 +5,7 @@ import {
   type McpBrowserSession,
   type McpConnection,
 } from '@aaa/db';
-import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
+import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
 import { getMcpRuntime, type RuntimeMcpConnection } from '@aaa/mcp';
 import { AppError } from '../lib/errors.js';
 import {
@@ -32,7 +32,7 @@ function hasCredentialMaterial(credentials: Record<string, unknown>): boolean {
 
 function toRuntimeConnection(
   connection: McpConnection,
-  credentials = decryptConnectorCredentials(connection.encryptedCredentials),
+  credentials = decryptCredentials(connection.encryptedCredentials),
 ): RuntimeMcpConnection {
   return {
     id: connection.id,
@@ -46,7 +46,7 @@ function toRuntimeConnection(
 }
 
 function toConnectionSummary(connection: McpConnection) {
-  const credentials = decryptConnectorCredentials(connection.encryptedCredentials);
+  const credentials = decryptCredentials(connection.encryptedCredentials);
   return {
     id: connection.id,
     integrationKind: connection.integrationKind as 'playwright',
@@ -194,7 +194,7 @@ export class McpService {
       integrationKind: input.integrationKind,
       instanceLabel: input.instanceLabel,
       status: input.authMode === 'stored_secret' && input.secretProfile ? 'connected' : 'pending',
-      encryptedCredentials: encryptConnectorCredentials(credentials),
+      encryptedCredentials: encryptCredentials(credentials),
       settings: {},
       isDefaultActive: !hasDefaultForKind,
     });
@@ -572,10 +572,10 @@ export class McpService {
     }
 
     const storageState = await this.browserSessionManager.persistSession(session.id);
-    const currentCredentials = decryptConnectorCredentials(connection.encryptedCredentials);
+    const currentCredentials = decryptCredentials(connection.encryptedCredentials);
     const updatedConnection = await mcpConnectionRepository.update(connection.id, {
       status: 'connected',
-      encryptedCredentials: encryptConnectorCredentials({
+      encryptedCredentials: encryptCredentials({
         ...currentCredentials,
         storageState,
       }),
@@ -627,10 +627,10 @@ export class McpService {
     }
 
     const storageState = await this.browserSessionManager.persistSession(session.id);
-    const currentCredentials = decryptConnectorCredentials(connection.encryptedCredentials);
+    const currentCredentials = decryptCredentials(connection.encryptedCredentials);
     const updatedConnection = await mcpConnectionRepository.update(connection.id, {
       status: 'connected',
-      encryptedCredentials: encryptConnectorCredentials({
+      encryptedCredentials: encryptCredentials({
         ...currentCredentials,
         storageState,
       }),
@@ -746,7 +746,7 @@ export class McpService {
 
     if (result.success && result.connectionUpdate) {
       const nextCredentials = result.connectionUpdate.credentials
-        ? encryptConnectorCredentials({
+        ? encryptCredentials({
             ...runtimeConnection.credentials,
             ...result.connectionUpdate.credentials,
           })

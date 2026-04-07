@@ -13,7 +13,7 @@ export const DEFAULTS = {
 export const QUEUE_NAMES = {
   ingestion: 'ingestion',
   embedding: 'embedding',
-  connectorSync: 'connector-sync',
+  appSync: 'app-sync',
   toolExecution: 'tool-execution',
 } as const;
 

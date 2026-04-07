@@ -27,20 +27,21 @@ The assistant uses a small multi-agent architecture:
 - **Tool Agent** — Executes tools (native and per-user MCP), handles external operations
 - **Verifier Agent** — Validates outputs, checks approval requirements
 
-### Connectors
+### Apps
 
-The connector layer is intentionally split into two separate concerns:
+Provider apps connect once per external provider and expose two internal capabilities:
 
-- **Knowledge connectors** — Used for sync, indexing, and retrieval
-- **Tool connectors** — Used for live tool access and side-effectful operations
+- **Knowledge** — Used for sync, indexing, and retrieval
+- **Tools** — Used for live tool access and side-effectful operations
 
-Even when both connector types target the same external provider, they should stay loosely coupled and should not depend on each other.
+Those capabilities stay separate internally even when they share the same provider credentials.
 
 Current behavior:
 
-- Knowledge connectors back RAG over connected sources
-- Tool connectors back native tools for live reads and writes
-- A knowledge connector and a tool connector may exist for the same provider without depending on each other
+- GitHub and Google are the user-facing provider apps
+- Knowledge backs RAG over connected sources
+- Tools back native tools for live reads and writes
+- A single provider app can power both capabilities without reconnecting twice
 
 ### Tool System
 
@@ -118,7 +119,7 @@ kubectl apply -f infra/kubernetes/
 │   ├── tool-providers/       # Native tool providers used by tool execution
 │   ├── mcp/                  # Per-user MCP runtime and built-in integrations
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
-│   ├── connectors/           # Retrieval-oriented connectors and credential helpers
+│   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
 │   ├── memory/               # Preferences, personalization, memory
 │   ├── db/                   # Database schema, migrations, repositories
 │   ├── config/               # Environment parsing, constants

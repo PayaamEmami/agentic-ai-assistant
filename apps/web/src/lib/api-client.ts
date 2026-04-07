@@ -136,22 +136,7 @@ interface AuthPayload {
   };
 }
 
-export interface ConnectorSummary {
-  id: string;
-  kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools';
-  status: 'pending' | 'connected' | 'failed';
-  lastSyncAt: string | null;
-  lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
-  lastError: string | null;
-  hasCredentials: boolean;
-  selectedRepoCount?: number;
-  totalSourceCount: number;
-  searchableSourceCount: number;
-  recentSyncRuns: ConnectorSyncRunSummary[];
-  recentSources: ConnectorSourceSummary[];
-}
-
-export interface ConnectorSyncRunSummary {
+export interface AppSyncRunSummary {
   id: string;
   trigger: string;
   status: 'running' | 'completed' | 'failed';
@@ -164,7 +149,7 @@ export interface ConnectorSyncRunSummary {
   completedAt: string | null;
 }
 
-export interface ConnectorSourceSummary {
+export interface AppSourceSummary {
   id: string;
   kind: string;
   title: string;
@@ -202,6 +187,30 @@ export interface McpConnectionSummary {
   isDefaultActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface AppCapabilitySummary {
+  capability: 'knowledge' | 'tools';
+  status: 'pending' | 'connected' | 'failed';
+  lastSyncAt: string | null;
+  lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
+  lastError: string | null;
+  hasCredentials: boolean;
+  totalSourceCount: number;
+  searchableSourceCount: number;
+  recentSyncRuns: AppSyncRunSummary[];
+  recentSources: AppSourceSummary[];
+}
+
+export interface AppSummary {
+  kind: 'github' | 'google';
+  displayName: string;
+  status: 'pending' | 'connected' | 'failed';
+  hasCredentials: boolean;
+  lastError: string | null;
+  selectedRepoCount?: number;
+  knowledge: AppCapabilitySummary;
+  tools: AppCapabilitySummary;
 }
 
 export interface BrowserPageSummary {
@@ -406,31 +415,33 @@ export const api = {
       });
     },
   },
-  connectors: {
+  apps: {
     list() {
-      return request<{ connectors: ConnectorSummary[] }>('/api/connectors');
+      return request<{ apps: AppSummary[] }>('/api/apps');
     },
-    start(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
-      return request<{ authorizationUrl: string }>(`/api/connectors/${kind}/start`, {
+    connect(kind: 'github' | 'google') {
+      return request<{ authorizationUrl: string }>(`/api/apps/${kind}/connect`, {
         method: 'POST',
       });
     },
-    sync(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
-      return request<{ queued: boolean }>(`/api/connectors/${kind}/sync`, {
+    sync(kind: 'github' | 'google') {
+      return request<{ queued: boolean }>(`/api/apps/${kind}/sync`, {
         method: 'POST',
       });
     },
-    disconnect(kind: 'github' | 'google_docs' | 'github_tools' | 'google_drive_tools') {
-      return request<{ ok: boolean }>(`/api/connectors/${kind}`, {
+    disconnect(kind: 'github' | 'google') {
+      return request<{ ok: boolean }>(`/api/apps/${kind}`, {
         method: 'DELETE',
       });
     },
-    listGitHubRepos() {
-      return request<{ repositories: GitHubRepositorySummary[] }>('/api/connectors/github/repos');
+    listGitHubRepositories() {
+      return request<{ repositories: GitHubRepositorySummary[] }>(
+        '/api/apps/github/repositories',
+      );
     },
-    saveGitHubRepos(repositoryIds: number[]) {
-      return request<{ ok: boolean }>('/api/connectors/github/repos', {
-        method: 'POST',
+    saveGitHubRepositories(repositoryIds: number[]) {
+      return request<{ ok: boolean }>('/api/apps/github/repositories', {
+        method: 'PUT',
         body: JSON.stringify({ repositoryIds }),
       });
     },

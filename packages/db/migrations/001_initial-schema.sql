@@ -30,19 +30,20 @@ CREATE TABLE sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
   kind TEXT NOT NULL,
-  connector_kind TEXT,
+  app_kind TEXT,
   external_id TEXT,
   title TEXT NOT NULL,
   uri TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE connector_configs (
+CREATE TABLE app_capability_configs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id),
-  kind TEXT NOT NULL,
+  app_kind TEXT NOT NULL,
+  capability TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
-  credentials_encrypted TEXT NOT NULL,
+  encrypted_credentials TEXT NOT NULL,
   settings JSONB NOT NULL DEFAULT '{}',
   last_sync_cursor TEXT,
   last_sync_at TIMESTAMPTZ,
@@ -50,14 +51,15 @@ CREATE TABLE connector_configs (
   last_error TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, kind)
+  UNIQUE(user_id, app_kind, capability)
 );
 
-CREATE TABLE connector_sync_runs (
+CREATE TABLE app_sync_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id),
-  connector_config_id UUID REFERENCES connector_configs(id) ON DELETE SET NULL,
-  connector_kind TEXT NOT NULL,
+  app_capability_config_id UUID REFERENCES app_capability_configs(id) ON DELETE SET NULL,
+  app_kind TEXT NOT NULL,
+  capability TEXT NOT NULL,
   trigger TEXT NOT NULL DEFAULT 'manual',
   status TEXT NOT NULL DEFAULT 'running',
   items_discovered INTEGER NOT NULL DEFAULT 0,
@@ -207,16 +209,16 @@ CREATE INDEX idx_memories_user ON memories(user_id);
 CREATE INDEX idx_memories_user_kind_updated ON memories(user_id, kind, updated_at DESC);
 CREATE INDEX idx_tool_executions_conversation ON tool_executions(conversation_id);
 CREATE INDEX idx_sources_user ON sources(user_id);
-CREATE UNIQUE INDEX idx_sources_connector_external
-  ON sources(user_id, connector_kind, external_id)
-  WHERE connector_kind IS NOT NULL AND external_id IS NOT NULL;
+CREATE UNIQUE INDEX idx_sources_app_external
+  ON sources(user_id, app_kind, external_id)
+  WHERE app_kind IS NOT NULL AND external_id IS NOT NULL;
 CREATE INDEX idx_documents_user ON documents(user_id);
 CREATE UNIQUE INDEX idx_documents_source_unique
   ON documents(source_id)
   WHERE source_id IS NOT NULL;
-CREATE INDEX idx_connector_configs_user ON connector_configs(user_id);
-CREATE INDEX idx_connector_sync_runs_user_kind_started
-  ON connector_sync_runs(user_id, connector_kind, started_at DESC);
+CREATE INDEX idx_app_capability_configs_user ON app_capability_configs(user_id);
+CREATE INDEX idx_app_sync_runs_user_kind_started
+  ON app_sync_runs(user_id, app_kind, capability, started_at DESC);
 CREATE INDEX idx_mcp_connections_user ON mcp_connections(user_id);
 CREATE INDEX idx_mcp_browser_sessions_connection
   ON mcp_browser_sessions(mcp_connection_id, created_at DESC);

@@ -20,7 +20,7 @@ export { embeddingRepository } from './embeddings.js';
 export type { Embedding, EmbeddingRepository, EmbeddingSearchFilters } from './embeddings.js';
 
 export { sourceRepository } from './sources.js';
-export type { ConnectorSourceStats, IndexedSourceSummary, Source, SourceRepository } from './sources.js';
+export type { AppSourceStats, IndexedSourceSummary, Source, SourceRepository } from './sources.js';
 
 export { toolExecutionRepository } from './tool-executions.js';
 export type { ToolExecution, ToolExecutionRepository } from './tool-executions.js';
@@ -34,11 +34,14 @@ export type { Preference, PreferenceRepository } from './preferences.js';
 export { memoryRepository } from './memories.js';
 export type { Memory, MemoryRepository } from './memories.js';
 
-export { connectorConfigRepository } from './connector-configs.js';
-export type { ConnectorConfig, ConnectorConfigRepository } from './connector-configs.js';
+export { appCapabilityConfigRepository } from './app-capability-configs.js';
+export type {
+  AppCapabilityConfig,
+  AppCapabilityConfigRepository,
+} from './app-capability-configs.js';
 
-export { connectorSyncRunRepository } from './connector-sync-runs.js';
-export type { ConnectorSyncRun, ConnectorSyncRunRepository } from './connector-sync-runs.js';
+export { appSyncRunRepository } from './app-sync-runs.js';
+export type { AppSyncRun, AppSyncRunRepository } from './app-sync-runs.js';
 
 export { mcpConnectionRepository } from './mcp-connections.js';
 export type { McpConnection, McpConnectionRepository } from './mcp-connections.js';

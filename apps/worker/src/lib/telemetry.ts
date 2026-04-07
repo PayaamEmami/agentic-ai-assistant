@@ -45,7 +45,7 @@ export const workerReadinessState = createGauge({
   labelNames: ['dependency'] as const,
 }) as ReturnType<typeof createGauge>;
 
-const QUEUE_NAMES = ['connector-sync', 'ingestion', 'embedding', 'tool-execution'] as const;
+const QUEUE_NAMES = ['app-sync', 'ingestion', 'embedding', 'tool-execution'] as const;
 
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);

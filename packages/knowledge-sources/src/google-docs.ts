@@ -1,4 +1,9 @@
-import type { Connector, ConnectorAuth, ConnectorItem, SyncResult } from './types.js';
+import type {
+  KnowledgeSource,
+  KnowledgeSourceAuth,
+  KnowledgeSourceItem,
+  KnowledgeSyncResult,
+} from './types.js';
 import { requestJson, requestText } from './http.js';
 
 interface GoogleDocsCredentials {
@@ -22,11 +27,11 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-export class GoogleDocsConnector implements Connector {
-  kind = 'google_docs' as const;
+export class GoogleKnowledgeSource implements KnowledgeSource {
+  kind = 'google' as const;
   private credentials: GoogleDocsCredentials | null = null;
 
-  async initialize(auth: ConnectorAuth): Promise<void> {
+  async initialize(auth: KnowledgeSourceAuth): Promise<void> {
     const accessToken = asString(auth.credentials.accessToken);
     if (!accessToken) {
       throw new Error('Google access token is required');
@@ -39,15 +44,18 @@ export class GoogleDocsConnector implements Connector {
     };
   }
 
-  async list(cursor?: string, limit = 100): Promise<{ items: ConnectorItem[]; nextCursor: string | null }> {
+  async list(
+    cursor?: string,
+    limit = 100,
+  ): Promise<{ items: KnowledgeSourceItem[]; nextCursor: string | null }> {
     const files = await this.listGoogleDocs(limit, cursor);
     return {
-      items: files.map((file) => this.toConnectorItem(file)),
+      items: files.map((file) => this.toKnowledgeSourceItem(file)),
       nextCursor: files.length === limit ? files.at(-1)?.id ?? null : null,
     };
   }
 
-  async read(externalId: string): Promise<ConnectorItem | null> {
+  async read(externalId: string): Promise<KnowledgeSourceItem | null> {
     const headers = await this.buildHeaders();
     const file = await requestJson<GoogleFile>(
       `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(externalId)}?fields=id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId`,
@@ -68,12 +76,12 @@ export class GoogleDocsConnector implements Connector {
     );
 
     return {
-      ...this.toConnectorItem(file),
+      ...this.toKnowledgeSourceItem(file),
       content,
     };
   }
 
-  async search(query: string, limit = 20): Promise<ConnectorItem[]> {
+  async search(query: string, limit = 20): Promise<KnowledgeSourceItem[]> {
     const trimmed = query.trim();
     if (!trimmed) {
       return [];
@@ -95,10 +103,10 @@ export class GoogleDocsConnector implements Connector {
 
     return (response.files ?? [])
       .filter((file) => this.shouldIncludeGoogleDoc(file))
-      .map((file) => this.toConnectorItem(file));
+      .map((file) => this.toKnowledgeSourceItem(file));
   }
 
-  async sync(cursor?: string): Promise<SyncResult> {
+  async sync(cursor?: string): Promise<KnowledgeSyncResult> {
     const headers = await this.buildHeaders();
     const errors: Array<{ externalId: string; error: string }> = [];
 
@@ -110,7 +118,7 @@ export class GoogleDocsConnector implements Connector {
       );
 
       return {
-        items: files.map((file) => this.toConnectorItem(file)),
+        items: files.map((file) => this.toKnowledgeSourceItem(file)),
         itemsSynced: files.length,
         errors,
         nextCursor: startPageToken.startPageToken,
@@ -135,7 +143,7 @@ export class GoogleDocsConnector implements Connector {
       },
     );
 
-    const items: ConnectorItem[] = [];
+    const items: KnowledgeSourceItem[] = [];
     for (const change of response.changes ?? []) {
       if (change.removed) {
         items.push({
@@ -169,7 +177,7 @@ export class GoogleDocsConnector implements Connector {
         continue;
       }
 
-      items.push(this.toConnectorItem(change.file));
+      items.push(this.toKnowledgeSourceItem(change.file));
     }
 
     return {
@@ -189,7 +197,7 @@ export class GoogleDocsConnector implements Connector {
 
   private async getAccessToken(): Promise<string> {
     if (!this.credentials) {
-      throw new Error('Google Docs connector is not initialized');
+      throw new Error('Google knowledge source is not initialized');
     }
 
     if (!this.credentials.expiresAt || Date.parse(this.credentials.expiresAt) - Date.now() > 60_000) {
@@ -264,7 +272,7 @@ export class GoogleDocsConnector implements Connector {
     );
   }
 
-  private toConnectorItem(file: GoogleFile): ConnectorItem {
+  private toKnowledgeSourceItem(file: GoogleFile): KnowledgeSourceItem {
     return {
       externalId: file.id,
       sourceKind: 'document',

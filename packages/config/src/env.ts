@@ -38,12 +38,12 @@ const envSchema = z.object({
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
-  GITHUB_REDIRECT_URI_BASE: z.string().optional(),
+  GITHUB_APP_REDIRECT_URI_BASE: z.string().optional(),
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI_BASE: z.string().optional(),
+  GOOGLE_APP_REDIRECT_URI_BASE: z.string().optional(),
   WEB_BASE_URL: z.string().default('http://localhost:3000'),
-  CONNECTOR_CREDENTIALS_SECRET: z.string().optional(),
+  APP_CREDENTIALS_SECRET: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

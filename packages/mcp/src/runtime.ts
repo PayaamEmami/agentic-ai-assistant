@@ -15,7 +15,7 @@ const BUILT_IN_CATALOG: McpCatalogEntry[] = [
     kind: 'playwright',
     displayName: 'Playwright Browser',
     description:
-      'Per-user browser automation with persisted session state, screenshots, extraction, and controlled interactions.',
+      'Web browser automation with persisted session state, screenshots, extraction, and controlled interactions.',
     supportsMultipleInstances: true,
     requiresDefaultActive: true,
     authModes: ['manual_browser', 'stored_secret'],

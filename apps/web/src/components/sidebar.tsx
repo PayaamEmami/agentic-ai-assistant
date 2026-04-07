@@ -55,7 +55,7 @@ export function Sidebar({
     useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
-  const isConnectorsPage = pathname === '/chat/connectors';
+  const isAppsPage = pathname === '/chat/apps';
 
   useEffect(() => {
     setIsAccountMenuOpen(false);
@@ -364,15 +364,15 @@ export function Sidebar({
             </button>
             <button
               type="button"
-              onClick={() => navigateTo('/chat/connectors')}
+              onClick={() => navigateTo('/chat/apps')}
               className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                isConnectorsPage
+                isAppsPage
                   ? 'bg-surface-accent text-foreground'
                   : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
               }`}
             >
-              <ConnectorIcon />
-              Connectors
+              <AppsIcon />
+              Apps
             </button>
             <button
               type="button"
@@ -457,7 +457,7 @@ function TrashIcon() {
   );
 }
 
-function ConnectorIcon() {
+function AppsIcon() {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22v-5" />

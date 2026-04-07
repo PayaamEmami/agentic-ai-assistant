@@ -63,9 +63,9 @@ function extractErrorDetail(body: string): string | null {
 async function performRequest(input: string, init?: RequestInit): Promise<Response> {
   const url = new URL(input);
   const response = await fetchWithTelemetry(input, init, {
-    component: 'connector-http',
+    component: 'knowledge-source-http',
     provider: inferProvider(url.hostname),
-    eventPrefix: 'connector.http',
+    eventPrefix: 'knowledge_source.http',
     logResponseBodyOnFailure: false,
   });
   if (!response.ok) {

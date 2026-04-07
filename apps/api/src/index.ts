@@ -7,7 +7,7 @@ import { logger } from './lib/logger.js';
 import { initializeApiTelemetry } from './lib/telemetry.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
 import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
-import { closeConnectorSyncQueue } from './services/connector-queue.js';
+import { closeAppSyncQueue } from './services/app-queue.js';
 import { closeBrowserSessionManager, getBrowserSessionManager } from './services/browser-session-manager.js';
 
 async function main() {
@@ -37,7 +37,7 @@ async function main() {
 
     try {
       await server.close();
-      await closeConnectorSyncQueue();
+      await closeAppSyncQueue();
       await closeToolExecutionQueue();
       await closeBrowserSessionManager();
       await closeMcpRuntime();
@@ -98,7 +98,7 @@ async function main() {
       'Failed to start server',
     );
     await closeToolExecutionQueue();
-    await closeConnectorSyncQueue();
+    await closeAppSyncQueue();
     await closeBrowserSessionManager();
     await closeMcpRuntime();
     await stopToolEventRelay();

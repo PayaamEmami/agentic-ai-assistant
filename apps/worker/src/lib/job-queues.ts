@@ -1,15 +1,17 @@
 import { Queue } from 'bullmq';
 import { getLogContext, getLogger, withSpan } from '@aaa/observability';
 
-export interface ConnectorSyncJobData {
-  connectorConfigId: string;
+export interface AppSyncJobData {
+  appCapabilityConfigId: string;
   userId: string;
-  connectorKind: 'github' | 'google_docs';
+  appKind: 'github' | 'google';
+  capability: 'knowledge';
   correlationId: string;
 }
 
 export interface IngestionJobData {
-  connectorConfigId: string;
+  appCapabilityConfigId: string;
+  appKind: 'github' | 'google';
   documentId: string;
   sourceId: string;
   userId: string;
@@ -23,7 +25,7 @@ export interface EmbeddingJobData {
   correlationId: string;
 }
 
-let connectorSyncQueue: Queue<ConnectorSyncJobData> | null = null;
+let appSyncQueue: Queue<AppSyncJobData> | null = null;
 let ingestionQueue: Queue<IngestionJobData> | null = null;
 let embeddingQueue: Queue<EmbeddingJobData> | null = null;
 
@@ -40,13 +42,13 @@ function parseRedisUrl(url: string): { host: string; port: number; password?: st
   };
 }
 
-function getConnectorSyncQueue(): Queue<ConnectorSyncJobData> {
-  if (!connectorSyncQueue) {
-    connectorSyncQueue = new Queue<ConnectorSyncJobData>('connector-sync', {
+function getAppSyncQueue(): Queue<AppSyncJobData> {
+  if (!appSyncQueue) {
+    appSyncQueue = new Queue<AppSyncJobData>('app-sync', {
       connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
     });
   }
-  return connectorSyncQueue;
+  return appSyncQueue;
 }
 
 function getIngestionQueue(): Queue<IngestionJobData> {
@@ -67,38 +69,39 @@ function getEmbeddingQueue(): Queue<EmbeddingJobData> {
   return embeddingQueue;
 }
 
-export async function enqueueConnectorSyncJob(job: ConnectorSyncJobData): Promise<void> {
+export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
   const correlationId =
-    job.correlationId || getLogContext().correlationId || `connector-${job.connectorConfigId}`;
+    job.correlationId || getLogContext().correlationId || `app-${job.appCapabilityConfigId}`;
   const payload = {
     ...job,
     correlationId,
   };
 
   await withSpan(
-    'queue.connector_sync.enqueue',
+    'queue.app_sync.enqueue',
     {
-      'aaa.queue.name': 'connector-sync',
-      'aaa.connector_config.id': job.connectorConfigId,
+      'aaa.queue.name': 'app-sync',
+      'aaa.app_capability_config.id': job.appCapabilityConfigId,
     },
     () =>
-      getConnectorSyncQueue().add('sync-connector', payload, {
-        jobId: createSafeJobId('connector-sync', job.connectorConfigId),
+      getAppSyncQueue().add('sync-app', payload, {
+        jobId: createSafeJobId('app-sync', job.appCapabilityConfigId),
         removeOnComplete: 100,
         removeOnFail: 500,
       }),
   );
   getLogger({
     component: 'worker-job-queues',
-    connectorConfigId: job.connectorConfigId,
+    appCapabilityConfigId: job.appCapabilityConfigId,
     correlationId,
   }).info(
     {
-      event: 'connector.sync.enqueued',
+      event: 'app.sync.enqueued',
       outcome: 'accepted',
-      connectorKind: job.connectorKind,
+      appKind: job.appKind,
+      appCapability: job.capability,
     },
-    'Connector sync job enqueued',
+    'App sync job enqueued',
   );
 }
 
@@ -133,6 +136,7 @@ export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> 
       outcome: 'accepted',
       sourceId: job.sourceId,
       externalId: job.externalId,
+      appKind: job.appKind,
     },
     'Ingestion job enqueued',
   );
@@ -173,11 +177,11 @@ export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> 
 
 export async function closeJobQueues(): Promise<void> {
   await Promise.all(
-    [connectorSyncQueue, ingestionQueue, embeddingQueue]
+    [appSyncQueue, ingestionQueue, embeddingQueue]
       .filter((queue): queue is Queue => queue !== null)
       .map((queue) => queue.close()),
   );
-  connectorSyncQueue = null;
+  appSyncQueue = null;
   ingestionQueue = null;
   embeddingQueue = null;
 }

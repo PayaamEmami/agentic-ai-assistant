@@ -16,17 +16,17 @@ export interface AppConfig {
   s3Region: string;
   s3Endpoint: string | undefined;
   webBaseUrl: string;
-  connectorCredentialsSecret: string;
+  appCredentialsSecret: string;
   otlpEndpoint?: string;
   otelServiceNamespace?: string;
   otelResourceAttributes?: string;
   logFileEnabled?: boolean;
   googleClientId?: string;
   googleClientSecret?: string;
-  googleRedirectUriBase?: string;
+  googleAppRedirectUriBase?: string;
   githubClientId?: string;
   githubClientSecret?: string;
-  githubRedirectUriBase?: string;
+  githubAppRedirectUriBase?: string;
 }
 
 declare module 'fastify' {
@@ -72,11 +72,11 @@ export function loadConfig(): AppConfig {
     s3Region: process.env.S3_REGION ?? 'us-west-1',
     s3Endpoint: process.env.S3_ENDPOINT,
     webBaseUrl: process.env.WEB_BASE_URL ?? 'http://localhost:3000',
-    connectorCredentialsSecret:
-      process.env.CONNECTOR_CREDENTIALS_SECRET ??
+    appCredentialsSecret:
+      process.env.APP_CREDENTIALS_SECRET ??
       (nodeEnv === 'production'
-        ? required('CONNECTOR_CREDENTIALS_SECRET')
-        : 'dev-connector-credentials-secret'),
+        ? required('APP_CREDENTIALS_SECRET')
+        : 'dev-app-credentials-secret'),
     otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
     otelServiceNamespace: process.env.OTEL_SERVICE_NAMESPACE,
     otelResourceAttributes: process.env.OTEL_RESOURCE_ATTRIBUTES,
@@ -86,9 +86,9 @@ export function loadConfig(): AppConfig {
         : undefined,
     googleClientId: process.env.GOOGLE_CLIENT_ID,
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    googleRedirectUriBase: process.env.GOOGLE_REDIRECT_URI_BASE,
+    googleAppRedirectUriBase: process.env.GOOGLE_APP_REDIRECT_URI_BASE,
     githubClientId: process.env.GITHUB_CLIENT_ID,
     githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
-    githubRedirectUriBase: process.env.GITHUB_REDIRECT_URI_BASE,
+    githubAppRedirectUriBase: process.env.GITHUB_APP_REDIRECT_URI_BASE,
   };
 }

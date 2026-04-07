@@ -27,7 +27,7 @@ import { uploadRoutes } from './routes/upload.js';
 import { approvalRoutes } from './routes/approvals.js';
 import { personalizationRoutes } from './routes/personalization.js';
 import { voiceRoutes } from './routes/voice.js';
-import { connectorRoutes } from './routes/connectors.js';
+import { appRoutes } from './routes/apps.js';
 import { mcpRoutes } from './routes/mcp.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
@@ -150,7 +150,7 @@ export async function buildServer(config: AppConfig) {
   await app.register(approvalRoutes, { prefix: '/api' });
   await app.register(personalizationRoutes, { prefix: '/api' });
   await app.register(voiceRoutes, { prefix: '/api' });
-  await app.register(connectorRoutes, { prefix: '/api' });
+  await app.register(appRoutes, { prefix: '/api' });
   await app.register(mcpRoutes, { prefix: '/api' });
   await app.register(clientLogRoutes, { prefix: '/api' });
   await app.register(clientTelemetryRoutes, { prefix: '/api' });

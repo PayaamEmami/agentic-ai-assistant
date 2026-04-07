@@ -20,7 +20,7 @@ interface EmbeddingQueryRow {
 export interface Embedding extends EmbeddingRow {}
 
 export interface EmbeddingSearchFilters {
-  connectorKinds?: string[];
+  appKinds?: string[];
 }
 
 export interface EmbeddingRepository {
@@ -105,9 +105,8 @@ export const embeddingRepository: EmbeddingRepository = {
     filters?: EmbeddingSearchFilters,
   ): Promise<Embedding[]> {
     const pool = getPool();
-    const connectorKinds =
-      filters?.connectorKinds?.map((kind) => kind.trim()).filter((kind) => kind.length > 0) ?? [];
-    const hasConnectorFilter = connectorKinds.length > 0;
+    const appKinds = filters?.appKinds?.map((kind) => kind.trim()).filter((kind) => kind.length > 0) ?? [];
+    const hasAppFilter = appKinds.length > 0;
 
     let query: string;
     let params: Array<string | number | string[]>;
@@ -119,9 +118,9 @@ export const embeddingRepository: EmbeddingRepository = {
         '(d.user_id = $3 OR (d.user_id IS NULL AND s.user_id = $3))',
       ];
 
-      if (hasConnectorFilter) {
-        params.push(connectorKinds);
-        conditions.push(`s.connector_kind = ANY($${params.length}::text[])`);
+      if (hasAppFilter) {
+        params.push(appKinds);
+        conditions.push(`s.app_kind = ANY($${params.length}::text[])`);
       }
 
       query = `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
@@ -132,15 +131,15 @@ export const embeddingRepository: EmbeddingRepository = {
                WHERE ${conditions.join('\n                 AND ')}
                ORDER BY e.vector <=> $1::vector
                LIMIT $2`;
-    } else if (hasConnectorFilter) {
-      params = [serializeVector(vector), limit, connectorKinds];
+    } else if (hasAppFilter) {
+      params = [serializeVector(vector), limit, appKinds];
       query = `SELECT e.id, e.chunk_id AS "chunkId", e.vector::text AS "vector", e.model, e.created_at AS "createdAt"
                FROM embeddings AS e
                JOIN chunks AS c ON c.id = e.chunk_id
                JOIN documents AS d ON d.id = c.document_id
                LEFT JOIN sources AS s ON s.id = d.source_id
                WHERE e.vector IS NOT NULL
-                 AND s.connector_kind = ANY($3::text[])
+                 AND s.app_kind = ANY($3::text[])
                ORDER BY e.vector <=> $1::vector
                LIMIT $2`;
     } else {

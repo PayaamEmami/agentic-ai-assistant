@@ -30,7 +30,7 @@ export function toSystemPromptContext(context: AgentContext): SystemPromptContex
   return {
     personalContext: context.personalContext,
     availableTools: context.availableTools,
-    activeConnectors: context.activeConnectors,
+    activeApps: context.activeApps,
   };
 }
 

@@ -7,8 +7,9 @@ export interface LogContext {
   spanId?: string;
   userId?: string;
   conversationId?: string;
-  connectorKind?: string;
-  connectorConfigId?: string;
+  appKind?: string;
+  appCapability?: string;
+  appCapabilityConfigId?: string;
   documentId?: string;
   sourceId?: string;
   externalId?: string;

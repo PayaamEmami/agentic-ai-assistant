@@ -31,7 +31,7 @@ export interface SearchQuery {
 
 export interface SearchFilters {
   sourceKinds?: string[];
-  connectorKinds?: string[];
+  appKinds?: string[];
   dateFrom?: Date;
   dateTo?: Date;
 }

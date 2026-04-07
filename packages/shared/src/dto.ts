@@ -155,13 +155,11 @@ export const HealthResponse = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
-export const ConnectorKindDto = z.enum([
-  'github',
-  'google_docs',
-  'github_tools',
-  'google_drive_tools',
-]);
-export type ConnectorKindDto = z.infer<typeof ConnectorKindDto>;
+export const AppKindDto = z.enum(['github', 'google']);
+export type AppKindDto = z.infer<typeof AppKindDto>;
+
+export const AppCapabilityDto = z.enum(['knowledge', 'tools']);
+export type AppCapabilityDto = z.infer<typeof AppCapabilityDto>;
 
 export const McpIntegrationKindDto = z.enum(['playwright']);
 export type McpIntegrationKindDto = z.infer<typeof McpIntegrationKindDto>;
@@ -176,13 +174,13 @@ export const MemoryKindDto = z.enum([
 ]);
 export type MemoryKindDto = z.infer<typeof MemoryKindDto>;
 
-export const ConnectorStatusDto = z.enum(['pending', 'connected', 'failed']);
-export type ConnectorStatusDto = z.infer<typeof ConnectorStatusDto>;
+export const AppStatusDto = z.enum(['pending', 'connected', 'failed']);
+export type AppStatusDto = z.infer<typeof AppStatusDto>;
 
-export const ConnectorSyncStatusDto = z.enum(['pending', 'running', 'completed', 'failed']);
-export type ConnectorSyncStatusDto = z.infer<typeof ConnectorSyncStatusDto>;
+export const AppSyncStatusDto = z.enum(['pending', 'running', 'completed', 'failed']);
+export type AppSyncStatusDto = z.infer<typeof AppSyncStatusDto>;
 
-export const ConnectorSyncRunDto = z.object({
+export const AppSyncRunDto = z.object({
   id: z.string().uuid(),
   trigger: z.string(),
   status: z.enum(['running', 'completed', 'failed']),
@@ -194,9 +192,9 @@ export const ConnectorSyncRunDto = z.object({
   startedAt: z.string().datetime(),
   completedAt: z.string().datetime().nullable(),
 });
-export type ConnectorSyncRunDto = z.infer<typeof ConnectorSyncRunDto>;
+export type AppSyncRunDto = z.infer<typeof AppSyncRunDto>;
 
-export const ConnectorSourceDto = z.object({
+export const AppSourceDto = z.object({
   id: z.string().uuid(),
   kind: z.string(),
   title: z.string(),
@@ -204,43 +202,53 @@ export const ConnectorSourceDto = z.object({
   mimeType: z.string().nullable(),
   updatedAt: z.string().datetime(),
 });
-export type ConnectorSourceDto = z.infer<typeof ConnectorSourceDto>;
+export type AppSourceDto = z.infer<typeof AppSourceDto>;
 
-export const ConnectorSummaryDto = z.object({
-  id: z.string().uuid(),
-  kind: ConnectorKindDto,
-  status: ConnectorStatusDto,
+export const AppCapabilitySummaryDto = z.object({
+  capability: AppCapabilityDto,
+  status: AppStatusDto,
   lastSyncAt: z.string().datetime().nullable(),
-  lastSyncStatus: ConnectorSyncStatusDto.nullable(),
+  lastSyncStatus: AppSyncStatusDto.nullable(),
   lastError: z.string().nullable(),
   hasCredentials: z.boolean(),
-  selectedRepoCount: z.number().int().nonnegative().optional(),
   totalSourceCount: z.number().int().nonnegative().default(0),
   searchableSourceCount: z.number().int().nonnegative().default(0),
-  recentSyncRuns: z.array(ConnectorSyncRunDto).default([]),
-  recentSources: z.array(ConnectorSourceDto).default([]),
+  recentSyncRuns: z.array(AppSyncRunDto).default([]),
+  recentSources: z.array(AppSourceDto).default([]),
 });
-export type ConnectorSummaryDto = z.infer<typeof ConnectorSummaryDto>;
+export type AppCapabilitySummaryDto = z.infer<typeof AppCapabilitySummaryDto>;
 
-export const ConnectorListResponse = z.object({
-  connectors: z.array(ConnectorSummaryDto),
+export const AppSummaryDto = z.object({
+  kind: AppKindDto,
+  displayName: z.string(),
+  status: AppStatusDto,
+  hasCredentials: z.boolean(),
+  lastError: z.string().nullable(),
+  selectedRepoCount: z.number().int().nonnegative().optional(),
+  knowledge: AppCapabilitySummaryDto,
+  tools: AppCapabilitySummaryDto,
 });
-export type ConnectorListResponse = z.infer<typeof ConnectorListResponse>;
+export type AppSummaryDto = z.infer<typeof AppSummaryDto>;
 
-export const ConnectorConnectStartResponse = z.object({
+export const AppListResponse = z.object({
+  apps: z.array(AppSummaryDto),
+});
+export type AppListResponse = z.infer<typeof AppListResponse>;
+
+export const AppConnectResponse = z.object({
   authorizationUrl: z.string().url(),
 });
-export type ConnectorConnectStartResponse = z.infer<typeof ConnectorConnectStartResponse>;
+export type AppConnectResponse = z.infer<typeof AppConnectResponse>;
 
-export const ConnectorSyncResponse = z.object({
+export const AppSyncResponse = z.object({
   queued: z.boolean(),
 });
-export type ConnectorSyncResponse = z.infer<typeof ConnectorSyncResponse>;
+export type AppSyncResponse = z.infer<typeof AppSyncResponse>;
 
-export const ConnectorDisconnectResponse = z.object({
+export const AppDisconnectResponse = z.object({
   ok: z.literal(true),
 });
-export type ConnectorDisconnectResponse = z.infer<typeof ConnectorDisconnectResponse>;
+export type AppDisconnectResponse = z.infer<typeof AppDisconnectResponse>;
 
 export const McpConnectionStatusDto = z.enum(['pending', 'connected', 'failed']);
 export type McpConnectionStatusDto = z.infer<typeof McpConnectionStatusDto>;

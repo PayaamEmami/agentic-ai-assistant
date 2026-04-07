@@ -4,7 +4,8 @@ import type {
   ApprovalStatus,
   ToolExecutionStatus,
   SourceKind,
-  ConnectorKind,
+  AppKind,
+  AppCapability,
   McpIntegrationKind,
   MemoryKind,
   AgentRole,
@@ -103,7 +104,7 @@ export interface Source {
   id: string;
   userId: string | null;
   kind: SourceKind;
-  connectorKind: ConnectorKind | null;
+  appKind: AppKind | null;
   externalId: string | null;
   title: string;
   uri: string | null;
@@ -202,10 +203,11 @@ export interface Preference {
   updatedAt: Date;
 }
 
-export interface ConnectorConfig {
+export interface AppCapabilityConfig {
   id: string;
   userId: string;
-  kind: ConnectorKind;
+  appKind: AppKind;
+  capability: AppCapability;
   status: 'pending' | 'connected' | 'failed';
   credentials: Record<string, unknown>;
   settings: Record<string, unknown>;

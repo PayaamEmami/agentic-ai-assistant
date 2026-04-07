@@ -32,12 +32,12 @@ importers:
       '@aaa/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@aaa/connectors':
-        specifier: workspace:*
-        version: link:../../packages/connectors
       '@aaa/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@aaa/knowledge-sources':
+        specifier: workspace:*
+        version: link:../../packages/knowledge-sources
       '@aaa/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
@@ -136,12 +136,12 @@ importers:
       '@aaa/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@aaa/connectors':
-        specifier: workspace:*
-        version: link:../../packages/connectors
       '@aaa/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@aaa/knowledge-sources':
+        specifier: workspace:*
+        version: link:../../packages/knowledge-sources
       '@aaa/mcp':
         specifier: workspace:*
         version: link:../../packages/mcp
@@ -206,19 +206,6 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
-  packages/connectors:
-    dependencies:
-      '@aaa/observability':
-        specifier: workspace:*
-        version: link:../observability
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.37
-      typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
-
   packages/db:
     dependencies:
       '@aaa/observability':
@@ -237,6 +224,19 @@ importers:
       '@types/pg':
         specifier: ^8.11.0
         version: 8.18.0
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+
+  packages/knowledge-sources:
+    dependencies:
+      '@aaa/observability':
+        specifier: workspace:*
+        version: link:../observability
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.37
       typescript:
         specifier: ^5.5.0
         version: 5.9.3

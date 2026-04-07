@@ -1,18 +1,19 @@
 import type { Job } from 'bullmq';
 import {
   chunkRepository,
-  connectorConfigRepository,
+  appCapabilityConfigRepository,
   documentRepository,
   embeddingRepository,
   sourceRepository,
 } from '@aaa/db';
-import { createConnector, decryptConnectorCredentials } from '@aaa/connectors';
+import { createKnowledgeSource, decryptCredentials } from '@aaa/knowledge-sources';
 import { SimpleChunkingService } from '@aaa/retrieval';
 import { logger } from '../lib/logger.js';
 import { enqueueEmbeddingJob } from '../lib/job-queues.js';
 
 export interface IngestionJobData {
-  connectorConfigId: string;
+  appCapabilityConfigId: string;
+  appKind: 'github' | 'google';
   documentId: string;
   sourceId: string;
   userId: string;
@@ -21,7 +22,8 @@ export interface IngestionJobData {
 }
 
 export async function handleIngestion(job: Job<IngestionJobData>): Promise<void> {
-  const { connectorConfigId, documentId, sourceId, externalId, correlationId } = job.data;
+  const { appCapabilityConfigId, appKind, documentId, sourceId, externalId, correlationId } =
+    job.data;
   logger.info(
     {
       event: 'ingestion.started',
@@ -35,40 +37,40 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
     'Processing ingestion job',
   );
 
-  const config = await connectorConfigRepository.findById(connectorConfigId);
+  const config = await appCapabilityConfigRepository.findById(appCapabilityConfigId);
   if (!config) {
     logger.warn(
       {
         event: 'ingestion.skipped',
         outcome: 'failure',
-        connectorConfigId,
+        appCapabilityConfigId,
         jobId: job.id,
         correlationId,
       },
-      'Connector config not found for ingestion job',
+      'App capability config not found for ingestion job',
     );
     return;
   }
 
-  const connector = createConnector(config.kind as 'github' | 'google_docs');
-  await connector.initialize({
-    kind: config.kind as 'github' | 'google_docs',
-    credentials: decryptConnectorCredentials(config.credentialsEncrypted),
+  const knowledgeSource = createKnowledgeSource(appKind);
+  await knowledgeSource.initialize({
+    kind: appKind,
+    credentials: decryptCredentials(config.encryptedCredentials),
     settings: config.settings,
   });
 
-  const item = await connector.read(externalId);
+  const item = await knowledgeSource.read(externalId);
   if (!item) {
     logger.warn(
       {
         event: 'ingestion.skipped',
         outcome: 'failure',
         externalId,
-        connectorConfigId,
+        appCapabilityConfigId,
         jobId: job.id,
         correlationId,
       },
-      'Connector item could not be read',
+      'Knowledge source item could not be read',
     );
     return;
   }
@@ -103,7 +105,7 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
     content,
     mimeType: item.mimeType,
     metadata: {
-      connectorKind: config.kind,
+      appKind: config.appKind,
       externalId: item.externalId,
       uri: item.uri,
       ...item.metadata,

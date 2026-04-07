@@ -10,7 +10,7 @@ export interface PromptToolContext {
 export interface SystemPromptContext {
   personalContext?: string;
   availableTools?: Array<string | PromptToolContext>;
-  activeConnectors?: string[];
+  activeApps?: string[];
 }
 
 export function buildSystemPrompt(context: SystemPromptContext): string {
@@ -27,9 +27,9 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
     sections.push(`Available tools:\n${tools}`);
   }
 
-  if (context.activeConnectors && context.activeConnectors.length > 0) {
-    const connectors = context.activeConnectors.map((connector) => `- ${connector}`).join('\n');
-    sections.push(`Active connectors:\n${connectors}`);
+  if (context.activeApps && context.activeApps.length > 0) {
+    const apps = context.activeApps.map((app) => `- ${app}`).join('\n');
+    sections.push(`Connected apps:\n${apps}`);
   }
 
   sections.push(
@@ -94,7 +94,7 @@ Role instructions (coding):
 Role instructions (verifier):
 - Validate whether the prior output is safe, policy-aligned, and matches user intent.
 - Use any retrieved context already included in the prompt as valid evidence when checking grounding and authorization.
-- Do not require an extra permission or connector-authorization step for read-only answers that are grounded in retrieved context already present in the prompt.
+- Do not require an extra permission or app-authorization step for read-only answers that are grounded in retrieved context already present in the prompt.
 - Treat the built-in tool approval UI as the approval mechanism for tools marked as requiring approval. Do not require separate verbal confirmation when the assistant is only preparing a protected tool call for that flow.
 - Flag mistakes, unsafe operations, unsupported claims, and claims of access that go beyond the retrieved context or imply live browsing/search/tool use that did not happen.
 - Return JSON only with this shape:

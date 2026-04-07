@@ -1,13 +1,13 @@
 import type { Job } from 'bullmq';
 import {
   conversationRepository,
-  connectorConfigRepository,
+  appCapabilityConfigRepository,
   getPool,
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
 import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
-import { decryptConnectorCredentials, encryptConnectorCredentials } from '@aaa/connectors';
+import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
 import type {
   InternalPlaywrightExecuteResponse,
   ToolDoneEvent,
@@ -101,7 +101,7 @@ async function resolveGitHubRepo(repo: string, provider: GitHubToolProvider): Pr
   }
 
   throw new Error(
-    `Repository "${trimmedRepo}" did not match any GitHub repository accessible to this connector. Use the full GitHub repository name (owner/repo).`,
+    `Repository "${trimmedRepo}" did not match any GitHub repository accessible to this app. Use the full GitHub repository name (owner/repo).`,
   );
 }
 
@@ -314,12 +314,16 @@ async function withGitHubProvider(
   handler: (provider: GitHubToolProvider, token: string) => Promise<unknown>,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
   try {
-    const config = await connectorConfigRepository.findByUserAndKind(userId, 'github_tools');
+    const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
+      userId,
+      'github',
+      'tools',
+    );
     if (!config) {
-      throw new Error('GitHub tools connector is not connected');
+      throw new Error('GitHub app is not connected');
     }
 
-    const credentials = decryptConnectorCredentials(config.credentialsEncrypted);
+    const credentials = decryptCredentials(config.encryptedCredentials);
     const token = requireString(credentials, 'accessToken');
     const provider = new GitHubToolProvider(token);
     return { success: true, result: await handler(provider, token) };
@@ -337,12 +341,16 @@ async function withGoogleProvider(
   handler: (provider: GoogleDriveToolProvider) => Promise<unknown>,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
   try {
-    const config = await connectorConfigRepository.findByUserAndKind(userId, 'google_drive_tools');
+    const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
+      userId,
+      'google',
+      'tools',
+    );
     if (!config) {
-      throw new Error('Google Drive tools connector is not connected');
+      throw new Error('Google app is not connected');
     }
 
-    const credentials = decryptConnectorCredentials(config.credentialsEncrypted);
+    const credentials = decryptCredentials(config.encryptedCredentials);
     const provider = new GoogleDriveToolProvider({
       credentials: {
         accessToken: requireString(credentials, 'accessToken'),
@@ -350,9 +358,10 @@ async function withGoogleProvider(
         expiresAt: asString(credentials['expiresAt']),
       },
       onRefresh: async (refreshedCredentials) => {
-        await connectorConfigRepository.updateCredentials(
-          config.id,
-          encryptConnectorCredentials(refreshedCredentials as unknown as Record<string, unknown>),
+        await appCapabilityConfigRepository.updateCredentialsByUserAndApp(
+          userId,
+          'google',
+          encryptCredentials(refreshedCredentials as unknown as Record<string, unknown>),
         );
       },
     });

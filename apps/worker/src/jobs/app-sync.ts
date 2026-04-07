@@ -1,76 +1,79 @@
 import type { Job } from 'bullmq';
 import {
-  connectorConfigRepository,
-  connectorSyncRunRepository,
+  appCapabilityConfigRepository,
+  appSyncRunRepository,
   documentRepository,
   sourceRepository,
   chunkRepository,
   embeddingRepository,
 } from '@aaa/db';
-import { createConnector, decryptConnectorCredentials } from '@aaa/connectors';
+import { createKnowledgeSource, decryptCredentials } from '@aaa/knowledge-sources';
 import { logger } from '../lib/logger.js';
 import { enqueueIngestionJob } from '../lib/job-queues.js';
 
-export interface ConnectorSyncJobData {
-  connectorConfigId: string;
+export interface AppSyncJobData {
+  appCapabilityConfigId: string;
   userId: string;
-  connectorKind: 'github' | 'google_docs';
+  appKind: 'github' | 'google';
+  capability: 'knowledge';
   correlationId: string;
 }
 
-export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promise<void> {
-  const { connectorConfigId, userId, connectorKind, correlationId } = job.data;
+export async function handleAppSync(job: Job<AppSyncJobData>): Promise<void> {
+  const { appCapabilityConfigId, userId, appKind, capability, correlationId } = job.data;
   logger.info(
     {
-      event: 'connector.sync.started',
+      event: 'app.sync.started',
       outcome: 'start',
       userId,
-      connectorKind,
-      connectorConfigId,
+      appKind,
+      appCapability: capability,
+      appCapabilityConfigId,
       jobId: job.id,
       correlationId,
     },
-    'Processing connector sync job',
+    'Processing app sync job',
   );
 
-  const config = await connectorConfigRepository.findById(connectorConfigId);
+  const config = await appCapabilityConfigRepository.findById(appCapabilityConfigId);
   if (!config) {
     logger.warn(
       {
-        event: 'connector.sync.skipped',
+        event: 'app.sync.skipped',
         outcome: 'failure',
-        connectorConfigId,
+        appCapabilityConfigId,
         jobId: job.id,
         correlationId,
       },
-      'Connector config not found',
+      'App capability config not found',
     );
     return;
   }
 
-  const syncRun = await connectorSyncRunRepository.create(
+  const syncRun = await appSyncRunRepository.create(
     userId,
-    connectorKind,
-    connectorConfigId,
+    appKind,
+    capability,
+    appCapabilityConfigId,
     'manual',
   );
 
-  await connectorConfigRepository.updateSyncState(connectorConfigId, {
+  await appCapabilityConfigRepository.updateSyncState(appCapabilityConfigId, {
     lastSyncAt: new Date(),
     lastSyncStatus: 'running',
     lastError: null,
   });
 
   try {
-    const connector = createConnector(connectorKind);
-    await connector.initialize({
-      kind: connectorKind,
-      credentials: decryptConnectorCredentials(config.credentialsEncrypted),
+    const knowledgeSource = createKnowledgeSource(appKind);
+    await knowledgeSource.initialize({
+      kind: appKind,
+      credentials: decryptCredentials(config.encryptedCredentials),
       settings: config.settings,
     });
 
-    const result = await connector.sync(config.lastSyncCursor ?? undefined);
-    const itemsDeleted = result.items.filter((item) => item.metadata.deleted === true).length;
+    const result = await knowledgeSource.sync(config.lastSyncCursor ?? undefined);
+    const itemsDeleted = result.items.filter((item) => item.metadata['deleted'] === true).length;
     const itemsQueued = result.items.length - itemsDeleted;
     const errorSummary =
       result.errors.length > 0
@@ -78,10 +81,10 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
         : null;
 
     for (const item of result.items) {
-      if (item.metadata.deleted === true) {
+      if (item.metadata['deleted'] === true) {
         const existingSource = await sourceRepository.findByExternalId(
           userId,
-          connectorKind,
+          appKind,
           item.externalId,
         );
         if (!existingSource) {
@@ -94,12 +97,7 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
           const existingChunks = await chunkRepository.listByDocument(document.id);
           await embeddingRepository.deleteByChunkIds(existingChunks.map((chunk) => chunk.id));
           await chunkRepository.deleteByDocument(document.id);
-          await documentRepository.updateDocument(
-            document.id,
-            item.title,
-            null,
-            item.mimeType,
-          );
+          await documentRepository.updateDocument(document.id, item.title, null, item.mimeType);
         }
         continue;
       }
@@ -107,7 +105,7 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       const source = await sourceRepository.upsertByExternalId(
         userId,
         item.sourceKind,
-        connectorKind,
+        appKind,
         item.externalId,
         item.title,
         item.uri,
@@ -121,7 +119,8 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       );
 
       await enqueueIngestionJob({
-        connectorConfigId,
+        appCapabilityConfigId,
+        appKind,
         documentId: document.id,
         sourceId: source.id,
         userId,
@@ -130,18 +129,14 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
       });
     }
 
-    await connectorConfigRepository.updateSyncState(connectorConfigId, {
+    await appCapabilityConfigRepository.updateSyncState(appCapabilityConfigId, {
       lastSyncCursor: result.nextCursor,
       lastSyncAt: new Date(),
       lastSyncStatus: result.errors.length > 0 ? 'failed' : 'completed',
       lastError: errorSummary,
     });
-    await connectorConfigRepository.updateStatus(
-      connectorConfigId,
-      'connected',
-      errorSummary,
-    );
-    await connectorSyncRunRepository.complete(syncRun.id, {
+    await appCapabilityConfigRepository.updateStatus(appCapabilityConfigId, 'connected', errorSummary);
+    await appSyncRunRepository.complete(syncRun.id, {
       status: result.errors.length > 0 ? 'failed' : 'completed',
       itemsDiscovered: result.items.length,
       itemsQueued,
@@ -151,27 +146,28 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
     });
     logger.info(
       {
-        event: 'connector.sync.completed',
+        event: 'app.sync.completed',
         outcome: result.errors.length > 0 ? 'failure' : 'success',
-        connectorConfigId,
-        connectorKind,
+        appCapabilityConfigId,
+        appKind,
+        appCapability: capability,
         correlationId,
         itemsDiscovered: result.items.length,
         itemsQueued,
         itemsDeleted,
         errorCount: result.errors.length,
       },
-      'Connector sync finished',
+      'App sync finished',
     );
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await connectorConfigRepository.updateStatus(connectorConfigId, 'failed', message);
-    await connectorConfigRepository.updateSyncState(connectorConfigId, {
+    await appCapabilityConfigRepository.updateStatus(appCapabilityConfigId, 'failed', message);
+    await appCapabilityConfigRepository.updateSyncState(appCapabilityConfigId, {
       lastSyncAt: new Date(),
       lastSyncStatus: 'failed',
       lastError: message,
     });
-    await connectorSyncRunRepository.complete(syncRun.id, {
+    await appSyncRunRepository.complete(syncRun.id, {
       status: 'failed',
       itemsDiscovered: 0,
       itemsQueued: 0,
@@ -181,14 +177,15 @@ export async function handleConnectorSync(job: Job<ConnectorSyncJobData>): Promi
     });
     logger.error(
       {
-        event: 'connector.sync.failed',
+        event: 'app.sync.failed',
         outcome: 'failure',
-        connectorConfigId,
-        connectorKind,
+        appCapabilityConfigId,
+        appKind,
+        appCapability: capability,
         correlationId,
         error,
       },
-      'Connector sync failed',
+      'App sync failed',
     );
     throw error;
   }
