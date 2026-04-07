@@ -41,7 +41,6 @@ Current behavior:
 - GitHub and Google are the user-facing provider apps
 - Knowledge backs RAG over connected sources
 - Tools back native tools for live reads and writes
-- A single provider app can power both capabilities without reconnecting twice
 
 ### Tool System
 
