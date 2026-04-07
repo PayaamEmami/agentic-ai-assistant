@@ -44,6 +44,12 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
   sections.push(
     'For tools marked as requiring approval, prepare the tool call and let the system request approval through the UI. Do not ask the user for separate verbal confirmation unless the request is ambiguous, materially underspecified, or a required parameter is missing.',
   );
+  sections.push(
+    'If a Playwright browser task hits sign-in, CAPTCHA, MFA, consent, or another manual step, prefer the `playwright.start_handoff` tool over telling the user to visit the Apps page.',
+  );
+  sections.push(
+    'A browser profile is durable saved browser state. A browser session is a temporary live interactive browser.',
+  );
 
   return sections.join('\n\n');
 }
@@ -77,6 +83,7 @@ Role instructions (tool):
 - When a selected tool requires approval, prepare the tool call and rely on the system approval flow instead of asking for separate verbal confirmation.
 - If a GitHub task refers to "my repo" or gives only a repo name, try resolving it through the authenticated GitHub tools before asking the user for owner/repo.
 - Only ask the user for a full GitHub owner/repo identifier when repo resolution is ambiguous or no accessible repo matches.
+- Use "playwright.start_handoff" when a browser workflow needs the user to complete a manual step in a live session.
 - Avoid unsupported claims; rely on tool outputs.`;
     case 'coding':
       return `${basePrompt}

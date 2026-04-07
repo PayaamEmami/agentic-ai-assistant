@@ -164,6 +164,12 @@ See `.env.example` for the full template.
 pnpm install
 ```
 
+### Reset Local Database After MCP Schema Changes
+
+The MCP profile and browser session rename updates the initial schema directly and assumes a local database reset instead of backward-compatibility migrations.
+
+If you already have a local database from an older build, drop and recreate it before starting the app again.
+
 ### Start The App
 
 ```bash

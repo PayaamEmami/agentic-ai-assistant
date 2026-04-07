@@ -71,25 +71,25 @@ CREATE TABLE app_sync_runs (
   completed_at TIMESTAMPTZ
 );
 
-CREATE TABLE mcp_connections (
+CREATE TABLE mcp_profiles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   integration_kind TEXT NOT NULL,
-  instance_label TEXT NOT NULL,
+  profile_label TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   encrypted_credentials TEXT NOT NULL,
   settings JSONB NOT NULL DEFAULT '{}',
   last_error TEXT,
-  is_default_active BOOLEAN NOT NULL DEFAULT FALSE,
+  is_default BOOLEAN NOT NULL DEFAULT FALSE,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, integration_kind, instance_label)
+  UNIQUE(user_id, integration_kind, profile_label)
 );
 
-CREATE TABLE mcp_browser_sessions (
+CREATE TABLE browser_sessions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  mcp_connection_id UUID NOT NULL REFERENCES mcp_connections(id) ON DELETE CASCADE,
+  mcp_profile_id UUID NOT NULL REFERENCES mcp_profiles(id) ON DELETE CASCADE,
   message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
   purpose TEXT NOT NULL DEFAULT 'manual',
   status TEXT NOT NULL DEFAULT 'pending',
@@ -97,8 +97,8 @@ CREATE TABLE mcp_browser_sessions (
   tool_execution_id UUID,
   selected_page_id TEXT,
   metadata JSONB NOT NULL DEFAULT '{}',
-  owner_instance_id TEXT,
-  owner_instance_url TEXT,
+  owner_api_instance_id TEXT,
+  owner_api_instance_url TEXT,
   last_client_seen_at TIMESTAMPTZ,
   last_frame_at TIMESTAMPTZ,
   expires_at TIMESTAMPTZ NOT NULL,
@@ -160,7 +160,7 @@ CREATE TABLE tool_executions (
   output JSONB,
   status TEXT NOT NULL DEFAULT 'pending',
   origin TEXT NOT NULL DEFAULT 'native',
-  mcp_connection_id UUID REFERENCES mcp_connections(id) ON DELETE SET NULL,
+  mcp_profile_id UUID REFERENCES mcp_profiles(id) ON DELETE SET NULL,
   integration_kind TEXT,
   approval_id UUID,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -219,18 +219,18 @@ CREATE UNIQUE INDEX idx_documents_source_unique
 CREATE INDEX idx_app_capability_configs_user ON app_capability_configs(user_id);
 CREATE INDEX idx_app_sync_runs_user_kind_started
   ON app_sync_runs(user_id, app_kind, capability, started_at DESC);
-CREATE INDEX idx_mcp_connections_user ON mcp_connections(user_id);
-CREATE INDEX idx_mcp_browser_sessions_connection
-  ON mcp_browser_sessions(mcp_connection_id, created_at DESC);
-CREATE INDEX idx_mcp_browser_sessions_user_status_updated
-  ON mcp_browser_sessions(user_id, status, updated_at DESC);
-CREATE INDEX idx_mcp_browser_sessions_message
-  ON mcp_browser_sessions(message_id);
-CREATE INDEX idx_mcp_browser_sessions_owner_status
-  ON mcp_browser_sessions(owner_instance_id, status);
-CREATE UNIQUE INDEX idx_mcp_browser_sessions_active_connection
-  ON mcp_browser_sessions(mcp_connection_id)
+CREATE INDEX idx_mcp_profiles_user ON mcp_profiles(user_id);
+CREATE INDEX idx_browser_sessions_profile
+  ON browser_sessions(mcp_profile_id, created_at DESC);
+CREATE INDEX idx_browser_sessions_user_status_updated
+  ON browser_sessions(user_id, status, updated_at DESC);
+CREATE INDEX idx_browser_sessions_message
+  ON browser_sessions(message_id);
+CREATE INDEX idx_browser_sessions_owner_status
+  ON browser_sessions(owner_api_instance_id, status);
+CREATE UNIQUE INDEX idx_browser_sessions_active_profile
+  ON browser_sessions(mcp_profile_id)
   WHERE status IN ('pending', 'active');
-CREATE UNIQUE INDEX idx_mcp_connections_default_active
-  ON mcp_connections(user_id, integration_kind)
-  WHERE is_default_active = TRUE;
+CREATE UNIQUE INDEX idx_mcp_profiles_default
+  ON mcp_profiles(user_id, integration_kind)
+  WHERE is_default = TRUE;

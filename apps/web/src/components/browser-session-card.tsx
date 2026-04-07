@@ -33,12 +33,12 @@ interface BrowserSessionCardProps {
 
 function purposeLabel(purpose: BrowserSessionPurpose): string {
   switch (purpose) {
-    case 'auth':
+    case 'sign_in':
       return 'Sign-in session';
     case 'manual':
       return 'Manual browser session';
-    case 'tool_takeover':
-      return 'Tool takeover session';
+    case 'handoff':
+      return 'Agent handoff session';
     default:
       return 'Browser session';
   }
@@ -93,10 +93,18 @@ export function BrowserSessionCard({
 }: BrowserSessionCardProps) {
   const endedAtLabel = formatTimestamp(session.endedAt ?? null);
   const expiresAtLabel = formatTimestamp(session.expiresAt ?? null);
-  const reason =
-    session.metadata && typeof session.metadata['reason'] === 'string'
-      ? session.metadata['reason']
+  const handoffReason =
+    session.metadata && typeof session.metadata['handoffReason'] === 'string'
+      ? session.metadata['handoffReason']
       : undefined;
+  const terminalReason =
+    session.metadata && typeof session.metadata['terminalReason'] === 'string'
+      ? session.metadata['terminalReason']
+      : undefined;
+  const reasonLabel =
+    session.status === 'pending' || session.status === 'active' ? handoffReason : terminalReason;
+  const reasonPrefix =
+    session.status === 'pending' || session.status === 'active' ? 'Handoff reason' : 'Ended because';
 
   return (
     <section className="rounded-2xl border border-border bg-surface px-4 py-3">
@@ -121,7 +129,11 @@ export function BrowserSessionCard({
           <p className="mt-2 text-xs text-foreground-muted">
             {endedAtLabel ? `Ended ${endedAtLabel}` : expiresAtLabel ? `Expires ${expiresAtLabel}` : 'Session timing unavailable'}
           </p>
-          {reason ? <p className="mt-1 text-xs text-foreground-muted">Reason: {reason}</p> : null}
+          {reasonLabel ? (
+            <p className="mt-1 text-xs text-foreground-muted">
+              {reasonPrefix}: {reasonLabel}
+            </p>
+          ) : null}
         </div>
 
         {actions.length > 0 ? (

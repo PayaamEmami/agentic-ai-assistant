@@ -62,17 +62,19 @@ export interface TranscriptContentBlock {
 export interface BrowserSessionContentBlock {
   type: 'browser_session';
   browserSessionId?: string;
-  mcpConnectionId?: string;
-  purpose?: 'auth' | 'manual' | 'tool_takeover';
+  mcpProfileId?: string;
+  purpose?: 'sign_in' | 'manual' | 'handoff';
   status?:
     | 'pending'
     | 'active'
     | 'completed'
     | 'cancelled'
     | 'failed'
-    | 'expired'
-    | 'crashed';
-  instanceLabel?: string;
+      | 'expired'
+      | 'crashed';
+  profileLabel?: string;
+  handoffReason?: string | null;
+  terminalReason?: string | null;
   expiresAt?: string | null;
   endedAt?: string | null;
 }
@@ -306,9 +308,9 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
     return {
       type,
       browserSessionId: asString(raw.browserSessionId),
-      mcpConnectionId: asString(raw.mcpConnectionId),
+      mcpProfileId: asString(raw.mcpProfileId),
       purpose:
-        raw.purpose === 'auth' || raw.purpose === 'manual' || raw.purpose === 'tool_takeover'
+        raw.purpose === 'sign_in' || raw.purpose === 'manual' || raw.purpose === 'handoff'
           ? raw.purpose
           : undefined,
       status:
@@ -321,7 +323,9 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
         raw.status === 'crashed'
           ? raw.status
           : undefined,
-      instanceLabel: asString(raw.instanceLabel),
+      profileLabel: asString(raw.profileLabel),
+      handoffReason: asString(raw.handoffReason) ?? null,
+      terminalReason: asString(raw.terminalReason) ?? null,
       expiresAt: asString(raw.expiresAt) ?? null,
       endedAt: asString(raw.endedAt) ?? null,
     };

@@ -401,7 +401,7 @@ function requireReviewEvent(value: unknown): 'APPROVE' | 'COMMENT' | 'REQUEST_CH
 
 async function executePlaywrightViaApi(
   userId: string,
-  mcpConnectionId: string,
+  mcpProfileId: string,
   conversationId: string,
   toolExecutionId: string,
   toolName: string,
@@ -415,7 +415,7 @@ async function executePlaywrightViaApi(
     },
     body: JSON.stringify({
       userId,
-      mcpConnectionId,
+      mcpProfileId,
       conversationId,
       toolExecutionId,
       toolName,
@@ -458,14 +458,14 @@ async function executeTool(
   }
 
   if (execution.origin === 'mcp') {
-    if (!execution.mcpConnectionId || !execution.integrationKind) {
-      return { success: false, result: null, error: 'MCP execution is missing connection binding' };
+    if (!execution.mcpProfileId || !execution.integrationKind) {
+      return { success: false, result: null, error: 'MCP execution is missing profile binding' };
     }
 
     if (execution.integrationKind === 'playwright') {
       return executePlaywrightViaApi(
         userId,
-        execution.mcpConnectionId,
+        execution.mcpProfileId,
         conversationId,
         toolExecutionId,
         toolName,

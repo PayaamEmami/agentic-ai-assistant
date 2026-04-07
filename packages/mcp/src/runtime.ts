@@ -1,10 +1,8 @@
 import { getLogger } from '@aaa/observability';
-import { PlaywrightConnectionClient } from './playwright-integration.js';
+import { PlaywrightProfileClient } from './playwright-integration.js';
 import type {
   McpCatalogEntry,
-  ManualAuthSessionCompleteResult,
-  ManualAuthSessionStartResult,
-  RuntimeMcpConnection,
+  RuntimeMcpProfile,
   ToolExecutionInput,
   ToolExecutionOutput,
   UnifiedToolDescriptor,
@@ -15,20 +13,17 @@ const BUILT_IN_CATALOG: McpCatalogEntry[] = [
     kind: 'playwright',
     displayName: 'Playwright Browser',
     description:
-      'Web browser automation with persisted session state, screenshots, extraction, and controlled interactions.',
-    supportsMultipleInstances: true,
-    requiresDefaultActive: true,
-    authModes: ['manual_browser', 'stored_secret'],
+      'Web browser automation with persisted session state, screenshots, extraction, controlled interactions, and interactive handoff sessions.',
+    supportsMultipleProfiles: true,
+    requiresDefaultProfile: true,
+    authModes: ['embedded_browser', 'stored_secret'],
   },
 ];
 
 interface RuntimeClient {
   listTools(): UnifiedToolDescriptor[];
-  updateConnection(connection: RuntimeMcpConnection): void;
+  updateProfile(profile: RuntimeMcpProfile): void;
   executeTool(input: ToolExecutionInput): Promise<ToolExecutionOutput>;
-  startManualAuthSession?(authSessionId: string): Promise<ManualAuthSessionStartResult>;
-  completeManualAuthSession?(authSessionId: string): Promise<ManualAuthSessionCompleteResult>;
-  cancelAuthSession?(authSessionId: string): Promise<void>;
   shutdown?(): Promise<void>;
 }
 
@@ -40,45 +35,21 @@ class McpRuntime {
     return BUILT_IN_CATALOG.map((entry) => ({ ...entry }));
   }
 
-  listTools(connections: RuntimeMcpConnection[]): UnifiedToolDescriptor[] {
-    return connections.flatMap((connection) => {
-      const client = this.getClient(connection);
+  listTools(profiles: RuntimeMcpProfile[]): UnifiedToolDescriptor[] {
+    return profiles.flatMap((profile) => {
+      const client = this.getClient(profile);
       return client.listTools();
     });
   }
 
   async executeTool(input: ToolExecutionInput): Promise<ToolExecutionOutput> {
-    const client = this.getClient(input.connection);
+    const client = this.getClient(input.profile);
     return client.executeTool(input);
   }
 
-  async startManualAuthSession(
-    connection: RuntimeMcpConnection,
-    authSessionId: string,
-  ): Promise<ManualAuthSessionStartResult> {
-    const client = this.getClient(connection);
-    if (!client.startManualAuthSession) {
-      throw new Error(`Integration does not support manual auth sessions: ${connection.integrationKind}`);
-    }
-
-    return client.startManualAuthSession(authSessionId);
-  }
-
-  async completeManualAuthSession(
-    connection: RuntimeMcpConnection,
-    authSessionId: string,
-  ): Promise<ManualAuthSessionCompleteResult> {
-    const client = this.getClient(connection);
-    if (!client.completeManualAuthSession) {
-      throw new Error(`Integration does not support manual auth completion: ${connection.integrationKind}`);
-    }
-
-    return client.completeManualAuthSession(authSessionId);
-  }
-
-  async invalidateConnection(connectionId: string): Promise<void> {
-    const client = this.clients.get(connectionId);
-    this.clients.delete(connectionId);
+  async invalidateProfile(profileId: string): Promise<void> {
+    const client = this.clients.get(profileId);
+    this.clients.delete(profileId);
     if (client?.shutdown) {
       await client.shutdown();
     }
@@ -97,23 +68,23 @@ class McpRuntime {
     );
   }
 
-  private getClient(connection: RuntimeMcpConnection): RuntimeClient {
-    const existing = this.clients.get(connection.id);
+  private getClient(profile: RuntimeMcpProfile): RuntimeClient {
+    const existing = this.clients.get(profile.id);
     if (existing) {
-      existing.updateConnection(connection);
+      existing.updateProfile(profile);
       return existing;
     }
 
     let client: RuntimeClient;
-    switch (connection.integrationKind) {
+    switch (profile.integrationKind) {
       case 'playwright':
-        client = new PlaywrightConnectionClient(connection);
+        client = new PlaywrightProfileClient(profile);
         break;
       default:
-        throw new Error(`Unsupported MCP integration: ${connection.integrationKind}`);
+        throw new Error(`Unsupported MCP integration: ${profile.integrationKind}`);
     }
 
-    this.clients.set(connection.id, client);
+    this.clients.set(profile.id, client);
     return client;
   }
 }

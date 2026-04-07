@@ -172,19 +172,19 @@ export interface McpCatalogEntrySummary {
   kind: 'playwright';
   displayName: string;
   description: string;
-  supportsMultipleInstances: boolean;
-  requiresDefaultActive: boolean;
-  authModes: Array<'manual_browser' | 'stored_secret'>;
+  supportsMultipleProfiles: boolean;
+  requiresDefaultProfile: boolean;
+  authModes: Array<'embedded_browser' | 'stored_secret'>;
 }
 
-export interface McpConnectionSummary {
+export interface McpProfileSummary {
   id: string;
   integrationKind: 'playwright';
-  instanceLabel: string;
+  profileLabel: string;
   status: 'pending' | 'connected' | 'failed';
   hasCredentials: boolean;
   lastError: string | null;
-  isDefaultActive: boolean;
+  isDefault: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -223,9 +223,9 @@ export interface BrowserPageSummary {
 export interface McpBrowserSessionSummary {
   id: string;
   userId: string;
-  mcpConnectionId: string;
+  mcpProfileId: string;
   messageId: string | null;
-  purpose: 'auth' | 'manual' | 'tool_takeover';
+  purpose: 'sign_in' | 'manual' | 'handoff';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'failed' | 'expired' | 'crashed';
   conversationId: string | null;
   toolExecutionId: string | null;
@@ -450,30 +450,30 @@ export const api = {
     catalog() {
       return request<{ integrations: McpCatalogEntrySummary[] }>('/api/mcp/catalog');
     },
-    listConnections() {
-      return request<{ connections: McpConnectionSummary[] }>('/api/mcp/connections');
+    listProfiles() {
+      return request<{ profiles: McpProfileSummary[] }>('/api/mcp/profiles');
     },
-    createConnection(input: {
+    createProfile(input: {
       integrationKind: 'playwright';
-      instanceLabel: string;
-      authMode?: 'manual_browser' | 'stored_secret';
+      profileLabel: string;
+      authMode?: 'embedded_browser' | 'stored_secret';
       secretProfile?: Record<string, unknown>;
     }) {
-      return request<{ connection: McpConnectionSummary }>('/api/mcp/connections', {
+      return request<{ profile: McpProfileSummary }>('/api/mcp/profiles', {
         method: 'POST',
         body: JSON.stringify(input),
       });
     },
-    setDefaultConnection(id: string) {
-      return request<{ ok: true; connection: McpConnectionSummary }>(
-        `/api/mcp/connections/${id}/default`,
+    setDefaultProfile(id: string) {
+      return request<{ ok: true; profile: McpProfileSummary }>(
+        `/api/mcp/profiles/${id}/default`,
         {
           method: 'POST',
         },
       );
     },
-    deleteConnection(id: string) {
-      return request<{ ok: true }>(`/api/mcp/connections/${id}`, {
+    deleteProfile(id: string) {
+      return request<{ ok: true }>(`/api/mcp/profiles/${id}`, {
         method: 'DELETE',
       });
     },
@@ -494,9 +494,9 @@ export const api = {
       );
     },
     createBrowserSession(
-      connectionId: string,
+      profileId: string,
       input: {
-        purpose?: 'auth' | 'manual' | 'tool_takeover';
+        purpose?: 'sign_in' | 'manual' | 'handoff';
         conversationId?: string;
         toolExecutionId?: string;
       },
@@ -504,7 +504,7 @@ export const api = {
       return request<{
         session: McpBrowserSessionSummary;
         pages: BrowserPageSummary[];
-      }>(`/api/mcp/connections/${connectionId}/browser-sessions`, {
+      }>(`/api/mcp/profiles/${profileId}/browser-sessions`, {
         method: 'POST',
         body: JSON.stringify(input),
       });
@@ -518,7 +518,7 @@ export const api = {
     persistBrowserSession(id: string, persistAsDefault = true) {
       return request<{
         session: McpBrowserSessionSummary;
-        connection: McpConnectionSummary;
+        profile: McpProfileSummary;
         pages: BrowserPageSummary[];
       }>(`/api/mcp/browser-sessions/${id}/persist`, {
         method: 'POST',

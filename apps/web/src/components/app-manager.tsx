@@ -9,7 +9,7 @@ import {
   type GitHubRepositorySummary,
   type McpBrowserSessionSummary,
   type McpCatalogEntrySummary,
-  type McpConnectionSummary,
+  type McpProfileSummary,
 } from '@/lib/api-client';
 import { useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
@@ -86,12 +86,12 @@ function capabilityDescription(capability: AppCapabilitySummary): string {
     : 'Live provider tools available during chat.';
 }
 
-function mcpStatusSummary(connection: McpConnectionSummary): string {
-  if (connection.status === 'connected') {
-    return connection.isDefaultActive ? 'Ready in chat and default active.' : 'Ready in chat.';
+function mcpStatusSummary(profile: McpProfileSummary): string {
+  if (profile.status === 'connected') {
+    return profile.isDefault ? 'Ready in chat and set as the default profile.' : 'Ready in chat.';
   }
 
-  if (connection.status === 'failed') {
+  if (profile.status === 'failed') {
     return 'Needs attention before it can be used.';
   }
 
@@ -106,8 +106,8 @@ export function AppManager() {
   const [githubRepositories, setGitHubRepositories] = useState<GitHubRepositorySummary[]>([]);
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntrySummary[]>([]);
-  const [mcpConnections, setMcpConnections] = useState<McpConnectionSummary[]>([]);
-  const [mcpSessionsByConnection, setMcpSessionsByConnection] = useState<
+  const [mcpProfiles, setMcpProfiles] = useState<McpProfileSummary[]>([]);
+  const [mcpSessionsByProfile, setMcpSessionsByProfile] = useState<
     Record<string, McpBrowserSessionSummary>
   >({});
   const [loading, setLoading] = useState(true);
@@ -125,20 +125,20 @@ export function AppManager() {
     }
 
     try {
-      const [appResponse, catalogResponse, connectionResponse, sessionResponse] =
+      const [appResponse, catalogResponse, profileResponse, sessionResponse] =
         await Promise.all([
           api.apps.list(),
           api.mcp.catalog(),
-          api.mcp.listConnections(),
+          api.mcp.listProfiles(),
           api.mcp.listBrowserSessions(),
         ]);
 
       setApps(appResponse.apps);
       setMcpCatalog(catalogResponse.integrations);
-      setMcpConnections(connectionResponse.connections);
-      setMcpSessionsByConnection(
+      setMcpProfiles(profileResponse.profiles);
+      setMcpSessionsByProfile(
         Object.fromEntries(
-          sessionResponse.sessions.map((session) => [session.mcpConnectionId, session]),
+          sessionResponse.sessions.map((session) => [session.mcpProfileId, session]),
         ),
       );
 
@@ -262,38 +262,38 @@ export function AppManager() {
     }
   };
 
-  const createMcpConnection = async (entry: McpCatalogEntrySummary) => {
-    const instanceLabel = window.prompt(`Name this ${entry.displayName} instance`, entry.displayName);
-    if (!instanceLabel || !instanceLabel.trim()) {
+  const createMcpProfile = async (entry: McpCatalogEntrySummary) => {
+    const profileLabel = window.prompt(`Name this ${entry.displayName} profile`, entry.displayName);
+    if (!profileLabel || !profileLabel.trim()) {
       return;
     }
 
     setActionError(null);
 
     try {
-      await api.mcp.createConnection({
+      await api.mcp.createProfile({
         integrationKind: entry.kind,
-        instanceLabel: instanceLabel.trim(),
-        authMode: 'manual_browser',
+        profileLabel: profileLabel.trim(),
+        authMode: 'embedded_browser',
       });
       await load(false);
     } catch (error) {
       void reportClientError({
         event: 'client.mcp.create_failed',
         component: 'app-manager',
-        message: `Failed to create ${entry.kind} MCP connection`,
+        message: `Failed to create ${entry.kind} MCP profile`,
         error,
       });
       setActionError(error instanceof Error ? error.message : 'Failed to create app');
     }
   };
 
-  const openEmbeddedBrowser = async (connection: McpConnectionSummary) => {
+  const openSignInSession = async (profile: McpProfileSummary) => {
     setActionError(null);
 
     try {
-      const response = await api.mcp.createBrowserSession(connection.id, {
-        purpose: 'auth',
+      const response = await api.mcp.createBrowserSession(profile.id, {
+        purpose: 'sign_in',
         conversationId: currentConversationId,
       });
       router.push(`/chat?browserSessionId=${response.session.id}`);
@@ -302,26 +302,26 @@ export function AppManager() {
       void reportClientError({
         event: 'client.mcp.browser_session_start_failed',
         component: 'app-manager',
-        message: `Failed to start browser session for ${connection.id}`,
+        message: `Failed to start browser session for ${profile.id}`,
         error,
       });
       setActionError(error instanceof Error ? error.message : 'Failed to open browser session');
     }
   };
 
-  const setDefaultMcpConnection = async (connectionId: string) => {
+  const setDefaultMcpProfile = async (profileId: string) => {
     setActionError(null);
 
     try {
-      await api.mcp.setDefaultConnection(connectionId);
+      await api.mcp.setDefaultProfile(profileId);
       await load(false);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to set default browser');
+      setActionError(error instanceof Error ? error.message : 'Failed to set default profile');
     }
   };
 
-  const deleteMcpConnection = async (connection: McpConnectionSummary) => {
-    const confirmed = window.confirm(`Remove "${connection.instanceLabel}"?`);
+  const deleteMcpProfile = async (profile: McpProfileSummary) => {
+    const confirmed = window.confirm(`Remove "${profile.profileLabel}"?`);
     if (!confirmed) {
       return;
     }
@@ -329,10 +329,10 @@ export function AppManager() {
     setActionError(null);
 
     try {
-      await api.mcp.deleteConnection(connection.id);
+      await api.mcp.deleteProfile(profile.id);
       await load(false);
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : 'Failed to remove app');
+      setActionError(error instanceof Error ? error.message : 'Failed to remove profile');
     }
   };
 
@@ -578,8 +578,8 @@ export function AppManager() {
           })}
 
           {mcpCatalog.map((entry) => {
-            const connections = mcpConnections.filter(
-              (connection) => connection.integrationKind === entry.kind,
+            const profiles = mcpProfiles.filter(
+              (profile) => profile.integrationKind === entry.kind,
             );
 
             return (
@@ -589,58 +589,58 @@ export function AppManager() {
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-2xl">
-                    <p className="text-lg font-semibold text-foreground">{entry.displayName}</p>
+                    <p className="text-lg font-semibold text-foreground">Browser Profiles</p>
                     <p className="mt-1 text-sm text-foreground-muted">{entry.description}</p>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
                     <button
-                      onClick={() => void createMcpConnection(entry)}
+                      onClick={() => void createMcpProfile(entry)}
                       className="rounded-xl bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
                     >
-                      Add instance
+                      Add profile
                     </button>
                   </div>
                 </div>
 
-                {connections.length > 0 ? (
+                {profiles.length > 0 ? (
                   <div className="mt-4 space-y-3">
-                    {connections.map((connection) => {
-                      const session = mcpSessionsByConnection[connection.id];
+                    {profiles.map((profile) => {
+                      const session = mcpSessionsByProfile[profile.id];
 
                       return (
                         <div
-                          key={connection.id}
+                          key={profile.id}
                           className="rounded-2xl border border-border bg-surface px-4 py-3 text-xs"
                         >
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div>
-                              <p className="font-medium text-foreground">{connection.instanceLabel}</p>
+                              <p className="font-medium text-foreground">{profile.profileLabel}</p>
                               <p className="mt-1 text-foreground-muted">
-                                {mcpStatusSummary(connection)}
+                                {mcpStatusSummary(profile)}
                               </p>
-                              {connection.lastError ? (
-                                <p className="mt-2 text-error">{connection.lastError}</p>
+                              {profile.lastError ? (
+                                <p className="mt-2 text-error">{profile.lastError}</p>
                               ) : null}
                             </div>
 
                             <div className="flex flex-wrap gap-2">
-                              {!connection.isDefaultActive ? (
+                              {!profile.isDefault ? (
                                 <button
-                                  onClick={() => void setDefaultMcpConnection(connection.id)}
+                                  onClick={() => void setDefaultMcpProfile(profile.id)}
                                   className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
                                 >
-                                  Make default
+                                  Make default profile
                                 </button>
                               ) : null}
                               <button
-                                onClick={() => void openEmbeddedBrowser(connection)}
+                                onClick={() => void openSignInSession(profile)}
                                 className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
                               >
-                                Open sign-in
+                                Open sign-in session
                               </button>
                               <button
-                                onClick={() => void deleteMcpConnection(connection)}
+                                onClick={() => void deleteMcpProfile(profile)}
                                 className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error"
                               >
                                 Remove

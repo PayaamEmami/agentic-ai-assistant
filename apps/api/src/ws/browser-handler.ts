@@ -59,9 +59,9 @@ function isAttachEvent(value: BrowserClientEvent): value is BrowserAttachRequest
 }
 
 function isOwnedByCurrentInstance(
-  session: Pick<McpBrowserSession, 'ownerInstanceId'>,
+  session: Pick<McpBrowserSession, 'ownerApiInstanceId'>,
 ): boolean {
-  return !session.ownerInstanceId || session.ownerInstanceId === getApiInstanceId();
+  return !session.ownerApiInstanceId || session.ownerApiInstanceId === getApiInstanceId();
 }
 
 function toSocketPayload(data: RawData): string | Buffer {
@@ -85,8 +85,8 @@ function toSocketPayload(data: RawData): string | Buffer {
   return Buffer.from(view.buffer, view.byteOffset, view.byteLength);
 }
 
-function buildInternalBrowserProxyUrl(ownerInstanceUrl: string, correlationId: string): string {
-  const base = new URL(ownerInstanceUrl);
+function buildInternalBrowserProxyUrl(ownerApiInstanceUrl: string, correlationId: string): string {
+  const base = new URL(ownerApiInstanceUrl);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/ws/browser/internal';
   base.searchParams.set('internalServiceSecret', getInternalServiceSecret());
@@ -153,7 +153,7 @@ async function attachLocalSession(
   const attachedPayload: BrowserSessionAttachedEvent = {
     type: 'browser.session.attached',
     sessionId: snapshot.sessionId,
-    mcpConnectionId: snapshot.mcpConnectionId,
+    mcpProfileId: snapshot.mcpProfileId,
     status: snapshot.status,
     purpose: snapshot.purpose,
     selectedPageId: snapshot.selectedPageId,
@@ -219,7 +219,7 @@ export async function browserWsHandler(app: FastifyInstance) {
         clearProxySocket();
         attachedSessionId = session.id;
 
-        if (!session.ownerInstanceUrl) {
+        if (!session.ownerApiInstanceUrl) {
           sendError(
             socket,
             'BROWSER_SESSION_OWNER_UNAVAILABLE',
@@ -230,7 +230,7 @@ export async function browserWsHandler(app: FastifyInstance) {
         }
 
         const remote = new WebSocket(
-          buildInternalBrowserProxyUrl(session.ownerInstanceUrl, correlationId),
+          buildInternalBrowserProxyUrl(session.ownerApiInstanceUrl, correlationId),
         );
         remote.binaryType = 'arraybuffer';
         proxySocket = remote;
@@ -277,7 +277,7 @@ export async function browserWsHandler(app: FastifyInstance) {
               outcome: 'failure',
               error,
               sessionId: session.id,
-              ownerInstanceUrl: session.ownerInstanceUrl,
+              ownerApiInstanceUrl: session.ownerApiInstanceUrl,
               viewerId,
               userId: user.id,
             },

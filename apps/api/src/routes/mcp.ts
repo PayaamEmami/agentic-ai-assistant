@@ -3,7 +3,7 @@ import {
   InternalPlaywrightExecuteRequest,
   McpBrowserSessionCreateRequest,
   McpBrowserSessionPersistRequest,
-  McpConnectionCreateRequest,
+  McpProfileCreateRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { assertInternalServiceSecret } from '../lib/internal-service.js';
@@ -28,37 +28,37 @@ export async function mcpRoutes(app: FastifyInstance) {
     return reply.status(200).send({ integrations: mcpService.listCatalog() });
   });
 
-  app.get('/mcp/connections', { preHandler: authenticate }, async (request, reply) => {
-    const connections = await mcpService.listConnections(request.user!.id);
-    return reply.status(200).send({ connections });
+  app.get('/mcp/profiles', { preHandler: authenticate }, async (request, reply) => {
+    const profiles = await mcpService.listProfiles(request.user!.id);
+    return reply.status(200).send({ profiles });
   });
 
-  app.post('/mcp/connections', { preHandler: authenticate }, async (request, reply) => {
-    const parsed = McpConnectionCreateRequest.safeParse(request.body);
+  app.post('/mcp/profiles', { preHandler: authenticate }, async (request, reply) => {
+    const parsed = McpProfileCreateRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({
         error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
       });
     }
 
-    const connection = await mcpService.createConnection(request.user!.id, parsed.data);
-    return reply.status(200).send({ connection });
+    const profile = await mcpService.createProfile(request.user!.id, parsed.data);
+    return reply.status(200).send({ profile });
   });
 
   app.post<{ Params: { id: string } }>(
-    '/mcp/connections/:id/default',
+    '/mcp/profiles/:id/default',
     { preHandler: authenticate },
     async (request, reply) => {
-      const connection = await mcpService.setDefaultConnection(request.user!.id, request.params.id);
-      return reply.status(200).send({ ok: true, connection });
+      const profile = await mcpService.setDefaultProfile(request.user!.id, request.params.id);
+      return reply.status(200).send({ ok: true, profile });
     },
   );
 
   app.delete<{ Params: { id: string } }>(
-    '/mcp/connections/:id',
+    '/mcp/profiles/:id',
     { preHandler: authenticate },
     async (request, reply) => {
-      const result = await mcpService.deleteConnection(request.user!.id, request.params.id);
+      const result = await mcpService.deleteProfile(request.user!.id, request.params.id);
       return reply.status(200).send(result);
     },
   );
@@ -88,7 +88,7 @@ export async function mcpRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Params: { id: string } }>(
-    '/mcp/connections/:id/browser-sessions',
+    '/mcp/profiles/:id/browser-sessions',
     { preHandler: authenticate },
     async (request, reply) => {
       const parsed = McpBrowserSessionCreateRequest.safeParse(request.body ?? {});
@@ -195,7 +195,7 @@ export async function mcpRoutes(app: FastifyInstance) {
       }
 
       const startedAt = Date.now();
-      const result = await mcpService.executePlaywrightTool(parsed.data.userId, parsed.data.mcpConnectionId, {
+      const result = await mcpService.executePlaywrightTool(parsed.data.userId, parsed.data.mcpProfileId, {
         toolName: parsed.data.toolName,
         arguments: parsed.data.input,
       });

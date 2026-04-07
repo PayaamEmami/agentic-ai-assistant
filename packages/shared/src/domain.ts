@@ -51,10 +51,12 @@ export interface TranscriptContent {
 export interface BrowserSessionContent {
   type: 'browser_session';
   browserSessionId: string;
-  mcpConnectionId: string;
-  purpose: 'auth' | 'manual' | 'tool_takeover';
+  mcpProfileId: string;
+  purpose: 'sign_in' | 'manual' | 'handoff';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
-  instanceLabel?: string;
+  profileLabel?: string;
+  handoffReason?: string | null;
+  terminalReason?: string | null;
   expiresAt?: string | null;
   endedAt?: string | null;
 }
@@ -124,9 +126,9 @@ export interface ToolDescriptor {
   parameters: Record<string, unknown>;
   origin: 'native' | 'mcp';
   mcpServerId?: string;
-  mcpConnectionId?: string;
+  mcpProfileId?: string;
   integrationKind?: McpIntegrationKind;
-  instanceLabel?: string;
+  profileLabel?: string;
   requiresApproval: boolean;
 }
 
@@ -139,7 +141,7 @@ export interface ToolExecution {
   output: unknown | null;
   status: ToolExecutionStatus;
   origin: 'native' | 'mcp';
-  mcpConnectionId: string | null;
+  mcpProfileId: string | null;
   integrationKind: McpIntegrationKind | null;
   approvalId: string | null;
   startedAt: Date;
@@ -219,16 +221,16 @@ export interface AppCapabilityConfig {
   updatedAt: Date;
 }
 
-export interface McpConnection {
+export interface McpProfile {
   id: string;
   userId: string;
   integrationKind: McpIntegrationKind;
-  instanceLabel: string;
+  profileLabel: string;
   status: 'pending' | 'connected' | 'failed';
   encryptedCredentials: string;
   settings: Record<string, unknown>;
   lastError: string | null;
-  isDefaultActive: boolean;
+  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -236,16 +238,16 @@ export interface McpConnection {
 export interface McpBrowserSession {
   id: string;
   userId: string;
-  mcpConnectionId: string;
+  mcpProfileId: string;
   messageId: string | null;
-  purpose: 'auth' | 'manual' | 'tool_takeover';
+  purpose: 'sign_in' | 'manual' | 'handoff';
   status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
   conversationId: string | null;
   toolExecutionId: string | null;
   selectedPageId: string | null;
   metadata: Record<string, unknown>;
-  ownerInstanceId: string | null;
-  ownerInstanceUrl: string | null;
+  ownerApiInstanceId: string | null;
+  ownerApiInstanceUrl: string | null;
   lastClientSeenAt: Date | null;
   lastFrameAt: Date | null;
   expiresAt: Date;

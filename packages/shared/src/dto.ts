@@ -250,10 +250,10 @@ export const AppDisconnectResponse = z.object({
 });
 export type AppDisconnectResponse = z.infer<typeof AppDisconnectResponse>;
 
-export const McpConnectionStatusDto = z.enum(['pending', 'connected', 'failed']);
-export type McpConnectionStatusDto = z.infer<typeof McpConnectionStatusDto>;
+export const McpProfileStatusDto = z.enum(['pending', 'connected', 'failed']);
+export type McpProfileStatusDto = z.infer<typeof McpProfileStatusDto>;
 
-export const McpBrowserSessionPurposeDto = z.enum(['auth', 'manual', 'tool_takeover']);
+export const McpBrowserSessionPurposeDto = z.enum(['sign_in', 'manual', 'handoff']);
 export type McpBrowserSessionPurposeDto = z.infer<typeof McpBrowserSessionPurposeDto>;
 
 export const McpBrowserSessionStatusDto = z.enum([
@@ -271,9 +271,9 @@ export const McpCatalogEntryDto = z.object({
   kind: McpIntegrationKindDto,
   displayName: z.string(),
   description: z.string(),
-  supportsMultipleInstances: z.boolean(),
-  requiresDefaultActive: z.boolean(),
-  authModes: z.array(z.enum(['manual_browser', 'stored_secret'])),
+  supportsMultipleProfiles: z.boolean(),
+  requiresDefaultProfile: z.boolean(),
+  authModes: z.array(z.enum(['embedded_browser', 'stored_secret'])),
 });
 export type McpCatalogEntryDto = z.infer<typeof McpCatalogEntryDto>;
 
@@ -282,42 +282,42 @@ export const McpCatalogResponse = z.object({
 });
 export type McpCatalogResponse = z.infer<typeof McpCatalogResponse>;
 
-export const McpConnectionSummaryDto = z.object({
+export const McpProfileSummaryDto = z.object({
   id: z.string().uuid(),
   integrationKind: McpIntegrationKindDto,
-  instanceLabel: z.string(),
-  status: McpConnectionStatusDto,
+  profileLabel: z.string(),
+  status: McpProfileStatusDto,
   hasCredentials: z.boolean(),
   lastError: z.string().nullable(),
-  isDefaultActive: z.boolean(),
+  isDefault: z.boolean(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
-export type McpConnectionSummaryDto = z.infer<typeof McpConnectionSummaryDto>;
+export type McpProfileSummaryDto = z.infer<typeof McpProfileSummaryDto>;
 
-export const McpConnectionListResponse = z.object({
-  connections: z.array(McpConnectionSummaryDto),
+export const McpProfileListResponse = z.object({
+  profiles: z.array(McpProfileSummaryDto),
 });
-export type McpConnectionListResponse = z.infer<typeof McpConnectionListResponse>;
+export type McpProfileListResponse = z.infer<typeof McpProfileListResponse>;
 
-export const McpConnectionCreateRequest = z.object({
+export const McpProfileCreateRequest = z.object({
   integrationKind: McpIntegrationKindDto,
-  instanceLabel: z.string().trim().min(1).max(120),
-  authMode: z.enum(['manual_browser', 'stored_secret']).optional(),
+  profileLabel: z.string().trim().min(1).max(120),
+  authMode: z.enum(['embedded_browser', 'stored_secret']).optional(),
   secretProfile: z.record(z.unknown()).optional(),
 });
-export type McpConnectionCreateRequest = z.infer<typeof McpConnectionCreateRequest>;
+export type McpProfileCreateRequest = z.infer<typeof McpProfileCreateRequest>;
 
-export const McpConnectionCreateResponse = z.object({
-  connection: McpConnectionSummaryDto,
+export const McpProfileCreateResponse = z.object({
+  profile: McpProfileSummaryDto,
 });
-export type McpConnectionCreateResponse = z.infer<typeof McpConnectionCreateResponse>;
+export type McpProfileCreateResponse = z.infer<typeof McpProfileCreateResponse>;
 
-export const McpConnectionDefaultResponse = z.object({
+export const McpProfileDefaultResponse = z.object({
   ok: z.literal(true),
-  connection: McpConnectionSummaryDto,
+  profile: McpProfileSummaryDto,
 });
-export type McpConnectionDefaultResponse = z.infer<typeof McpConnectionDefaultResponse>;
+export type McpProfileDefaultResponse = z.infer<typeof McpProfileDefaultResponse>;
 
 export const BrowserPageDto = z.object({
   id: z.string(),
@@ -330,7 +330,7 @@ export type BrowserPageDto = z.infer<typeof BrowserPageDto>;
 export const McpBrowserSessionDto = z.object({
   id: z.string().uuid(),
   userId: z.string().uuid(),
-  mcpConnectionId: z.string().uuid(),
+  mcpProfileId: z.string().uuid(),
   messageId: z.string().uuid().nullable(),
   purpose: McpBrowserSessionPurposeDto,
   status: McpBrowserSessionStatusDto,
@@ -376,7 +376,7 @@ export const InternalPlaywrightExecuteRequest = z.object({
   input: z.record(z.unknown()),
   conversationId: z.string().uuid().optional(),
   userId: z.string().uuid(),
-  mcpConnectionId: z.string().uuid(),
+  mcpProfileId: z.string().uuid(),
 });
 export type InternalPlaywrightExecuteRequest = z.infer<typeof InternalPlaywrightExecuteRequest>;
 

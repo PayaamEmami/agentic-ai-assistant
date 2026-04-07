@@ -1,12 +1,12 @@
 import {
   mcpBrowserSessionRepository,
-  mcpConnectionRepository,
+  mcpProfileRepository,
   messageRepository,
   type McpBrowserSession,
-  type McpConnection,
+  type McpProfile,
 } from '@aaa/db';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
-import { getMcpRuntime, type RuntimeMcpConnection } from '@aaa/mcp';
+import { getMcpRuntime, type RuntimeMcpProfile } from '@aaa/mcp';
 import { AppError } from '../lib/errors.js';
 import {
   getApiInstanceId,
@@ -20,7 +20,7 @@ import {
 } from './browser-session-content.js';
 
 const SESSION_TTL_MS = 30 * 60 * 1000;
-const INSTANCE_UNREACHABLE_CODES = new Set([
+const OWNER_UNREACHABLE_CODES = new Set([
   'MCP_BROWSER_SESSION_NOT_LIVE',
   'BROWSER_SESSION_NOT_LIVE',
   'MCP_BROWSER_SESSION_OWNER_UNREACHABLE',
@@ -30,33 +30,33 @@ function hasCredentialMaterial(credentials: Record<string, unknown>): boolean {
   return Object.keys(credentials).length > 0;
 }
 
-function toRuntimeConnection(
-  connection: McpConnection,
-  credentials = decryptCredentials(connection.encryptedCredentials),
-): RuntimeMcpConnection {
+function toRuntimeProfile(
+  profile: McpProfile,
+  credentials = decryptCredentials(profile.encryptedCredentials),
+): RuntimeMcpProfile {
   return {
-    id: connection.id,
-    userId: connection.userId,
-    integrationKind: connection.integrationKind as RuntimeMcpConnection['integrationKind'],
-    instanceLabel: connection.instanceLabel,
-    status: connection.status,
-    settings: connection.settings,
+    id: profile.id,
+    userId: profile.userId,
+    integrationKind: profile.integrationKind as RuntimeMcpProfile['integrationKind'],
+    profileLabel: profile.profileLabel,
+    status: profile.status,
+    settings: profile.settings,
     credentials,
   };
 }
 
-function toConnectionSummary(connection: McpConnection) {
-  const credentials = decryptCredentials(connection.encryptedCredentials);
+function toProfileSummary(profile: McpProfile) {
+  const credentials = decryptCredentials(profile.encryptedCredentials);
   return {
-    id: connection.id,
-    integrationKind: connection.integrationKind as 'playwright',
-    instanceLabel: connection.instanceLabel,
-    status: connection.status,
+    id: profile.id,
+    integrationKind: profile.integrationKind as 'playwright',
+    profileLabel: profile.profileLabel,
+    status: profile.status,
     hasCredentials: hasCredentialMaterial(credentials),
-    lastError: connection.lastError,
-    isDefaultActive: connection.isDefaultActive,
-    createdAt: connection.createdAt.toISOString(),
-    updatedAt: connection.updatedAt.toISOString(),
+    lastError: profile.lastError,
+    isDefault: profile.isDefault,
+    createdAt: profile.createdAt.toISOString(),
+    updatedAt: profile.updatedAt.toISOString(),
   };
 }
 
@@ -64,7 +64,7 @@ function toBrowserSessionDto(session: McpBrowserSession) {
   return {
     id: session.id,
     userId: session.userId,
-    mcpConnectionId: session.mcpConnectionId,
+    mcpProfileId: session.mcpProfileId,
     messageId: session.messageId,
     purpose: session.purpose,
     status: session.status,
@@ -81,64 +81,65 @@ function toBrowserSessionDto(session: McpBrowserSession) {
   };
 }
 
-async function requireOwnedConnection(userId: string, connectionId: string): Promise<McpConnection> {
-  const connection = await mcpConnectionRepository.findByIdForUser(connectionId, userId);
-  if (!connection) {
-    throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
+async function requireOwnedProfile(userId: string, profileId: string): Promise<McpProfile> {
+  const profile = await mcpProfileRepository.findByIdForUser(profileId, userId);
+  if (!profile) {
+    throw new AppError(404, 'MCP profile not found', 'MCP_PROFILE_NOT_FOUND');
   }
-  return connection;
+  return profile;
 }
 
 async function requireOwnedBrowserSession(
   userId: string,
   sessionId: string,
-): Promise<{ session: McpBrowserSession; connection: McpConnection }> {
+): Promise<{ session: McpBrowserSession; profile: McpProfile }> {
   const session = await mcpBrowserSessionRepository.findById(sessionId);
   if (!session || session.userId !== userId) {
     throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
   }
 
-  const connection = await mcpConnectionRepository.findById(session.mcpConnectionId);
-  if (!connection || connection.userId !== userId) {
+  const profile = await mcpProfileRepository.findById(session.mcpProfileId);
+  if (!profile || profile.userId !== userId) {
     throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
   }
 
-  return { session, connection };
+  return { session, profile };
 }
 
 async function requireBrowserSession(
   sessionId: string,
-): Promise<{ session: McpBrowserSession; connection: McpConnection }> {
+): Promise<{ session: McpBrowserSession; profile: McpProfile }> {
   const session = await mcpBrowserSessionRepository.findById(sessionId);
   if (!session) {
     throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
   }
 
-  const connection = await mcpConnectionRepository.findById(session.mcpConnectionId);
-  if (!connection) {
+  const profile = await mcpProfileRepository.findById(session.mcpProfileId);
+  if (!profile) {
     throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
   }
 
-  return { session, connection };
+  return { session, profile };
 }
 
-function isOwnedByCurrentInstance(session: Pick<McpBrowserSession, 'ownerInstanceId'>): boolean {
-  return (
-    !session.ownerInstanceId ||
-    session.ownerInstanceId === getApiInstanceId()
-  );
+function isOwnedByCurrentInstance(
+  session: Pick<McpBrowserSession, 'ownerApiInstanceId'>,
+): boolean {
+  return !session.ownerApiInstanceId || session.ownerApiInstanceId === getApiInstanceId();
 }
 
-function hasRemoteOwner(session: Pick<McpBrowserSession, 'ownerInstanceId' | 'ownerInstanceUrl'>): boolean {
-  return !isOwnedByCurrentInstance(session) && Boolean(session.ownerInstanceUrl);
+function hasRemoteOwner(
+  session: Pick<McpBrowserSession, 'ownerApiInstanceId' | 'ownerApiInstanceUrl'>,
+): boolean {
+  return !isOwnedByCurrentInstance(session) && Boolean(session.ownerApiInstanceUrl);
 }
 
 function buildInternalBrowserSessionUrl(
-  ownerInstanceUrl: string,
+  ownerApiInstanceUrl: string,
   sessionId: string,
   suffix = '',
 ): string {
-  const base = new URL(ownerInstanceUrl);
+  const base = new URL(ownerApiInstanceUrl);
   const pathSuffix = suffix.startsWith('/') ? suffix : `/${suffix}`;
   base.pathname = `/api/mcp/internal/browser-sessions/${sessionId}${suffix ? pathSuffix : ''}`;
   return base.toString();
@@ -164,24 +165,23 @@ export class McpService {
     return this.runtime.listCatalog();
   }
 
-  async listConnections(userId: string) {
-    const connections = await mcpConnectionRepository.listByUser(userId);
-    return connections.map(toConnectionSummary);
+  async listProfiles(userId: string) {
+    const profiles = await mcpProfileRepository.listByUser(userId);
+    return profiles.map(toProfileSummary);
   }
 
-  async createConnection(
+  async createProfile(
     userId: string,
     input: {
       integrationKind: 'playwright';
-      instanceLabel: string;
-      authMode?: 'manual_browser' | 'stored_secret';
+      profileLabel: string;
+      authMode?: 'embedded_browser' | 'stored_secret';
       secretProfile?: Record<string, unknown>;
     },
   ) {
-    const existing = await mcpConnectionRepository.listByUser(userId);
+    const existing = await mcpProfileRepository.listByUser(userId);
     const hasDefaultForKind = existing.some(
-      (connection) =>
-        connection.integrationKind === input.integrationKind && connection.isDefaultActive,
+      (profile) => profile.integrationKind === input.integrationKind && profile.isDefault,
     );
 
     const credentials: Record<string, unknown> = {};
@@ -189,31 +189,31 @@ export class McpService {
       credentials['secretProfiles'] = { default: input.secretProfile };
     }
 
-    const connection = await mcpConnectionRepository.create({
+    const profile = await mcpProfileRepository.create({
       userId,
       integrationKind: input.integrationKind,
-      instanceLabel: input.instanceLabel,
+      profileLabel: input.profileLabel,
       status: input.authMode === 'stored_secret' && input.secretProfile ? 'connected' : 'pending',
       encryptedCredentials: encryptCredentials(credentials),
       settings: {},
-      isDefaultActive: !hasDefaultForKind,
+      isDefault: !hasDefaultForKind,
     });
 
-    return toConnectionSummary(connection);
+    return toProfileSummary(profile);
   }
 
-  async setDefaultConnection(userId: string, connectionId: string) {
-    const connection = await mcpConnectionRepository.setDefaultActive(connectionId, userId);
-    if (!connection) {
-      throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
+  async setDefaultProfile(userId: string, profileId: string) {
+    const profile = await mcpProfileRepository.setDefault(profileId, userId);
+    if (!profile) {
+      throw new AppError(404, 'MCP profile not found', 'MCP_PROFILE_NOT_FOUND');
     }
 
-    return toConnectionSummary(connection);
+    return toProfileSummary(profile);
   }
 
-  async deleteConnection(userId: string, connectionId: string) {
-    const connection = await requireOwnedConnection(userId, connectionId);
-    const activeSession = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+  async deleteProfile(userId: string, profileId: string) {
+    const profile = await requireOwnedProfile(userId, profileId);
+    const activeSession = await mcpBrowserSessionRepository.findActiveByProfile(profile.id);
     if (activeSession) {
       if (hasRemoteOwner(activeSession)) {
         try {
@@ -222,29 +222,29 @@ export class McpService {
             method: 'POST',
           });
         } catch {
-          await this.markBrowserSessionAsCrashed(activeSession, 'owner_instance_unreachable');
+          await this.markBrowserSessionAsCrashed(activeSession, 'owner_api_instance_unreachable');
         }
       } else if (this.browserSessionManager.hasLiveSession(activeSession.id)) {
-        await this.browserSessionManager.cancelSession(activeSession.id, 'connection_deleted');
+        await this.browserSessionManager.cancelSession(activeSession.id, 'profile_deleted');
       }
     }
 
-    const deleted = await mcpConnectionRepository.delete(connectionId, userId);
+    const deleted = await mcpProfileRepository.delete(profileId, userId);
     if (!deleted) {
-      throw new AppError(404, 'MCP connection not found', 'MCP_CONNECTION_NOT_FOUND');
+      throw new AppError(404, 'MCP profile not found', 'MCP_PROFILE_NOT_FOUND');
     }
 
-    if (connection.isDefaultActive) {
-      const remaining = await mcpConnectionRepository.listByUser(userId);
+    if (profile.isDefault) {
+      const remaining = await mcpProfileRepository.listByUser(userId);
       const replacement = remaining.find(
-        (candidate) => candidate.integrationKind === connection.integrationKind,
+        (candidate) => candidate.integrationKind === profile.integrationKind,
       );
       if (replacement) {
-        await mcpConnectionRepository.setDefaultActive(replacement.id, userId);
+        await mcpProfileRepository.setDefault(replacement.id, userId);
       }
     }
 
-    await this.runtime.invalidateConnection(connectionId);
+    await this.runtime.invalidateProfile(profileId);
     return { ok: true as const };
   }
 
@@ -275,7 +275,7 @@ export class McpService {
   private async updateBrowserSessionMessage(
     session: Pick<
       McpBrowserSession,
-      'id' | 'messageId' | 'status' | 'expiresAt' | 'endedAt'
+      'id' | 'messageId' | 'status' | 'expiresAt' | 'endedAt' | 'metadata'
     >,
   ) {
     if (!session.messageId) {
@@ -299,7 +299,7 @@ export class McpService {
         endedAt: new Date(),
         metadata: {
           ...session.metadata,
-          reason,
+          terminalReason: reason,
         },
       })) ?? session;
     await this.updateBrowserSessionMessage(updated);
@@ -308,7 +308,7 @@ export class McpService {
 
   private async createBrowserSessionMessage(
     session: McpBrowserSession,
-    connection: McpConnection,
+    profile: McpProfile,
   ): Promise<McpBrowserSession> {
     if (!session.conversationId) {
       return session;
@@ -316,7 +316,7 @@ export class McpService {
 
     const message = await messageRepository.create(session.conversationId, 'assistant', [
       buildBrowserSessionContentBlock(session, {
-        instanceLabel: connection.instanceLabel,
+        profileLabel: profile.profileLabel,
       }),
     ]);
 
@@ -331,14 +331,14 @@ export class McpService {
   }
 
   private async proxyBrowserSessionRequest<T>(
-    session: Pick<McpBrowserSession, 'id' | 'ownerInstanceUrl'>,
+    session: Pick<McpBrowserSession, 'id' | 'ownerApiInstanceUrl'>,
     input?: {
       suffix?: string;
       method?: 'GET' | 'POST';
       body?: Record<string, unknown>;
     },
   ): Promise<T> {
-    if (!session.ownerInstanceUrl) {
+    if (!session.ownerApiInstanceUrl) {
       throw new AppError(
         409,
         'Browser session owner is unavailable',
@@ -347,7 +347,7 @@ export class McpService {
     }
 
     const response = await fetch(
-      buildInternalBrowserSessionUrl(session.ownerInstanceUrl, session.id, input?.suffix),
+      buildInternalBrowserSessionUrl(session.ownerApiInstanceUrl, session.id, input?.suffix),
       {
         method: input?.method ?? 'GET',
         headers: {
@@ -371,82 +371,106 @@ export class McpService {
     return response.json() as Promise<T>;
   }
 
-  async createBrowserSession(
-    userId: string,
-    connectionId: string,
-    input: {
-      purpose: 'auth' | 'manual' | 'tool_takeover';
-      conversationId?: string;
-      toolExecutionId?: string;
+  private normalizeSnapshotResponse(
+    session: McpBrowserSession,
+    snapshot: {
+      pages: Array<{ pageId: string; url: string; title: string; isSelected: boolean }>;
     },
   ) {
-    const connection = await requireOwnedConnection(userId, connectionId);
-    const existing = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+    return {
+      session: toBrowserSessionDto(session),
+      pages: snapshot.pages.map((page) => ({
+        id: page.pageId,
+        url: page.url,
+        title: page.title,
+        isSelected: page.isSelected,
+      })),
+    };
+  }
+
+  private async getExistingActiveSessionResult(
+    existing: McpBrowserSession,
+  ): Promise<{
+    session: ReturnType<typeof toBrowserSessionDto>;
+    pages: Array<{ id: string; url: string; title: string; isSelected: boolean }>;
+  }> {
+    if (hasRemoteOwner(existing)) {
+      return this.proxyBrowserSessionRequest(existing);
+    }
+
+    if (this.browserSessionManager.hasLiveSession(existing.id)) {
+      const snapshot = await this.browserSessionManager.getSnapshot(existing.id);
+      return this.normalizeSnapshotResponse(existing, snapshot);
+    }
+
+    const crashed = await this.markBrowserSessionAsCrashed(existing, 'live_session_not_present_on_api');
+    return {
+      session: toBrowserSessionDto(crashed),
+      pages: [],
+    };
+  }
+
+  async createBrowserSession(
+    userId: string,
+    profileId: string,
+    input: {
+      purpose: 'sign_in' | 'manual' | 'handoff';
+      conversationId?: string;
+      toolExecutionId?: string;
+      startUrl?: string;
+      handoffReason?: string;
+    },
+  ) {
+    const profile = await requireOwnedProfile(userId, profileId);
+    const existing = await mcpBrowserSessionRepository.findActiveByProfile(profile.id);
     if (existing) {
-      if (hasRemoteOwner(existing)) {
-        try {
-          return await this.proxyBrowserSessionRequest<{
-            session: ReturnType<typeof toBrowserSessionDto>;
-            pages: Array<{ id: string; url: string; title: string; isSelected: boolean }>;
-          }>(existing);
-        } catch (error) {
-          const code = error instanceof AppError ? error.code : undefined;
-          if (!code || !INSTANCE_UNREACHABLE_CODES.has(code)) {
-            throw error;
-          }
-          await this.markBrowserSessionAsCrashed(existing, 'owner_instance_unreachable');
+      if (input.purpose === 'handoff') {
+        if (input.conversationId && existing.conversationId === input.conversationId) {
+          return this.getExistingActiveSessionResult(existing);
         }
-      } else if (this.browserSessionManager.hasLiveSession(existing.id)) {
-        const snapshot = await this.browserSessionManager.getSnapshot(existing.id);
-        return {
-          session: toBrowserSessionDto(existing),
-          pages: snapshot.pages.map((page) => ({
-            id: page.pageId,
-            url: page.url,
-            title: page.title,
-            isSelected: page.isSelected,
-          })),
-        };
-      } else {
-        await this.markBrowserSessionAsCrashed(existing, 'live_session_not_present_on_api');
+
+        throw new AppError(
+          409,
+          'Browser profile already has an active live session',
+          'BROWSER_PROFILE_BUSY',
+        );
       }
+
+      return this.getExistingActiveSessionResult(existing);
+    }
+
+    const metadata: Record<string, unknown> = {};
+    if (input.handoffReason) {
+      metadata['handoffReason'] = input.handoffReason;
     }
 
     let session = await mcpBrowserSessionRepository.create({
       userId,
-      mcpConnectionId: connection.id,
+      mcpProfileId: profile.id,
       purpose: input.purpose,
       conversationId: input.conversationId ?? null,
       toolExecutionId: input.toolExecutionId ?? null,
-      metadata: {},
-      ownerInstanceId: getApiInstanceId(),
-      ownerInstanceUrl: getApiInternalBaseUrl(),
+      metadata,
+      ownerApiInstanceId: getApiInstanceId(),
+      ownerApiInstanceUrl: getApiInternalBaseUrl(),
       expiresAt: new Date(Date.now() + SESSION_TTL_MS),
     });
 
-    session = await this.createBrowserSessionMessage(session, connection);
+    session = await this.createBrowserSessionMessage(session, profile);
 
     try {
-      const snapshot = await this.browserSessionManager.createSession(session, connection, {
+      const snapshot = await this.browserSessionManager.createSession(session, profile, {
         startUrl:
-          input.purpose === 'auth'
-            ? (typeof connection.settings['manualAuthStartUrl'] === 'string'
-                ? connection.settings['manualAuthStartUrl']
-                : undefined)
-            : undefined,
+          input.startUrl ??
+          (input.purpose === 'sign_in' &&
+          typeof profile.settings['signInStartUrl'] === 'string'
+            ? profile.settings['signInStartUrl']
+            : undefined),
       });
 
       const updatedSession = (await mcpBrowserSessionRepository.findById(session.id)) ?? session;
       await this.updateBrowserSessionMessage(updatedSession);
-      return {
-        session: toBrowserSessionDto(updatedSession),
-        pages: snapshot.pages.map((page) => ({
-          id: page.pageId,
-          url: page.url,
-          title: page.title,
-          isSelected: page.isSelected,
-        })),
-      };
+      return this.normalizeSnapshotResponse(updatedSession, snapshot);
     } catch (error) {
       await this.markBrowserSessionAsCrashed(session, 'session_create_failed');
       throw error;
@@ -464,12 +488,12 @@ export class McpService {
         }>(session);
       } catch (error) {
         const code = error instanceof AppError ? error.code : undefined;
-        if (!code || !INSTANCE_UNREACHABLE_CODES.has(code)) {
+        if (!code || !OWNER_UNREACHABLE_CODES.has(code)) {
           throw error;
         }
         const crashedSession = await this.markBrowserSessionAsCrashed(
           session,
-          'owner_instance_unreachable',
+          'owner_api_instance_unreachable',
         );
         return {
           session: toBrowserSessionDto(crashedSession),
@@ -505,6 +529,10 @@ export class McpService {
           const expiredSession = await mcpBrowserSessionRepository.update(session.id, {
             status: 'expired',
             endedAt: new Date(),
+            metadata: {
+              ...session.metadata,
+              terminalReason: 'session_expired',
+            },
           });
           if (expiredSession) {
             await this.updateBrowserSessionMessage(expiredSession);
@@ -546,11 +574,11 @@ export class McpService {
     sessionId: string,
     input: { persistAsDefault?: boolean },
   ) {
-    const { session, connection } = await requireOwnedBrowserSession(userId, sessionId);
+    const { session, profile } = await requireOwnedBrowserSession(userId, sessionId);
     if (hasRemoteOwner(session)) {
       return this.proxyBrowserSessionRequest<{
         session: ReturnType<typeof toBrowserSessionDto>;
-        connection: ReturnType<typeof toConnectionSummary>;
+        profile: ReturnType<typeof toProfileSummary>;
         pages: Array<{ id: string; url: string; title: string; isSelected: boolean }>;
       }>(session, {
         suffix: 'persist',
@@ -572,19 +600,19 @@ export class McpService {
     }
 
     const storageState = await this.browserSessionManager.persistSession(session.id);
-    const currentCredentials = decryptCredentials(connection.encryptedCredentials);
-    const updatedConnection = await mcpConnectionRepository.update(connection.id, {
+    const currentCredentials = decryptCredentials(profile.encryptedCredentials);
+    const updatedProfile = await mcpProfileRepository.update(profile.id, {
       status: 'connected',
       encryptedCredentials: encryptCredentials({
         ...currentCredentials,
         storageState,
       }),
       lastError: null,
-      isDefaultActive: input.persistAsDefault ? true : connection.isDefaultActive,
+      isDefault: input.persistAsDefault ? true : profile.isDefault,
     });
 
     if (input.persistAsDefault) {
-      await mcpConnectionRepository.setDefaultActive(connection.id, userId);
+      await mcpProfileRepository.setDefault(profile.id, userId);
     }
 
     const updatedSession = await mcpBrowserSessionRepository.findById(session.id);
@@ -593,7 +621,7 @@ export class McpService {
     }
     return {
       session: toBrowserSessionDto(updatedSession ?? session),
-      connection: toConnectionSummary(updatedConnection ?? connection),
+      profile: toProfileSummary(updatedProfile ?? profile),
       pages: [],
     };
   }
@@ -602,7 +630,7 @@ export class McpService {
     sessionId: string,
     input: { persistAsDefault?: boolean },
   ) {
-    const { session, connection } = await requireBrowserSession(sessionId);
+    const { session, profile } = await requireBrowserSession(sessionId);
     if (
       !isOwnedByCurrentInstance(session) &&
       !this.browserSessionManager.hasLiveSession(session.id)
@@ -627,19 +655,19 @@ export class McpService {
     }
 
     const storageState = await this.browserSessionManager.persistSession(session.id);
-    const currentCredentials = decryptCredentials(connection.encryptedCredentials);
-    const updatedConnection = await mcpConnectionRepository.update(connection.id, {
+    const currentCredentials = decryptCredentials(profile.encryptedCredentials);
+    const updatedProfile = await mcpProfileRepository.update(profile.id, {
       status: 'connected',
       encryptedCredentials: encryptCredentials({
         ...currentCredentials,
         storageState,
       }),
       lastError: null,
-      isDefaultActive: input.persistAsDefault ? true : connection.isDefaultActive,
+      isDefault: input.persistAsDefault ? true : profile.isDefault,
     });
 
     if (input.persistAsDefault) {
-      await mcpConnectionRepository.setDefaultActive(connection.id, session.userId);
+      await mcpProfileRepository.setDefault(profile.id, session.userId);
     }
 
     const updatedSession = await mcpBrowserSessionRepository.findById(session.id);
@@ -649,7 +677,7 @@ export class McpService {
 
     return {
       session: toBrowserSessionDto(updatedSession ?? session),
-      connection: toConnectionSummary(updatedConnection ?? connection),
+      profile: toProfileSummary(updatedProfile ?? profile),
       pages: [],
     };
   }
@@ -672,6 +700,10 @@ export class McpService {
       const updatedSession = await mcpBrowserSessionRepository.update(session.id, {
         status: 'cancelled',
         endedAt: new Date(),
+        metadata: {
+          ...session.metadata,
+          terminalReason: 'cancelled_by_user',
+        },
       });
       if (updatedSession) {
         await this.updateBrowserSessionMessage(updatedSession);
@@ -705,6 +737,10 @@ export class McpService {
       const updatedSession = await mcpBrowserSessionRepository.update(session.id, {
         status: 'cancelled',
         endedAt: new Date(),
+        metadata: {
+          ...session.metadata,
+          terminalReason: 'cancelled_by_user',
+        },
       });
       if (updatedSession) {
         await this.updateBrowserSessionMessage(updatedSession);
@@ -719,51 +755,117 @@ export class McpService {
     };
   }
 
+  private async startHandoffTool(
+    userId: string,
+    profileId: string,
+    input: {
+      arguments: Record<string, unknown>;
+      conversationId?: string;
+      toolExecutionId?: string;
+    },
+  ) {
+    if (!input.conversationId) {
+      return {
+        success: false,
+        result: null,
+        error: 'playwright.start_handoff requires a conversation context',
+      };
+    }
+
+    const reason = typeof input.arguments['reason'] === 'string' ? input.arguments['reason'].trim() : '';
+    if (!reason) {
+      return {
+        success: false,
+        result: null,
+        error: 'playwright.start_handoff requires a reason',
+      };
+    }
+
+    try {
+      const result = await this.createBrowserSession(userId, profileId, {
+        purpose: 'handoff',
+        conversationId: input.conversationId,
+        toolExecutionId: input.toolExecutionId,
+        startUrl:
+          typeof input.arguments['url'] === 'string' && input.arguments['url'].trim().length > 0
+            ? input.arguments['url'].trim()
+            : undefined,
+        handoffReason: reason,
+      });
+
+      return {
+        success: true,
+        result: {
+          session: result.session,
+          pages: result.pages,
+          started: true,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        result: null,
+        error: error instanceof Error ? error.message : 'Failed to start browser handoff',
+      };
+    }
+  }
+
   async executePlaywrightTool(
     userId: string,
-    connectionId: string,
+    profileId: string,
     input: {
       toolName: string;
       arguments: Record<string, unknown>;
+      conversationId?: string;
+      toolExecutionId?: string;
     },
   ) {
-    const connection = await requireOwnedConnection(userId, connectionId);
-    const activeSession = await mcpBrowserSessionRepository.findActiveByConnection(connection.id);
+    const profile = await requireOwnedProfile(userId, profileId);
+
+    if (input.toolName === 'playwright.start_handoff') {
+      return this.startHandoffTool(userId, profile.id, input);
+    }
+
+    const activeSession = await mcpBrowserSessionRepository.findActiveByProfile(profile.id);
     if (activeSession && activeSession.status !== 'completed') {
       return {
         success: false,
         result: null,
-        error: 'BROWSER_SESSION_BUSY',
+        error: 'BROWSER_PROFILE_BUSY',
       };
     }
 
-    const runtimeConnection = toRuntimeConnection(connection);
+    const runtimeProfile = toRuntimeProfile(profile);
     const result = await this.runtime.executeTool({
       toolName: input.toolName,
       arguments: input.arguments,
-      connection: runtimeConnection,
+      profile: runtimeProfile,
     });
 
-    if (result.success && result.connectionUpdate) {
-      const nextCredentials = result.connectionUpdate.credentials
+    if (result.success && result.profileUpdate) {
+      const nextCredentials = result.profileUpdate.credentials
         ? encryptCredentials({
-            ...runtimeConnection.credentials,
-            ...result.connectionUpdate.credentials,
+            ...runtimeProfile.credentials,
+            ...result.profileUpdate.credentials,
           })
         : undefined;
-      const nextSettings = result.connectionUpdate.settings
+      const nextSettings = result.profileUpdate.settings
         ? {
-            ...connection.settings,
-            ...result.connectionUpdate.settings,
+            ...profile.settings,
+            ...result.profileUpdate.settings,
           }
         : undefined;
 
-      await mcpConnectionRepository.update(connection.id, {
+      await mcpProfileRepository.update(profile.id, {
         encryptedCredentials: nextCredentials,
         settings: nextSettings,
       });
     }
 
-    return result;
+    return {
+      success: result.success,
+      result: result.result,
+      error: result.error,
+    };
   }
 }

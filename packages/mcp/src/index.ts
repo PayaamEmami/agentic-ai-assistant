@@ -1,7 +1,7 @@
 export type {
   McpCatalogEntry,
   UnifiedToolDescriptor,
-  RuntimeMcpConnection,
+  RuntimeMcpProfile,
   ToolExecutionInput,
   ToolExecutionOutput,
 } from './types.js';

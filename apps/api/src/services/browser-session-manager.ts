@@ -5,7 +5,7 @@ import {
   mcpBrowserSessionRepository,
   messageRepository,
   type McpBrowserSession,
-  type McpConnection,
+  type McpProfile,
 } from '@aaa/db';
 import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogger } from '@aaa/observability';
@@ -35,7 +35,7 @@ type SessionTerminalStatus = 'completed' | 'cancelled' | 'expired' | 'failed' | 
 
 interface BrowserSessionSnapshot {
   sessionId: string;
-  mcpConnectionId: string;
+  mcpProfileId: string;
   purpose: McpBrowserSession['purpose'];
   status: McpBrowserSession['status'];
   selectedPageId: string | null;
@@ -55,9 +55,10 @@ interface ControlChangedPayload {
 interface LiveBrowserSession {
   sessionId: string;
   userId: string;
-  mcpConnectionId: string;
+  mcpProfileId: string;
   messageId: string | null;
   purpose: McpBrowserSession['purpose'];
+  metadata: Record<string, unknown>;
   browser: Browser;
   context: BrowserContext;
   emitter: EventEmitter;
@@ -89,8 +90,8 @@ function sanitizeUrl(url: string): string {
   }
 }
 
-function getStorageState(connection: McpConnection): Record<string, unknown> | undefined {
-  const credentials = decryptCredentials(connection.encryptedCredentials);
+function getStorageState(profile: McpProfile): Record<string, unknown> | undefined {
+  const credentials = decryptCredentials(profile.encryptedCredentials);
   const state = credentials['storageState'];
   if (state && typeof state === 'object' && !Array.isArray(state)) {
     return state as Record<string, unknown>;
@@ -134,12 +135,12 @@ export class BrowserSessionManager {
 
   async createSession(
     session: McpBrowserSession,
-    connection: McpConnection,
+    profile: McpProfile,
     input: { startUrl?: string },
   ): Promise<BrowserSessionSnapshot> {
     await this.initialize();
 
-    const storageState = getStorageState(connection);
+    const storageState = getStorageState(profile);
     const browser = await chromium.launch({ headless: true });
     const context = await browser.newContext(
       storageState
@@ -155,9 +156,10 @@ export class BrowserSessionManager {
     const live: LiveBrowserSession = {
       sessionId: session.id,
       userId: session.userId,
-      mcpConnectionId: session.mcpConnectionId,
+      mcpProfileId: session.mcpProfileId,
       messageId: session.messageId,
       purpose: session.purpose,
+      metadata: { ...session.metadata },
       browser,
       context,
       emitter: new EventEmitter(),
@@ -204,10 +206,14 @@ export class BrowserSessionManager {
       status: 'active',
       selectedPageId: live.selectedPageId,
       metadata: {
-        ...session.metadata,
+        ...live.metadata,
         startUrl: startUrl ? sanitizeUrl(startUrl) : 'about:blank',
       },
     });
+    live.metadata = {
+      ...live.metadata,
+      startUrl: startUrl ? sanitizeUrl(startUrl) : 'about:blank',
+    };
 
     return this.getSnapshot(session.id);
   }
@@ -220,7 +226,7 @@ export class BrowserSessionManager {
     const live = this.requireLiveSession(sessionId);
     return {
       sessionId: live.sessionId,
-      mcpConnectionId: live.mcpConnectionId,
+      mcpProfileId: live.mcpProfileId,
       purpose: live.purpose,
       status: 'active',
       selectedPageId: live.selectedPageId,
@@ -532,10 +538,14 @@ export class BrowserSessionManager {
   ): Promise<void> {
     const live = this.liveSessions.get(sessionId);
     if (!live) {
+      const existing = await mcpBrowserSessionRepository.findById(sessionId);
       const updated = await mcpBrowserSessionRepository.update(sessionId, {
         status,
         endedAt: new Date(),
-        metadata: { reason },
+        metadata: {
+          ...(existing?.metadata ?? {}),
+          terminalReason: reason,
+        },
       });
       if (updated?.messageId) {
         await messageRepository.updateBrowserSessionBlock(
@@ -554,7 +564,10 @@ export class BrowserSessionManager {
     const updated = await mcpBrowserSessionRepository.update(sessionId, {
       status,
       endedAt: new Date(),
-      metadata: { reason },
+      metadata: {
+        ...live.metadata,
+        terminalReason: reason,
+      },
       lastClientSeenAt: new Date(live.lastClientSeenAt),
       lastFrameAt: live.lastFrameAt ? new Date(live.lastFrameAt) : null,
     });

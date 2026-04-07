@@ -217,13 +217,16 @@ export function Message({ role, content }: MessageProps) {
             status: sessionStatus,
             expiresAt: block.expiresAt ?? null,
             endedAt: block.endedAt ?? null,
-            metadata: {},
+            metadata: {
+              handoffReason: block.handoffReason ?? undefined,
+              terminalReason: block.terminalReason ?? undefined,
+            },
           }}
-          title={block.instanceLabel ?? 'Browser session'}
+          title={block.profileLabel ?? 'Browser session'}
           description={
-            sessionPurpose === 'auth'
+            sessionPurpose === 'sign_in'
               ? 'Authentication browser linked to this conversation'
-              : sessionPurpose === 'tool_takeover'
+              : sessionPurpose === 'handoff'
                 ? 'Interactive browser handoff linked to this conversation'
                 : 'Interactive browser session linked to this conversation'
           }

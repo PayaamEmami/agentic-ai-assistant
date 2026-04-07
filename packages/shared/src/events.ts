@@ -109,9 +109,9 @@ export interface BrowserPageEvent {
 export interface BrowserSessionAttachedEvent {
   type: 'browser.session.attached';
   sessionId: string;
-  mcpConnectionId: string;
+  mcpProfileId: string;
   status: string;
-  purpose: 'auth' | 'manual' | 'tool_takeover';
+  purpose: 'sign_in' | 'manual' | 'handoff';
   selectedPageId: string | null;
   controlGranted: boolean;
   pages: BrowserPageEvent[];

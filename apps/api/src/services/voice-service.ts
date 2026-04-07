@@ -40,10 +40,10 @@ function extractMessageText(content: unknown[]): string {
           : 'pending';
       textParts.push(
         `${
-          purpose === 'auth'
+          purpose === 'sign_in'
             ? 'Browser sign-in session'
-            : purpose === 'tool_takeover'
-              ? 'Browser takeover session'
+            : purpose === 'handoff'
+              ? 'Browser handoff session'
               : 'Browser session'
         } ${status}`.trim(),
       );

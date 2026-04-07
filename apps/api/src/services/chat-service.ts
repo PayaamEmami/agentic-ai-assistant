@@ -14,7 +14,7 @@ import {
   attachmentRepository,
   appCapabilityConfigRepository,
   conversationRepository,
-  mcpConnectionRepository,
+  mcpProfileRepository,
   getPool,
   messageRepository,
   toolExecutionRepository,
@@ -23,7 +23,7 @@ import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogContext } from '@aaa/observability';
 import {
   getMcpRuntime,
-  type RuntimeMcpConnection,
+  type RuntimeMcpProfile,
   type UnifiedToolDescriptor,
 } from '@aaa/mcp';
 import {
@@ -71,9 +71,9 @@ type AvailableTool = {
   parameters: Record<string, unknown>;
   requiresApproval: boolean;
   origin: 'native' | 'mcp';
-  mcpConnectionId?: string;
+  mcpProfileId?: string;
   integrationKind?: string;
-  instanceLabel?: string;
+  profileLabel?: string;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -119,20 +119,20 @@ function extractTextFromContent(content: unknown[]): string {
     if (type === 'browser_session') {
       const purpose = typeof block.purpose === 'string' ? block.purpose : 'manual';
       const status = typeof block.status === 'string' ? block.status : 'pending';
-      const instanceLabel =
-        typeof block.instanceLabel === 'string' && block.instanceLabel.trim().length > 0
-          ? block.instanceLabel.trim()
+      const profileLabel =
+        typeof block.profileLabel === 'string' && block.profileLabel.trim().length > 0
+          ? block.profileLabel.trim()
           : null;
       const purposeLabel =
-        purpose === 'auth'
+        purpose === 'sign_in'
           ? 'Browser sign-in session'
-          : purpose === 'tool_takeover'
-            ? 'Browser takeover session'
+          : purpose === 'handoff'
+            ? 'Browser handoff session'
             : 'Browser session';
 
       parts.push(
-        instanceLabel
-          ? `${purposeLabel} on ${instanceLabel} is ${status}.`
+        profileLabel
+          ? `${purposeLabel} on ${profileLabel} is ${status}.`
           : `${purposeLabel} is ${status}.`,
       );
     }
@@ -230,7 +230,7 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
   const repoSuffix = repo ? ` in ${repo}` : '';
   const pullNumber = getNumberField(input, 'pullNumber');
   const pullSuffix = pullNumber !== null ? ` for PR #${pullNumber}` : '';
-  const instanceSuffix = tool.instanceLabel ? ` using ${tool.instanceLabel}` : '';
+  const profileSuffix = tool.profileLabel ? ` using ${tool.profileLabel}` : '';
 
   switch (tool.name) {
     case 'external.execute': {
@@ -290,30 +290,30 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
     case 'google_docs.batch_update_document':
       return 'Allow updating this Google Doc';
     case 'playwright.navigate':
-      return `Allow navigating the browser${instanceSuffix}`;
+      return `Allow navigating the browser${profileSuffix}`;
     case 'playwright.extract_text':
-      return `Allow reading page text${instanceSuffix}`;
+      return `Allow reading page text${profileSuffix}`;
     case 'playwright.screenshot':
-      return `Allow capturing a screenshot${instanceSuffix}`;
+      return `Allow capturing a screenshot${profileSuffix}`;
     case 'playwright.click': {
       const selector = getStringField(input, 'selector');
       return selector
-        ? `Allow clicking "${selector}"${instanceSuffix}`
-        : `Allow clicking in the browser${instanceSuffix}`;
+        ? `Allow clicking "${selector}"${profileSuffix}`
+        : `Allow clicking in the browser${profileSuffix}`;
     }
     case 'playwright.fill': {
       const selector = getStringField(input, 'selector');
       return selector
-        ? `Allow filling "${selector}"${instanceSuffix}`
-        : `Allow filling a browser input${instanceSuffix}`;
+        ? `Allow filling "${selector}"${profileSuffix}`
+        : `Allow filling a browser input${profileSuffix}`;
     }
     case 'playwright.submit_form':
-      return `Allow submitting a browser form${instanceSuffix}`;
+      return `Allow submitting a browser form${profileSuffix}`;
     case 'playwright.login_with_profile': {
       const profileName = getStringField(input, 'profileName');
       return profileName
-        ? `Allow browser login with profile "${profileName}"${instanceSuffix}`
-        : `Allow browser login${instanceSuffix}`;
+        ? `Allow browser login with profile "${profileName}"${profileSuffix}`
+        : `Allow browser login${profileSuffix}`;
     }
     default:
       return `Allow ${tool.description.charAt(0).toLowerCase()}${tool.description.slice(1)}`;
@@ -562,15 +562,17 @@ function normalizeAssistantResponse(
   return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_EXECUTION_RESPONSE;
 }
 
-function toRuntimeMcpConnection(connection: Awaited<ReturnType<typeof mcpConnectionRepository.listConnectedByUser>>[number]): RuntimeMcpConnection {
+function toRuntimeMcpProfile(
+  profile: Awaited<ReturnType<typeof mcpProfileRepository.listConnectedByUser>>[number],
+): RuntimeMcpProfile {
   return {
-    id: connection.id,
-    userId: connection.userId,
-    integrationKind: connection.integrationKind as RuntimeMcpConnection['integrationKind'],
-    instanceLabel: connection.instanceLabel,
-    status: connection.status,
-    settings: connection.settings,
-    credentials: decryptCredentials(connection.encryptedCredentials),
+    id: profile.id,
+    userId: profile.userId,
+    integrationKind: profile.integrationKind as RuntimeMcpProfile['integrationKind'],
+    profileLabel: profile.profileLabel,
+    status: profile.status,
+    settings: profile.settings,
+    credentials: decryptCredentials(profile.encryptedCredentials),
   };
 }
 
@@ -579,29 +581,29 @@ async function loadAvailableTools(userId: string, requestContent: string): Promi
 
   try {
     const runtime = getMcpRuntime();
-    const connectedMcpConnections = await mcpConnectionRepository.listConnectedByUser(userId);
+    const connectedMcpProfiles = await mcpProfileRepository.listConnectedByUser(userId);
     const requestContentLower = requestContent.toLowerCase();
-    const byKind = new Map<string, typeof connectedMcpConnections>();
+    const byKind = new Map<string, typeof connectedMcpProfiles>();
 
-    for (const connection of connectedMcpConnections) {
-      const existing = byKind.get(connection.integrationKind) ?? [];
-      existing.push(connection);
-      byKind.set(connection.integrationKind, existing);
+    for (const profile of connectedMcpProfiles) {
+      const existing = byKind.get(profile.integrationKind) ?? [];
+      existing.push(profile);
+      byKind.set(profile.integrationKind, existing);
     }
 
-    const selectedConnections: RuntimeMcpConnection[] = [];
-    for (const connections of byKind.values()) {
-      const explicit = connections.find((connection) =>
-        requestContentLower.includes(connection.instanceLabel.toLowerCase()),
+    const selectedProfiles: RuntimeMcpProfile[] = [];
+    for (const profiles of byKind.values()) {
+      const explicit = profiles.find((profile) =>
+        requestContentLower.includes(profile.profileLabel.toLowerCase()),
       );
-      const selected = explicit ?? connections.find((connection) => connection.isDefaultActive) ?? connections[0];
+      const selected = explicit ?? profiles.find((profile) => profile.isDefault) ?? profiles[0];
       if (selected) {
-        selectedConnections.push(toRuntimeMcpConnection(selected));
+        selectedProfiles.push(toRuntimeMcpProfile(selected));
       }
     }
 
     const mcpTools = runtime
-      .listTools(selectedConnections)
+      .listTools(selectedProfiles)
       .map<AvailableTool>((tool) => toAvailableTool(tool));
     tools.push(...mcpTools);
   } catch {
@@ -618,9 +620,9 @@ function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
     parameters: tool.parameters,
     requiresApproval: tool.requiresApproval,
     origin: tool.origin,
-    mcpConnectionId: tool.mcpConnectionId,
+    mcpProfileId: tool.mcpProfileId,
     integrationKind: tool.integrationKind,
-    instanceLabel: tool.instanceLabel,
+    profileLabel: tool.profileLabel,
   };
 }
 
@@ -839,10 +841,10 @@ export class ChatService {
             .map((app) => appLabel(app.appKind)),
         ),
       );
-      const activeMcpConnections = (await mcpConnectionRepository.listConnectedByUser(userId)).map(
-        (connection) => `MCP ${connection.integrationKind}: ${connection.instanceLabel}`,
+      const activeMcpProfiles = (await mcpProfileRepository.listConnectedByUser(userId)).map(
+        (profile) => `Browser profile (${profile.integrationKind}): ${profile.profileLabel}`,
       );
-      activeApps.push(...activeMcpConnections);
+      activeApps.push(...activeMcpProfiles);
       throwIfAborted(signal);
 
       const availableTools = await loadAvailableTools(userId, content);
@@ -912,7 +914,7 @@ export class ChatService {
           toolCall.name,
           toolInput,
           tool.origin,
-          tool.mcpConnectionId ?? null,
+          tool.mcpProfileId ?? null,
           tool.integrationKind ?? null,
         );
         toolExecutionIds.push(toolExecution.id);

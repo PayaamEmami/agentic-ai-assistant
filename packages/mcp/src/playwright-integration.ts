@@ -1,12 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
-import os from 'node:os';
-import path from 'node:path';
 import { chromium, type BrowserContext, type Page } from 'playwright';
 import { getLogger } from '@aaa/observability';
 import type {
-  ManualAuthSessionCompleteResult,
-  ManualAuthSessionStartResult,
-  RuntimeMcpConnection,
+  RuntimeMcpProfile,
   ToolExecutionInput,
   ToolExecutionOutput,
   UnifiedToolDescriptor,
@@ -19,11 +14,6 @@ interface SecretProfile {
   usernameSelector?: string;
   passwordSelector?: string;
   submitSelector?: string;
-}
-
-interface AuthSessionHandle {
-  context: BrowserContext;
-  userDataDir: string;
 }
 
 function asString(value: unknown): string | undefined {
@@ -68,9 +58,9 @@ async function gotoIfProvided(page: Page, input: Record<string, unknown>): Promi
   }
 }
 
-async function createIsolatedContext(connection: RuntimeMcpConnection): Promise<BrowserContext> {
+async function createIsolatedContext(profile: RuntimeMcpProfile): Promise<BrowserContext> {
   const browser = await chromium.launch({ headless: true });
-  const storageState = getStorageState(connection.credentials);
+  const storageState = getStorageState(profile.credentials);
   const context = await browser.newContext(storageState ? { storageState: storageState as never } : undefined);
   context.on('close', async () => {
     await browser.close().catch(() => undefined);
@@ -79,37 +69,36 @@ async function createIsolatedContext(connection: RuntimeMcpConnection): Promise<
 }
 
 function withUpdatedStorageState(
-  connection: RuntimeMcpConnection,
+  profile: RuntimeMcpProfile,
   storageState: Record<string, unknown>,
-): ToolExecutionOutput['connectionUpdate'] {
+): ToolExecutionOutput['profileUpdate'] {
   return {
     credentials: {
-      ...connection.credentials,
+      ...profile.credentials,
       storageState,
     },
   };
 }
 
-export class PlaywrightConnectionClient {
-  private connection: RuntimeMcpConnection;
+export class PlaywrightProfileClient {
+  private profile: RuntimeMcpProfile;
   private readonly logger = getLogger({ component: 'mcp-playwright' });
-  private readonly authSessions = new Map<string, AuthSessionHandle>();
 
-  constructor(connection: RuntimeMcpConnection) {
-    this.connection = connection;
+  constructor(profile: RuntimeMcpProfile) {
+    this.profile = profile;
   }
 
-  updateConnection(connection: RuntimeMcpConnection): void {
-    this.connection = connection;
+  updateProfile(profile: RuntimeMcpProfile): void {
+    this.profile = profile;
   }
 
   listTools(): UnifiedToolDescriptor[] {
-    const label = this.connection.instanceLabel;
+    const label = this.profile.profileLabel;
 
     return [
       {
         name: 'playwright.navigate',
-        description: `Navigate using the "${label}" browser instance and return the final page title and URL.`,
+        description: `Navigate using the "${label}" browser profile and return the final page title and URL.`,
         parameters: {
           type: 'object',
           properties: {
@@ -119,14 +108,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: false,
       },
       {
         name: 'playwright.extract_text',
-        description: `Read page text from the "${label}" browser instance.`,
+        description: `Read page text from the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -137,14 +126,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: false,
       },
       {
         name: 'playwright.screenshot',
-        description: `Capture a screenshot with the "${label}" browser instance.`,
+        description: `Capture a screenshot with the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -155,14 +144,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: false,
       },
       {
         name: 'playwright.click',
-        description: `Click an element with the "${label}" browser instance.`,
+        description: `Click an element with the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -173,14 +162,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: true,
       },
       {
         name: 'playwright.fill',
-        description: `Fill an input using the "${label}" browser instance.`,
+        description: `Fill an input using the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -192,14 +181,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: true,
       },
       {
         name: 'playwright.submit_form',
-        description: `Submit a form using the "${label}" browser instance.`,
+        description: `Submit a form using the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -209,14 +198,14 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: true,
       },
       {
         name: 'playwright.login_with_profile',
-        description: `Log in using a stored secret profile with the "${label}" browser instance.`,
+        description: `Log in using a stored secret profile with the "${label}" browser profile.`,
         parameters: {
           type: 'object',
           properties: {
@@ -227,16 +216,43 @@ export class PlaywrightConnectionClient {
           additionalProperties: false,
         },
         origin: 'mcp',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
-        instanceLabel: label,
+        profileLabel: label,
         requiresApproval: true,
+      },
+      {
+        name: 'playwright.start_handoff',
+        description:
+          `Start an interactive browser handoff using the "${label}" browser profile when a human must complete sign-in, CAPTCHA, MFA, consent, or another manual browser step.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: { type: 'string' },
+            url: { type: 'string' },
+          },
+          required: ['reason'],
+          additionalProperties: false,
+        },
+        origin: 'mcp',
+        mcpProfileId: this.profile.id,
+        integrationKind: 'playwright',
+        profileLabel: label,
+        requiresApproval: false,
       },
     ];
   }
 
   async executeTool(input: ToolExecutionInput): Promise<ToolExecutionOutput> {
-    const context = await createIsolatedContext(this.connection);
+    if (input.toolName === 'playwright.start_handoff') {
+      return {
+        success: false,
+        result: null,
+        error: 'playwright.start_handoff must be handled by the API handoff flow',
+      };
+    }
+
+    const context = await createIsolatedContext(this.profile);
 
     try {
       const page = await context.newPage();
@@ -251,8 +267,8 @@ export class PlaywrightConnectionClient {
               title: await page.title(),
               url: page.url(),
             },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -270,8 +286,8 @@ export class PlaywrightConnectionClient {
               url: page.url(),
               text: text.slice(0, maxLength),
             },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -291,8 +307,8 @@ export class PlaywrightConnectionClient {
               mimeType: 'image/png',
               base64: buffer.toString('base64'),
             },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -307,8 +323,8 @@ export class PlaywrightConnectionClient {
           return {
             success: true,
             result: { url: page.url(), title: await page.title(), clicked: selector },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -324,8 +340,8 @@ export class PlaywrightConnectionClient {
           return {
             success: true,
             result: { url: page.url(), title: await page.title(), filled: selector },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -335,13 +351,19 @@ export class PlaywrightConnectionClient {
           const selector = asString(input.arguments['selector']);
           if (selector) {
             await page.locator(selector).evaluate((form) => {
-              if (form && typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function') {
+              if (
+                form &&
+                typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function'
+              ) {
                 (form as { requestSubmit: () => void }).requestSubmit();
               }
             });
           } else {
             await page.locator('form').first().evaluate((form) => {
-              if (form && typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function') {
+              if (
+                form &&
+                typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function'
+              ) {
                 (form as { requestSubmit: () => void }).requestSubmit();
               }
             });
@@ -349,8 +371,8 @@ export class PlaywrightConnectionClient {
           return {
             success: true,
             result: { url: page.url(), title: await page.title(), submitted: selector ?? 'form' },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -361,8 +383,8 @@ export class PlaywrightConnectionClient {
             return { success: false, result: null, error: 'Missing profileName' };
           }
 
-          const profile = getSecretProfiles(this.connection.credentials)[profileName];
-          if (!profile) {
+          const secretProfile = getSecretProfiles(this.profile.credentials)[profileName];
+          if (!secretProfile) {
             return {
               success: false,
               result: null,
@@ -370,19 +392,19 @@ export class PlaywrightConnectionClient {
             };
           }
 
-          const loginUrl = asString(input.arguments['url']) ?? profile.url;
+          const loginUrl = asString(input.arguments['url']) ?? secretProfile.url;
           if (loginUrl) {
             await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
           }
 
-          if (profile.username && profile.usernameSelector) {
-            await page.locator(profile.usernameSelector).fill(profile.username);
+          if (secretProfile.username && secretProfile.usernameSelector) {
+            await page.locator(secretProfile.usernameSelector).fill(secretProfile.username);
           }
-          if (profile.password && profile.passwordSelector) {
-            await page.locator(profile.passwordSelector).fill(profile.password);
+          if (secretProfile.password && secretProfile.passwordSelector) {
+            await page.locator(secretProfile.passwordSelector).fill(secretProfile.password);
           }
-          if (profile.submitSelector) {
-            await page.locator(profile.submitSelector).click();
+          if (secretProfile.submitSelector) {
+            await page.locator(secretProfile.submitSelector).click();
           }
 
           return {
@@ -392,8 +414,8 @@ export class PlaywrightConnectionClient {
               title: await page.title(),
               profileName,
             },
-            connectionUpdate: withUpdatedStorageState(
-              this.connection,
+            profileUpdate: withUpdatedStorageState(
+              this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
           };
@@ -416,71 +438,14 @@ export class PlaywrightConnectionClient {
     }
   }
 
-  async startManualAuthSession(authSessionId: string): Promise<ManualAuthSessionStartResult> {
-    const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'aaa-playwright-auth-'));
-    const context = await chromium.launchPersistentContext(userDataDir, { headless: false });
-    const page = context.pages()[0] ?? (await context.newPage());
-    const startUrl = asString(this.connection.settings['manualAuthStartUrl']) ?? 'about:blank';
-    await page.goto(startUrl).catch(() => undefined);
-    this.authSessions.set(authSessionId, { context, userDataDir });
-
-    return {
-      metadata: {
-        mode: 'manual_browser',
-        instructions:
-          'A local Chromium window has been opened for this auth session. Sign in there, then return here and click Save session.',
-        startUrl,
-      },
-    };
-  }
-
-  async completeManualAuthSession(authSessionId: string): Promise<ManualAuthSessionCompleteResult> {
-    const handle = this.authSessions.get(authSessionId);
-    if (!handle) {
-      throw new Error('Auth session is no longer available in memory');
-    }
-
-    this.authSessions.delete(authSessionId);
-    try {
-      const storageState = (await handle.context.storageState()) as unknown as Record<string, unknown>;
-      await handle.context.close();
-      await rm(handle.userDataDir, { force: true, recursive: true }).catch(() => undefined);
-
-      return {
-        metadata: {
-          savedAt: new Date().toISOString(),
-        },
-        connectionUpdate: withUpdatedStorageState(this.connection, storageState),
-      };
-    } finally {
-      await handle.context.close().catch(() => undefined);
-      await rm(handle.userDataDir, { force: true, recursive: true }).catch(() => undefined);
-    }
-  }
-
-  async cancelAuthSession(authSessionId: string): Promise<void> {
-    const handle = this.authSessions.get(authSessionId);
-    if (!handle) {
-      return;
-    }
-
-    this.authSessions.delete(authSessionId);
-    await handle.context.close().catch(() => undefined);
-    await rm(handle.userDataDir, { force: true, recursive: true }).catch(() => undefined);
-  }
-
   async shutdown(): Promise<void> {
-    for (const authSessionId of this.authSessions.keys()) {
-      await this.cancelAuthSession(authSessionId);
-    }
-
     this.logger.info(
       {
         event: 'mcp.playwright.shutdown',
         outcome: 'success',
-        mcpConnectionId: this.connection.id,
+        mcpProfileId: this.profile.id,
       },
-      'Playwright MCP client shut down',
+      'Playwright MCP profile client shut down',
     );
   }
 }
