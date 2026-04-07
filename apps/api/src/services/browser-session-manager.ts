@@ -73,6 +73,7 @@ interface LiveBrowserSession {
   lastPersistedFrameAt: number;
   viewers: Set<string>;
   controlViewerId: string | null;
+  isClosing: boolean;
 }
 
 function asString(value: unknown): string | undefined {
@@ -174,6 +175,7 @@ export class BrowserSessionManager {
       lastPersistedFrameAt: 0,
       viewers: new Set(),
       controlViewerId: null,
+      isClosing: false,
     };
 
     this.liveSessions.set(session.id, live);
@@ -184,9 +186,15 @@ export class BrowserSessionManager {
       void this.registerPage(live, page, true);
     });
     context.on('close', () => {
+      if (live.isClosing) {
+        return;
+      }
       void this.finishSession(live.sessionId, 'crashed', 'browser_context_closed');
     });
     browser.on('disconnected', () => {
+      if (live.isClosing) {
+        return;
+      }
       void this.finishSession(live.sessionId, 'crashed', 'browser_disconnected');
     });
 
@@ -557,6 +565,11 @@ export class BrowserSessionManager {
       return;
     }
 
+    if (live.isClosing) {
+      return;
+    }
+
+    live.isClosing = true;
     this.liveSessions.delete(sessionId);
     browserSessionsActive.dec({ state: 'active' });
     browserSessionsTotal.inc({ action: 'end', outcome: status });

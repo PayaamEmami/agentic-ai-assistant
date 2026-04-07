@@ -89,7 +89,7 @@ export function InlineBrowserPane({
         onSave={handleSave}
         onCancel={handleCancel}
         onClose={onClose}
-        onOpenFullscreen={() => router.push(`/chat/browser/${sessionId}`)}
+        onToggleDisplay={() => router.push(`/chat/browser/${sessionId}`)}
       />
     </div>
   );

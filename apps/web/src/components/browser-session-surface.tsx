@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef } from 'react';
 import type { BrowserPageSummary, McpBrowserSessionSummary } from '@/lib/api-client';
-import { pageLabel, sessionStatusLabel } from '@/lib/use-browser-session';
+import { pageLabel } from '@/lib/use-browser-session';
 
 interface BrowserSessionSurfaceProps {
   variant: 'fullscreen' | 'inline';
@@ -25,8 +25,126 @@ interface BrowserSessionSurfaceProps {
   onSave?: () => Promise<void>;
   onCancel?: () => Promise<void>;
   onClose?: () => void;
-  onOpenFullscreen?: () => void;
+  onToggleDisplay?: () => void;
+  toggleDisplayLabel?: string;
   closeLabel?: string;
+}
+
+interface IconButtonProps {
+  label: string;
+  onClick: () => void;
+  children: React.ReactNode;
+  disabled?: boolean;
+}
+
+function IconButton({ label, onClick, children, disabled = false }: IconButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-border-subtle bg-surface text-foreground hover:bg-surface-hover disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+function sessionTitle(session: McpBrowserSessionSummary | null): string {
+  if (!session) {
+    return 'Opening browser...';
+  }
+
+  switch (session.purpose) {
+    case 'sign_in':
+      return 'Sign-in session';
+    case 'handoff':
+      return 'Browser handoff';
+    default:
+      return 'Browser session';
+  }
+}
+
+function ExpandIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M7 3H3v4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 3h4v4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 13v4h-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 13v4h4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CollapseIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M8 3H3v5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M12 3h5v5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M17 12v5h-5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3 12v5h5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 7L3 3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 7l4-4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13 13l4 4" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M7 13l-4 4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M5 5l10 10" strokeLinecap="round" />
+      <path d="M15 5L5 15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M16 10a6 6 0 10-1.2 3.6" strokeLinecap="round" />
+      <path d="M13.5 4H17v3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ReconnectIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M6.5 6.5a4.5 4.5 0 016.4 0l.6.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M13.5 13.5a4.5 4.5 0 01-6.4 0l-.6-.6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M11 4.5h3v3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M9 15.5H6v-3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function BackIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M11.5 4.5L6 10l5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ForwardIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M8.5 4.5L14 10l-5.5 5.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function GoIcon() {
+  return (
+    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.7" className="h-4 w-4">
+      <path d="M4 10h10" strokeLinecap="round" />
+      <path d="M10.5 6.5L14 10l-3.5 3.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 export function BrowserSessionSurface({
@@ -50,10 +168,21 @@ export function BrowserSessionSurface({
   onSave,
   onCancel,
   onClose,
-  onOpenFullscreen,
+  onToggleDisplay,
+  toggleDisplayLabel,
   closeLabel,
 }: BrowserSessionSurfaceProps) {
   const viewportRef = useRef<HTMLDivElement | null>(null);
+  const browserStatusMessage =
+    socketState === 'connecting'
+      ? 'Connecting to the live browser...'
+      : socketState === 'disconnected'
+        ? 'Browser connection lost. Reconnect to continue.'
+        : !controlGranted
+          ? isTouchDevice
+            ? 'Touch devices stay view-only in chat.'
+            : 'Waiting for browser control...'
+          : null;
 
   const mapPointer = useCallback(
     (clientX: number, clientY: number) => {
@@ -80,6 +209,7 @@ export function BrowserSessionSurface({
     if (
       !viewportRef.current ||
       socketState !== 'connected' ||
+      !controlGranted ||
       !session ||
       (session.status !== 'active' && session.status !== 'pending')
     ) {
@@ -112,52 +242,27 @@ export function BrowserSessionSurface({
 
     observer.observe(viewport);
     return () => observer.disconnect();
-  }, [sendBrowserEvent, session, socketState]);
+  }, [controlGranted, sendBrowserEvent, session, socketState]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-elevated">
-      <div className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-3 py-3' : 'px-4 py-3'}`}>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs font-medium uppercase tracking-[0.2em] text-accent">
-              Embedded Browser
-            </p>
-            <p className="mt-1 text-sm text-foreground-muted">
-              {session ? `${sessionStatusLabel(session.status)} session for ${session.purpose}` : 'Loading session...'}
-            </p>
+      <div
+        className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-5 py-4' : 'px-6 py-4'}`}
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-foreground">{sessionTitle(session)}</p>
+            {browserStatusMessage ? (
+              <p className="mt-1 text-xs text-foreground-muted">{browserStatusMessage}</p>
+            ) : null}
           </div>
-          <div className="flex items-center gap-2">
-            {onClose ? (
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-              >
-                {closeLabel ?? (variant === 'inline' ? 'Close' : 'Back')}
-              </button>
-            ) : null}
-            {onOpenFullscreen ? (
-              <button
-                type="button"
-                onClick={onOpenFullscreen}
-                className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-              >
-                Open full screen
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={reconnect}
-              className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-            >
-              Reconnect
-            </button>
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {onCancel ? (
               <button
                 type="button"
                 onClick={() => void onCancel()}
                 disabled={isCancelling}
-                className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
+                className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
               >
                 {isCancelling ? 'Cancelling...' : 'Cancel'}
               </button>
@@ -167,34 +272,51 @@ export function BrowserSessionSurface({
                 type="button"
                 onClick={() => void onSave()}
                 disabled={isSaving || session?.status !== 'active'}
-                className="rounded-lg bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
+                className="rounded-xl bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover disabled:opacity-50"
               >
                 {isSaving ? 'Saving...' : 'Save session'}
               </button>
             ) : null}
+            <IconButton label="Reconnect browser" onClick={reconnect}>
+              <ReconnectIcon />
+            </IconButton>
+            {onToggleDisplay ? (
+              <IconButton
+                label={
+                  toggleDisplayLabel ??
+                  (variant === 'inline' ? 'Open full screen' : 'Return to inline chat')
+                }
+                onClick={onToggleDisplay}
+              >
+                {variant === 'inline' ? <ExpandIcon /> : <CollapseIcon />}
+              </IconButton>
+            ) : null}
+            {onClose ? (
+              <IconButton
+                label={closeLabel ?? (variant === 'inline' ? 'Close browser preview' : 'Close browser')}
+                onClick={onClose}
+              >
+                <CloseIcon />
+              </IconButton>
+            ) : null}
           </div>
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-foreground-muted">
-          <span>Socket: {socketState}</span>
-          <span>{controlGranted ? 'Control enabled' : 'View only'}</span>
-          {isTouchDevice ? <span>Touch devices are view-only in MVP.</span> : null}
         </div>
         {error ? (
           <p className="mt-3 rounded-lg bg-error/10 px-3 py-2 text-xs text-error">{error}</p>
         ) : null}
       </div>
 
-      <div className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-3 py-3' : 'px-4 py-3'}`}>
-        <div className="flex gap-2 overflow-x-auto pb-1">
-          {pages.length === 0 ? (
-            <p className="text-xs text-foreground-muted">Waiting for browser pages...</p>
-          ) : (
-            pages.map((page) => (
+      <div
+        className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-5 py-4' : 'px-6 py-4'}`}
+      >
+        {pages.length > 1 ? (
+          <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
+            {pages.map((page) => (
               <button
                 key={page.id}
                 type="button"
                 onClick={() => sendBrowserEvent({ type: 'browser.page.select', pageId: page.id })}
-                className={`min-w-0 rounded-lg border px-3 py-2 text-left text-xs ${
+                className={`min-w-0 rounded-xl border px-3 py-2 text-left text-xs ${
                   page.isSelected
                     ? 'border-accent bg-accent/10 text-foreground'
                     : 'border-border-subtle text-foreground-muted hover:bg-surface-hover'
@@ -202,34 +324,34 @@ export function BrowserSessionSurface({
               >
                 <span className="block truncate">{pageLabel(page)}</span>
               </button>
-            ))
-          )}
-        </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <button
-            type="button"
+            ))}
+          </div>
+        ) : null}
+        {pages.length === 0 ? (
+          <p className="mb-3 text-xs text-foreground-muted">Waiting for browser pages...</p>
+        ) : null}
+        <div className="flex flex-wrap items-center gap-2">
+          <IconButton
+            label="Go back"
             onClick={() => sendBrowserEvent({ type: 'browser.history', action: 'back' })}
             disabled={controlsDisabled}
-            className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
           >
-            Back
-          </button>
-          <button
-            type="button"
+            <BackIcon />
+          </IconButton>
+          <IconButton
+            label="Go forward"
             onClick={() => sendBrowserEvent({ type: 'browser.history', action: 'forward' })}
             disabled={controlsDisabled}
-            className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
           >
-            Forward
-          </button>
-          <button
-            type="button"
+            <ForwardIcon />
+          </IconButton>
+          <IconButton
+            label="Reload page"
             onClick={() => sendBrowserEvent({ type: 'browser.history', action: 'reload' })}
             disabled={controlsDisabled}
-            className="rounded-lg border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
           >
-            Reload
-          </button>
+            <RefreshIcon />
+          </IconButton>
           <form
             className="flex min-w-[240px] flex-1 gap-2"
             onSubmit={(event) => {
@@ -240,25 +362,31 @@ export function BrowserSessionSurface({
             <input
               value={addressValue}
               onChange={(event) => setAddressValue(event.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-border-subtle bg-surface-elevated px-3 py-2 text-xs text-foreground outline-none ring-0"
-              placeholder="Enter a URL"
+              className="min-w-0 flex-1 rounded-xl border border-border-subtle bg-surface-elevated px-4 py-2.5 text-sm text-foreground outline-none ring-0"
+              placeholder="Search or enter URL"
             />
             <button
               type="submit"
               disabled={controlsDisabled || addressValue.trim().length === 0}
-              className="rounded-lg bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
+              aria-label="Go to URL"
+              title="Go to URL"
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-surface-input text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
             >
-              Go
+              <GoIcon />
             </button>
           </form>
         </div>
       </div>
 
-      <div className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#111827] ${variant === 'inline' ? 'p-3' : 'p-4'}`}>
+      <div
+        className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#111827] ${
+          variant === 'inline' ? 'p-6 lg:p-7' : 'p-6'
+        }`}
+      >
         <div
           ref={viewportRef}
           tabIndex={controlsDisabled ? -1 : 0}
-          className="relative w-full max-w-6xl overflow-hidden rounded-2xl border border-black/40 bg-black shadow-[0_20px_80px_rgba(0,0,0,0.45)] outline-none"
+          className="relative w-full max-w-[1280px] overflow-hidden rounded-[28px] border border-black/40 bg-black shadow-[0_20px_80px_rgba(0,0,0,0.45)] outline-none"
           onMouseMove={(event) => {
             const point = mapPointer(event.clientX, event.clientY);
             if (!point || controlsDisabled) {

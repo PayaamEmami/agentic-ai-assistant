@@ -107,6 +107,7 @@ export function useBrowserSession({
   const [isSaving, setIsSaving] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
   const [connectionNonce, setConnectionNonce] = useState(0);
+  const [isAttached, setIsAttached] = useState(false);
   const pendingFrameMetaRef = useRef<FrameMeta | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const objectUrlRef = useRef<string | null>(null);
@@ -142,6 +143,7 @@ export function useBrowserSession({
       clearFrameUrl();
       setFrameSize(null);
       setControlGranted(false);
+      setIsAttached(false);
       setError(null);
       return null;
     }
@@ -151,6 +153,7 @@ export function useBrowserSession({
       clearFrameUrl();
       setFrameSize(null);
       setControlGranted(false);
+      setIsAttached(false);
       setPages([]);
       setAddressValue('');
       setSession(null);
@@ -191,6 +194,7 @@ export function useBrowserSession({
       socketRef.current?.close();
       socketRef.current = null;
       setSocketState('disconnected');
+      setIsAttached(false);
       return;
     }
 
@@ -198,6 +202,7 @@ export function useBrowserSession({
       socketRef.current?.close();
       socketRef.current = null;
       setSocketState('disconnected');
+      setIsAttached(false);
       return;
     }
 
@@ -207,11 +212,19 @@ export function useBrowserSession({
     setSocketState('connecting');
 
     socket.addEventListener('open', () => {
+      if (socketRef.current !== socket) {
+        socket.close();
+        return;
+      }
       setSocketState('connected');
+      setIsAttached(false);
       socket.send(JSON.stringify({ type: 'browser.attach', sessionId }));
     });
 
     socket.addEventListener('message', (event) => {
+      if (socketRef.current !== socket) {
+        return;
+      }
       if (typeof event.data === 'string') {
         try {
           const parsed = JSON.parse(event.data) as
@@ -236,6 +249,7 @@ export function useBrowserSession({
             case 'browser.session.attached': {
               const normalizedPages = normalizeBrowserPages(parsed.pages);
               setPages(normalizedPages);
+              setIsAttached(true);
               setControlGranted(Boolean(parsed.controlGranted));
               if (parsed.viewport) {
                 setFrameSize(parsed.viewport);
@@ -286,6 +300,7 @@ export function useBrowserSession({
               });
               return;
             case 'browser.session.ended':
+              setIsAttached(false);
               setSession((previous) =>
                 previous
                   ? {
@@ -318,10 +333,12 @@ export function useBrowserSession({
     });
 
     socket.addEventListener('close', () => {
-      if (socketRef.current === socket) {
-        socketRef.current = null;
+      if (socketRef.current !== socket) {
+        return;
       }
+      socketRef.current = null;
       setSocketState('disconnected');
+      setIsAttached(false);
     });
 
     return () => {
@@ -329,6 +346,7 @@ export function useBrowserSession({
       if (socketRef.current === socket) {
         socketRef.current = null;
       }
+      setIsAttached(false);
     };
   }, [connectionNonce, enabled, isLiveSession, replaceFrameUrl, sessionId, token]);
 
@@ -341,7 +359,7 @@ export function useBrowserSession({
   }, [pages]);
 
   useEffect(() => {
-    if (!sessionId || !socketRef.current || socketState !== 'connected') {
+    if (!sessionId || !socketRef.current || socketState !== 'connected' || !isAttached) {
       return;
     }
 
@@ -350,7 +368,7 @@ export function useBrowserSession({
     }, 5000);
 
     return () => window.clearInterval(interval);
-  }, [sessionId, socketState]);
+  }, [isAttached, sessionId, socketState]);
 
   useEffect(() => {
     return () => {
@@ -364,7 +382,7 @@ export function useBrowserSession({
         setError('Browser session is unavailable.');
         return false;
       }
-      if (!socketRef.current || socketState !== 'connected') {
+      if (!socketRef.current || socketState !== 'connected' || !isAttached) {
         setError('Browser session is disconnected.');
         return false;
       }
@@ -372,11 +390,12 @@ export function useBrowserSession({
       socketRef.current.send(JSON.stringify({ ...payload, sessionId }));
       return true;
     },
-    [sessionId, socketState],
+    [isAttached, sessionId, socketState],
   );
 
   const reconnect = useCallback(() => {
     setError(null);
+    setIsAttached(false);
     clearFrameUrl();
     setConnectionNonce((previous) => previous + 1);
     void loadSession();
@@ -433,7 +452,11 @@ export function useBrowserSession({
     [pages],
   );
   const controlsDisabled =
-    !controlGranted || socketState !== 'connected' || session?.status !== 'active' || isTouchDevice;
+    !isAttached ||
+    !controlGranted ||
+    socketState !== 'connected' ||
+    session?.status !== 'active' ||
+    isTouchDevice;
 
   return {
     session,

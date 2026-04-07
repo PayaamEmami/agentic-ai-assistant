@@ -195,6 +195,7 @@ export function ChatWorkspace() {
 
   const activeSessionId = explicitSessionId ?? activeConversationSession?.id ?? null;
   const previousConversationSessionSignatureRef = useRef<string | null>(null);
+  const previousMobileActiveSessionIdRef = useRef<string | null>(null);
 
   const rememberSession = useCallback((session: McpBrowserSessionSummary) => {
     if (session.conversationId) {
@@ -272,11 +273,19 @@ export function ChatWorkspace() {
   useEffect(() => {
     if (isDesktopInline) {
       setIsMobilePreviewOpen(false);
+      previousMobileActiveSessionIdRef.current = activeSessionId;
       return;
     }
 
     if (!activeSessionId) {
       setIsMobilePreviewOpen(false);
+      previousMobileActiveSessionIdRef.current = null;
+      return;
+    }
+
+    if (previousMobileActiveSessionIdRef.current !== activeSessionId) {
+      previousMobileActiveSessionIdRef.current = activeSessionId;
+      setIsMobilePreviewOpen(true);
     }
   }, [activeSessionId, isDesktopInline]);
 
@@ -310,7 +319,10 @@ export function ChatWorkspace() {
   }, [conversationSessions, currentConversationId, syncConversationState]);
 
   const sessionCards = useMemo(() => {
-    const cards = standaloneSessions.filter((session) => session.id !== activeSessionId);
+    const cards = [
+      ...standaloneSessions,
+      ...conversationSessions.filter((session) => dismissedAutoSessionIds.includes(session.id)),
+    ].filter((session) => session.id !== activeSessionId);
     const deduped = cards.reduce<McpBrowserSessionSummary[]>((items, session) => {
       if (items.some((item) => item.id === session.id)) {
         return items.map((item) => (item.id === session.id ? session : item));
@@ -320,36 +332,12 @@ export function ChatWorkspace() {
     }, []);
 
     return sortBrowserSessions(deduped).slice(0, 4);
-  }, [activeSessionId, standaloneSessions]);
+  }, [activeSessionId, conversationSessions, dismissedAutoSessionIds, standaloneSessions]);
 
-  const mobileActiveCard = !isDesktopInline && activeSessionId && activeSessionSummary ? (
-    <section className="border-t border-border bg-surface px-4 py-3">
-      <BrowserSessionCard
-        session={activeSessionSummary}
-        title="Inline browser"
-        description={
-          isMobilePreviewOpen
-            ? 'Preview is open below. Touch devices stay view-only in chat.'
-            : 'Preview is collapsed. Open the preview or switch to full screen to continue.'
-        }
-        actions={[
-          {
-            label: isMobilePreviewOpen ? 'Hide preview' : 'Show preview',
-            onClick: () => setIsMobilePreviewOpen((previous) => !previous),
-            tone: 'primary',
-          },
-          {
-            label: 'Open full screen',
-            onClick: () => router.push(`/chat/browser/${activeSessionId}`),
-          },
-          {
-            label: 'Close',
-            onClick: () => collapseActiveSession(activeSessionSummary),
-          },
-        ]}
-      />
-      {isMobilePreviewOpen ? (
-        <div className="mt-3 flex h-[360px] min-h-0 overflow-hidden rounded-2xl border border-border">
+  const mobileInlineBrowser =
+    !isDesktopInline && activeSessionId && activeSessionSummary && isMobilePreviewOpen ? (
+      <section className="border-t border-border bg-surface px-4 py-4">
+        <div className="flex h-[440px] min-h-0 overflow-hidden rounded-[28px] border border-border shadow-sm sm:h-[540px]">
           <InlineBrowserPane
             sessionId={activeSessionId}
             className="flex min-h-0 flex-1"
@@ -357,9 +345,8 @@ export function ChatWorkspace() {
             onSessionChange={handleSessionChange}
           />
         </div>
-      ) : null}
-    </section>
-  ) : null;
+      </section>
+    ) : null;
 
   const sessionTray =
     browserError || isLoadingSessions || sessionCards.length > 0 ? (
@@ -399,7 +386,7 @@ export function ChatWorkspace() {
   const chatColumn = (
     <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-elevated">
       <ChatPanel />
-      {mobileActiveCard}
+      {mobileInlineBrowser}
       {sessionTray}
       <InputBar />
     </div>
@@ -407,7 +394,7 @@ export function ChatWorkspace() {
 
   if (isDesktopInline && activeSessionId) {
     return (
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(360px,48vw)] overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,56vw)] overflow-hidden">
         {chatColumn}
         <div className="flex min-h-0 min-w-0 border-l border-border bg-surface">
           <InlineBrowserPane

@@ -68,6 +68,7 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
       reconnect={reconnect}
       onSave={handleSave}
       onCancel={handleCancel}
+      onToggleDisplay={() => router.push(`/chat?browserSessionId=${sessionId}`)}
       onClose={() => router.push('/chat/apps')}
       closeLabel="Back"
     />
