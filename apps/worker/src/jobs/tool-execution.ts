@@ -479,6 +479,33 @@ async function executeTool(
   return executeNativeTool(userId, conversationId, toolExecutionId, toolName, input);
 }
 
+async function continueConversationAfterToolExecution(
+  toolExecutionId: string,
+  correlationId: string,
+): Promise<void> {
+  const response = await fetch(
+    `${getInternalApiBaseUrl()}/api/chat/internal/tool-executions/${toolExecutionId}/continue`,
+    {
+      method: 'POST',
+      headers: {
+        'x-internal-service-secret': getInternalServiceSecret(),
+        'x-correlation-id': correlationId,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    const body = (await response.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    throw new Error(
+      typeof body?.error?.message === 'string'
+        ? body.error.message
+        : `Chat continuation failed with status ${response.status}`,
+    );
+  }
+}
+
 export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promise<void> {
   const { toolExecutionId, toolName, conversationId, correlationId } = job.data;
   logger.info(
@@ -560,6 +587,20 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
       status: 'completed',
     };
     await publishToolEvent(doneEvent);
+    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
+      logger.warn(
+        {
+          event: 'tool.execution.continuation_failed',
+          outcome: 'failure',
+          toolExecutionId,
+          toolName,
+          conversationId,
+          correlationId,
+          error,
+        },
+        'Failed to continue conversation after tool execution',
+      );
+    });
     logger.info(
       {
         event: 'tool.execution.completed',
@@ -592,6 +633,20 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     status: 'failed',
   };
   await publishToolEvent(doneEvent);
+  await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
+    logger.warn(
+      {
+        event: 'tool.execution.continuation_failed',
+        outcome: 'failure',
+        toolExecutionId,
+        toolName,
+        conversationId,
+        correlationId,
+        error,
+      },
+      'Failed to continue conversation after tool execution',
+    );
+  });
   logger.warn(
     {
       event: 'tool.execution.completed',

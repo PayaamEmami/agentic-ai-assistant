@@ -22,6 +22,7 @@ export interface ToolExecution extends ToolExecutionRow {}
 export interface ToolExecutionRepository {
   findById(id: string): Promise<ToolExecution | null>;
   listByConversation(conversationId: string, limit?: number, offset?: number): Promise<ToolExecution[]>;
+  listByMessage(messageId: string): Promise<ToolExecution[]>;
   create(
     conversationId: string,
     messageId: string | null,
@@ -68,6 +69,21 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        ORDER BY started_at ASC
        LIMIT $2 OFFSET $3`,
       [conversationId, limit, offset],
+    );
+    return result.rows;
+  },
+
+  async listByMessage(messageId: string): Promise<ToolExecution[]> {
+    const pool = getPool();
+    const result = await pool.query<ToolExecutionRow>(
+      `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
+              input, output, status, origin, mcp_profile_id AS "mcpProfileId",
+              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
+              completed_at AS "completedAt"
+       FROM tool_executions
+       WHERE message_id = $1
+       ORDER BY started_at ASC`,
+      [messageId],
     );
     return result.rows;
   },

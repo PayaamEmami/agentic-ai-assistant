@@ -20,10 +20,26 @@ export function ChatPanel() {
   const { user } = useAuthContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const firstName = getFirstName(user?.displayName);
+  const activeToolActivities = toolActivities.filter((activity) =>
+    activity.status === 'planned' ||
+    activity.status === 'approved' ||
+    activity.status === 'pending' ||
+    activity.status === 'running',
+  );
+  const hasAgentWorkInFlight = loading.isSendingMessage || activeToolActivities.length > 0;
+  const statusLabel = loading.isInterruptingMessage
+    ? 'Stopping response...'
+    : activeToolActivities.some((activity) => activity.status === 'running')
+      ? 'Assistant is using tools...'
+      : activeToolActivities.some((activity) => activity.status === 'pending')
+        ? 'Assistant is waiting for approval...'
+        : activeToolActivities.some((activity) => activity.status === 'approved')
+          ? 'Assistant is continuing after approval...'
+          : 'Assistant is still working...';
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, loading.isSendingMessage, loading.isInterruptingMessage]);
+  }, [messages, hasAgentWorkInFlight, loading.isInterruptingMessage]);
 
   return (
     <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
@@ -44,23 +60,21 @@ export function ChatPanel() {
           <Message key={message.id} role={message.role} content={message.content} />
         ))
       )}
-      {loading.isSendingMessage && (
+      {hasAgentWorkInFlight && (
         <div className="flex justify-start">
           <div className="max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground-muted">
-            {loading.isInterruptingMessage ? 'Stopping response...' : 'Assistant is thinking...'}
+            {statusLabel}
           </div>
         </div>
       )}
-      {toolActivities
-        .filter((activity) => activity.status === 'running')
-        .map((activity) => (
-          <ToolActivity
-            key={activity.id}
-            name={activity.name}
-            status={activity.status}
-            detail={activity.detail}
-          />
-        ))}
+      {activeToolActivities.map((activity) => (
+        <ToolActivity
+          key={activity.id}
+          name={activity.name}
+          status={activity.status}
+          detail={activity.detail}
+        />
+      ))}
       <div ref={scrollRef} />
     </div>
   );

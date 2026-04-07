@@ -151,7 +151,7 @@ export class PlaywrightProfileClient {
       },
       {
         name: 'playwright.click',
-        description: `Click an element with the "${label}" browser profile.`,
+        description: `Click an element with the "${label}" browser profile for ordinary browsing and link navigation.`,
         parameters: {
           type: 'object',
           properties: {
@@ -165,7 +165,7 @@ export class PlaywrightProfileClient {
         mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
         profileLabel: label,
-        requiresApproval: true,
+        requiresApproval: false,
       },
       {
         name: 'playwright.fill',
@@ -188,7 +188,7 @@ export class PlaywrightProfileClient {
       },
       {
         name: 'playwright.submit_form',
-        description: `Submit a form using the "${label}" browser profile.`,
+        description: `Submit a form with the "${label}" browser profile for ordinary browsing, search, and navigation flows.`,
         parameters: {
           type: 'object',
           properties: {
@@ -201,7 +201,7 @@ export class PlaywrightProfileClient {
         mcpProfileId: this.profile.id,
         integrationKind: 'playwright',
         profileLabel: label,
-        requiresApproval: true,
+        requiresApproval: false,
       },
       {
         name: 'playwright.login_with_profile',

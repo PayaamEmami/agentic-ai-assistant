@@ -22,6 +22,17 @@ export class VerifierAgent implements Agent {
       };
     }
 
+    // Do not "revise" intermediate responses while tool work is still pending.
+    if (context.previousResult.toolCalls.length > 0) {
+      return {
+        response: context.previousResult.response,
+        toolCalls: context.previousResult.toolCalls,
+        delegateTo: null,
+        requiresApproval: context.previousResult.requiresApproval,
+        verification: context.previousResult.verification,
+      };
+    }
+
     const systemPrompt = buildAgentSystemPrompt(this.role, toSystemPromptContext(context));
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },

@@ -562,6 +562,11 @@ function normalizeAssistantResponse(
   return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_EXECUTION_RESPONSE;
 }
 
+function getLatestUserRequestText(messages: DbMessage[]): string {
+  const latestUser = [...messages].reverse().find((message) => message.role === 'user');
+  return latestUser ? extractTextFromContent(latestUser.content) : '';
+}
+
 function toRuntimeMcpProfile(
   profile: Awaited<ReturnType<typeof mcpProfileRepository.listConnectedByUser>>[number],
 ): RuntimeMcpProfile {
@@ -630,6 +635,17 @@ interface SendMessageOptions {
   conversationId?: string;
   attachmentIds?: string[];
   clientRunId?: string;
+}
+
+interface AssistantTurnOptions {
+  conversation: {
+    id: string;
+    title: string | null;
+  };
+  userId: string;
+  requestContent: string;
+  signal?: AbortSignal;
+  initialConversationTitle?: string;
 }
 
 interface SendMessageResult {
@@ -716,77 +732,72 @@ export class ChatService {
     };
   }
 
-  private async processMessage(
-    userId: string,
-    content: string,
-    options: SendMessageOptions,
-  ): Promise<SendMessageResult> {
-    getPool();
-    const initialConversationTitle = buildConversationTitle(content);
-    const activeRun =
-      options.clientRunId !== undefined ? activeChatRuns.get(options.clientRunId) : undefined;
-    const signal = activeRun?.controller.signal;
+  async continueAfterToolExecution(toolExecutionId: string): Promise<{
+    continued: boolean;
+    reason?: string;
+    conversationId?: string;
+    messageId?: string;
+  }> {
+    const execution = await toolExecutionRepository.findById(toolExecutionId);
+    if (!execution) {
+      throw new AppError(404, 'Tool execution not found', 'TOOL_EXECUTION_NOT_FOUND');
+    }
 
-    const conversation =
-      options.conversationId === undefined
-        ? await conversationRepository.create(userId, initialConversationTitle)
-        : await conversationRepository.findById(options.conversationId);
+    if (!execution.messageId) {
+      return { continued: false, reason: 'missing_message_binding' };
+    }
 
-    if (!conversation || conversation.userId !== userId) {
+    if (execution.status !== 'completed' && execution.status !== 'failed') {
+      return { continued: false, reason: 'tool_execution_not_terminal' };
+    }
+
+    const conversation = await conversationRepository.findById(execution.conversationId);
+    if (!conversation) {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
     }
 
-    if (activeRun) {
-      activeRun.conversationId = conversation.id;
+    const recentMessages = await messageRepository.listByConversation(conversation.id, HISTORY_LIMIT);
+    const latestAssistant = [...recentMessages]
+      .reverse()
+      .find((message) => message.role === 'assistant');
+    if (!latestAssistant || latestAssistant.id !== execution.messageId) {
+      return { continued: false, reason: 'superseded_by_newer_assistant_message' };
     }
 
-    const attachments = options.attachmentIds?.length
-      ? await attachmentRepository.findByIdsForUser(options.attachmentIds, userId)
-      : [];
-    if ((options.attachmentIds?.length ?? 0) !== attachments.length) {
-      throw new AppError(404, 'One or more attachments were not found', 'ATTACHMENT_NOT_FOUND');
+    const groupedExecutions = await toolExecutionRepository.listByMessage(execution.messageId);
+    if (
+      groupedExecutions.length === 0 ||
+      groupedExecutions.some(
+        (item) => item.status !== 'completed' && item.status !== 'failed',
+      )
+    ) {
+      return { continued: false, reason: 'tool_group_still_in_progress' };
     }
 
-    const alreadyAttached = attachments.find((attachment) => attachment.messageId !== null);
-    if (alreadyAttached) {
-      throw new AppError(
-        409,
-        'An attachment has already been sent in another message',
-        'ATTACHMENT_ALREADY_USED',
-      );
+    const requestContent = getLatestUserRequestText(recentMessages);
+    if (!requestContent) {
+      return { continued: false, reason: 'missing_user_request' };
     }
 
-    const userMessageContent: Array<Record<string, unknown>> = [{ type: 'text', text: content }];
-    for (const attachment of attachments) {
-      userMessageContent.push({
-        type: 'attachment_ref',
-        attachmentId: attachment.id,
-        attachmentKind: attachment.kind,
-        mimeType: attachment.mimeType,
-        fileName: attachment.fileName,
-        indexedForRag: attachment.documentId !== null,
-        documentId: attachment.documentId,
-      });
-    }
+    const result = await this.generateAssistantTurn({
+      conversation,
+      userId: conversation.userId,
+      requestContent,
+    });
+    return {
+      continued: true,
+      conversationId: result.conversationId,
+      messageId: result.messageId,
+    };
+  }
 
-    const userMessage = await messageRepository.create(conversation.id, 'user', userMessageContent);
-    await Promise.all(
-      attachments.map(async (attachment) => {
-        const linked = await attachmentRepository.attachToMessage(
-          attachment.id,
-          userMessage.id,
-          userId,
-        );
-        if (!linked) {
-          throw new AppError(
-            409,
-            `Attachment "${attachment.fileName}" could not be linked to the message`,
-            'ATTACHMENT_LINK_FAILED',
-          );
-        }
-      }),
-    );
-
+  private async generateAssistantTurn({
+    conversation,
+    userId,
+    requestContent,
+    signal,
+    initialConversationTitle,
+  }: AssistantTurnOptions): Promise<SendMessageResult> {
     try {
       throwIfAborted(signal);
 
@@ -802,7 +813,7 @@ export class ChatService {
       const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
       throwIfAborted(signal);
 
-      const retrievalDecision = decideRetrieval(content, recentMessages);
+      const retrievalDecision = decideRetrieval(requestContent, recentMessages);
       logger.debug(
         {
           event: 'chat.retrieval_decided',
@@ -815,7 +826,12 @@ export class ChatService {
       );
 
       const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
-        ? await this.retrievalBridge.search(content, userId, MAX_RETRIEVAL_CONTEXT, signal)
+        ? await this.retrievalBridge.search(
+            requestContent,
+            userId,
+            MAX_RETRIEVAL_CONTEXT,
+            signal,
+          )
         : { results: [], citations: [] };
       throwIfAborted(signal);
 
@@ -847,7 +863,7 @@ export class ChatService {
       activeApps.push(...activeMcpProfiles);
       throwIfAborted(signal);
 
-      const availableTools = await loadAvailableTools(userId, content);
+      const availableTools = await loadAvailableTools(userId, requestContent);
       throwIfAborted(signal);
 
       let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
@@ -995,8 +1011,8 @@ export class ChatService {
       );
       if (toolExecutionIds.length > 0) {
         await Promise.all(
-          toolExecutionIds.map((toolExecutionId) =>
-            toolExecutionRepository.setMessage(toolExecutionId, assistantMessage.id),
+          toolExecutionIds.map((nextToolExecutionId) =>
+            toolExecutionRepository.setMessage(nextToolExecutionId, assistantMessage.id),
           ),
         );
       }
@@ -1041,7 +1057,6 @@ export class ChatService {
           outcome: 'success',
           conversationId: conversation.id,
           historySize: recentMessages.length,
-          attachmentCount: attachments.length,
           retrievalResultCount: retrieval.results.length,
           retrievalCitationCount: retrieval.citations.length,
           displayedCitationCount: displayedCitations.length,
@@ -1066,6 +1081,86 @@ export class ChatService {
 
       return this.createInterruptedMessage(conversation.id, userId);
     }
+  }
+
+  private async processMessage(
+    userId: string,
+    content: string,
+    options: SendMessageOptions,
+  ): Promise<SendMessageResult> {
+    getPool();
+    const initialConversationTitle = buildConversationTitle(content);
+    const activeRun =
+      options.clientRunId !== undefined ? activeChatRuns.get(options.clientRunId) : undefined;
+    const signal = activeRun?.controller.signal;
+
+    const conversation =
+      options.conversationId === undefined
+        ? await conversationRepository.create(userId, initialConversationTitle)
+        : await conversationRepository.findById(options.conversationId);
+
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    if (activeRun) {
+      activeRun.conversationId = conversation.id;
+    }
+
+    const attachments = options.attachmentIds?.length
+      ? await attachmentRepository.findByIdsForUser(options.attachmentIds, userId)
+      : [];
+    if ((options.attachmentIds?.length ?? 0) !== attachments.length) {
+      throw new AppError(404, 'One or more attachments were not found', 'ATTACHMENT_NOT_FOUND');
+    }
+
+    const alreadyAttached = attachments.find((attachment) => attachment.messageId !== null);
+    if (alreadyAttached) {
+      throw new AppError(
+        409,
+        'An attachment has already been sent in another message',
+        'ATTACHMENT_ALREADY_USED',
+      );
+    }
+
+    const userMessageContent: Array<Record<string, unknown>> = [{ type: 'text', text: content }];
+    for (const attachment of attachments) {
+      userMessageContent.push({
+        type: 'attachment_ref',
+        attachmentId: attachment.id,
+        attachmentKind: attachment.kind,
+        mimeType: attachment.mimeType,
+        fileName: attachment.fileName,
+        indexedForRag: attachment.documentId !== null,
+        documentId: attachment.documentId,
+      });
+    }
+
+    const userMessage = await messageRepository.create(conversation.id, 'user', userMessageContent);
+    await Promise.all(
+      attachments.map(async (attachment) => {
+        const linked = await attachmentRepository.attachToMessage(
+          attachment.id,
+          userMessage.id,
+          userId,
+        );
+        if (!linked) {
+          throw new AppError(
+            409,
+            `Attachment "${attachment.fileName}" could not be linked to the message`,
+            'ATTACHMENT_LINK_FAILED',
+          );
+        }
+      }),
+    );
+
+    return this.generateAssistantTurn({
+      conversation,
+      userId,
+      requestContent: content,
+      signal,
+      initialConversationTitle,
+    });
   }
 
   private async createInterruptedMessage(
