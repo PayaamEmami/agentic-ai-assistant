@@ -42,6 +42,7 @@ export interface ToolResultContentBlock {
     | 'running'
     | 'completed'
     | 'failed';
+  detail?: string;
   output?: unknown;
 }
 
@@ -120,14 +121,6 @@ export interface ApprovalStatusByToolExecution {
   [toolExecutionId: string]: 'pending' | 'approved' | 'rejected' | 'expired';
 }
 
-export interface ToolActivityItem {
-  id: string;
-  name: string;
-  status: 'planned' | 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed';
-  output?: unknown;
-  detail?: string;
-}
-
 export interface CitationItem {
   id: string;
   title: string;
@@ -160,7 +153,6 @@ interface ChatContextValue {
   messages: ChatMessage[];
   pendingApprovals: PendingApproval[];
   approvalStatusesByToolExecution: ApprovalStatusByToolExecution;
-  toolActivities: ToolActivityItem[];
   citations: CitationItem[];
   loading: ChatLoadingState;
   error: string | null;
@@ -282,6 +274,7 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
       toolExecutionId: asString(raw.toolExecutionId),
       toolName: asString(raw.toolName),
       status: parseToolStatus(raw.status),
+      detail: asString(raw.detail),
       output: raw.output,
     };
   }
@@ -416,29 +409,6 @@ function mergeConversations(
   return sortConversations(Array.from(map.values()));
 }
 
-function extractToolActivities(messages: ChatMessage[]): ToolActivityItem[] {
-  const byId = new Map<string, ToolActivityItem>();
-
-  for (const message of messages) {
-    message.content.forEach((block, index) => {
-      if (block.type !== 'tool_result') {
-        return;
-      }
-
-      const id = block.toolExecutionId ?? `${message.id}-${index}`;
-      byId.set(id, {
-        id,
-        name: block.toolName ?? 'Tool',
-        status: parseToolStatus(block.status),
-        output: block.output,
-        detail: undefined,
-      });
-    });
-  }
-
-  return Array.from(byId.values());
-}
-
 function extractCitations(messages: ChatMessage[]): CitationItem[] {
   const citations: CitationItem[] = [];
 
@@ -517,6 +487,67 @@ function createOptimisticVoiceMessage(role: 'user' | 'assistant', text: string):
   };
 }
 
+function patchMessagesToolResult(
+  messages: ChatMessage[],
+  toolExecutionId: string | undefined,
+  patch: Partial<Pick<ToolResultContentBlock, 'status' | 'detail' | 'output'>>,
+): ChatMessage[] {
+  if (!toolExecutionId) {
+    return messages;
+  }
+
+  let changed = false;
+  const nextMessages = messages.map((message) => {
+    let messageChanged = false;
+    const nextContent = message.content.map((block) => {
+      if (block.type !== 'tool_result' || block.toolExecutionId !== toolExecutionId) {
+        return block;
+      }
+
+      messageChanged = true;
+      const nextBlock: ToolResultContentBlock = { ...block };
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'status')) {
+        if (typeof patch.status === 'undefined') {
+          delete nextBlock.status;
+        } else {
+          nextBlock.status = patch.status;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'detail')) {
+        if (typeof patch.detail === 'undefined') {
+          delete nextBlock.detail;
+        } else {
+          nextBlock.detail = patch.detail;
+        }
+      }
+
+      if (Object.prototype.hasOwnProperty.call(patch, 'output')) {
+        if (typeof patch.output === 'undefined') {
+          delete nextBlock.output;
+        } else {
+          nextBlock.output = patch.output;
+        }
+      }
+
+      return nextBlock;
+    });
+
+    if (!messageChanged) {
+      return message;
+    }
+
+    changed = true;
+    return {
+      ...message,
+      content: nextContent,
+    };
+  });
+
+  return changed ? nextMessages : messages;
+}
+
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuthContext();
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
@@ -525,7 +556,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalStatusesByToolExecution, setApprovalStatusesByToolExecution] =
     useState<ApprovalStatusByToolExecution>({});
-  const [toolActivities, setToolActivities] = useState<ToolActivityItem[]>([]);
   const [citations, setCitations] = useState<CitationItem[]>([]);
 
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
@@ -929,30 +959,45 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       switch (parsed.type) {
         case 'assistant.text.done':
         case 'assistant.interrupted':
-        case 'tool.start':
-        case 'tool.progress':
-        case 'tool.done':
-          if (parsed.type === 'tool.progress') {
-            const progress = parsed as {
-              toolExecutionId?: string;
-              toolName?: string;
-              message?: string;
-            };
-            setToolActivities((previous) => {
-              const id = progress.toolExecutionId ?? crypto.randomUUID();
-              const next = previous.filter((item) => item.id !== id);
-              next.push({
-                id,
-                name: progress.toolName ?? 'Tool',
-                status: 'running',
-                detail: progress.message,
-              });
-              return next;
-            });
-            return;
-          }
           void refreshConversation(currentConversationId);
           return;
+        case 'tool.start':
+          setMessages((previous) =>
+            patchMessagesToolResult(previous, (parsed as { toolExecutionId?: string }).toolExecutionId, {
+              status: 'running',
+              detail: undefined,
+              output: undefined,
+            }),
+          );
+          return;
+        case 'tool.progress': {
+          const progress = parsed as {
+            toolExecutionId?: string;
+            message?: string;
+          };
+          setMessages((previous) =>
+            patchMessagesToolResult(previous, progress.toolExecutionId, {
+              status: 'running',
+              detail: progress.message,
+            }),
+          );
+          return;
+        }
+        case 'tool.done': {
+          const done = parsed as {
+            toolExecutionId?: string;
+            output?: unknown;
+            status?: 'completed' | 'failed';
+          };
+          setMessages((previous) =>
+            patchMessagesToolResult(previous, done.toolExecutionId, {
+              status: done.status,
+              output: done.output,
+              detail: undefined,
+            }),
+          );
+          return;
+        }
         case 'approval.requested':
           void loadPendingApprovals();
           void refreshConversation(currentConversationId);
@@ -970,9 +1015,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               ...previous,
               [resolved.toolExecutionId as string]: resolved.status as 'approved' | 'rejected',
             }));
+            setMessages((previous) =>
+              patchMessagesToolResult(previous, resolved.toolExecutionId, {
+                status: resolved.status,
+                detail: undefined,
+                output: undefined,
+              }),
+            );
           }
           void loadPendingApprovals();
-          void refreshConversation(currentConversationId);
           return;
         }
         case 'error':
@@ -998,7 +1049,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   }, [currentConversationId, loadPendingApprovals, refreshConversation, token]);
 
   useEffect(() => {
-    setToolActivities(extractToolActivities(messages));
     setCitations(extractCitations(messages));
   }, [messages]);
 
@@ -1028,7 +1078,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       messages,
       pendingApprovals,
       approvalStatusesByToolExecution,
-      toolActivities,
       citations,
       loading,
       error,
@@ -1065,7 +1114,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       startLiveVoiceSession,
       appendVoiceMessage,
       syncConversationState,
-      toolActivities,
       uploadAttachment,
     ],
   );

@@ -138,6 +138,11 @@ function extractTextFromContent(content: unknown[]): string {
     }
   }
 
+  const toolSummary = summarizeToolContent(content, { terminalOnly: true });
+  if (toolSummary) {
+    parts.push(toolSummary);
+  }
+
   return parts.join('\n').trim();
 }
 
@@ -188,7 +193,10 @@ function stringifyValue(value: unknown): string {
   }
 }
 
-function summarizeToolContent(content: unknown[]): string {
+function summarizeToolContent(
+  content: unknown[],
+  options?: { terminalOnly?: boolean },
+): string {
   const summaries: string[] = [];
 
   for (const block of content) {
@@ -198,6 +206,14 @@ function summarizeToolContent(content: unknown[]): string {
 
     const toolName = typeof block.toolName === 'string' ? block.toolName : 'tool';
     const status = typeof block.status === 'string' ? block.status : 'completed';
+    if (
+      options?.terminalOnly &&
+      status !== 'completed' &&
+      status !== 'failed' &&
+      status !== 'rejected'
+    ) {
+      continue;
+    }
     const output = 'output' in block ? stringifyValue(block.output) : null;
     summaries.push(
       output ? `Tool ${toolName} ${status}. Output: ${output}` : `Tool ${toolName} ${status}.`,
@@ -912,6 +928,13 @@ export class ChatService {
       );
       const toolResultBlocks: Array<Record<string, unknown>> = [];
       const toolExecutionIds: string[] = [];
+      const queuedToolJobs: Array<{
+        toolExecutionId: string;
+        toolName: string;
+        input: Record<string, unknown>;
+        conversationId: string;
+        correlationId: string;
+      }> = [];
       const approvalEvents: ApprovalRequestedEvent[] = [];
       let hasApprovalRequest = false;
 
@@ -961,7 +984,7 @@ export class ChatService {
             description: approval.description,
           });
         } else {
-          await enqueueToolExecutionJob({
+          queuedToolJobs.push({
             toolExecutionId: toolExecution.id,
             toolName: toolCall.name,
             input: toolInput,
@@ -1015,6 +1038,9 @@ export class ChatService {
             toolExecutionRepository.setMessage(nextToolExecutionId, assistantMessage.id),
           ),
         );
+      }
+      if (queuedToolJobs.length > 0) {
+        await Promise.all(queuedToolJobs.map((job) => enqueueToolExecutionJob(job)));
       }
 
       const event: AssistantTextDoneEvent = {

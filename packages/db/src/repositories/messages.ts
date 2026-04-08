@@ -13,17 +13,24 @@ export interface MessageRepository {
   findById(id: string): Promise<Message | null>;
   listByConversation(conversationId: string, limit?: number, offset?: number): Promise<Message[]>;
   create(conversationId: string, role: string, content: unknown[]): Promise<Message>;
-  updateToolResultStatus(
+  updateToolResultBlock(
     id: string,
     toolExecutionId: string,
-    status: string,
-    output?: unknown,
+    patch: {
+      status?: string;
+      output?: unknown;
+      detail?: string;
+    },
   ): Promise<void>;
   updateBrowserSessionBlock(
     id: string,
     browserSessionId: string,
     patch: Record<string, unknown>,
   ): Promise<void>;
+}
+
+function hasOwn(object: object, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(object, key);
 }
 
 export const messageRepository: MessageRepository = {
@@ -70,47 +77,88 @@ export const messageRepository: MessageRepository = {
     return result.rows[0]!;
   },
 
-  async updateToolResultStatus(
+  async updateToolResultBlock(
     id: string,
     toolExecutionId: string,
-    status: string,
-    output?: unknown,
+    patch: {
+      status?: string;
+      output?: unknown;
+      detail?: string;
+    },
   ): Promise<void> {
-    const existing = await messageRepository.findById(id);
-    if (!existing) {
-      return;
-    }
+    const pool = getPool();
+    const client = await pool.connect();
 
-    const nextContent = existing.content.map((block) => {
-      if (
-        block &&
-        typeof block === 'object' &&
-        !Array.isArray(block) &&
-        (block as Record<string, unknown>).type === 'tool_result' &&
-        (block as Record<string, unknown>).toolExecutionId === toolExecutionId
-      ) {
-        const nextBlock: Record<string, unknown> = {
-          ...(block as Record<string, unknown>),
-          status,
-        };
-
-        if (typeof output !== 'undefined') {
-          nextBlock['output'] = output;
-        }
-
-        return nextBlock;
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<Message>(
+        `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+         FROM messages
+         WHERE id = $1
+         FOR UPDATE`,
+        [id],
+      );
+      const existing = result.rows[0];
+      if (!existing) {
+        await client.query('ROLLBACK');
+        return;
       }
 
-      return block;
-    });
+      const nextContent = existing.content.map((block) => {
+        if (
+          block &&
+          typeof block === 'object' &&
+          !Array.isArray(block) &&
+          (block as Record<string, unknown>).type === 'tool_result' &&
+          (block as Record<string, unknown>).toolExecutionId === toolExecutionId
+        ) {
+          const nextBlock: Record<string, unknown> = {
+            ...(block as Record<string, unknown>),
+          };
 
-    const pool = getPool();
-    await pool.query(
-      `UPDATE messages
-       SET content = $1
-       WHERE id = $2`,
-      [JSON.stringify(nextContent), id],
-    );
+          if (hasOwn(patch, 'status')) {
+            if (typeof patch.status === 'undefined') {
+              delete nextBlock['status'];
+            } else {
+              nextBlock['status'] = patch.status;
+            }
+          }
+
+          if (hasOwn(patch, 'output')) {
+            if (typeof patch.output === 'undefined') {
+              delete nextBlock['output'];
+            } else {
+              nextBlock['output'] = patch.output;
+            }
+          }
+
+          if (hasOwn(patch, 'detail')) {
+            if (typeof patch.detail === 'undefined') {
+              delete nextBlock['detail'];
+            } else {
+              nextBlock['detail'] = patch.detail;
+            }
+          }
+
+          return nextBlock;
+        }
+
+        return block;
+      });
+
+      await client.query(
+        `UPDATE messages
+         SET content = $1
+         WHERE id = $2`,
+        [JSON.stringify(nextContent), id],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   async updateBrowserSessionBlock(

@@ -41,6 +41,22 @@ async function publishToolEvent(
   await pool.query('SELECT pg_notify($1, $2)', [TOOL_EVENT_CHANNEL, JSON.stringify(event)]);
 }
 
+async function updateInlineToolResult(
+  messageId: string | null,
+  toolExecutionId: string,
+  patch: {
+    status?: string;
+    output?: unknown;
+    detail?: string;
+  },
+): Promise<void> {
+  if (!messageId) {
+    return;
+  }
+
+  await messageRepository.updateToolResultBlock(messageId, toolExecutionId, patch);
+}
+
 function toNumberArray(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
@@ -111,6 +127,7 @@ async function executeNativeTool(
   toolExecutionId: string,
   toolName: string,
   input: Record<string, unknown>,
+  assistantMessageId: string | null,
 ): Promise<{ success: boolean; result: unknown; error?: string }> {
   switch (toolName) {
     case 'echo':
@@ -222,6 +239,10 @@ async function executeNativeTool(
           toolExecutionId,
           progress: {
             report: async ({ phase, message }) => {
+              await updateInlineToolResult(assistantMessageId, toolExecutionId, {
+                status: 'running',
+                detail: message,
+              });
               const event: ToolProgressEvent = {
                 type: 'tool.progress',
                 conversationId,
@@ -476,7 +497,14 @@ async function executeTool(
     return { success: false, result: null, error: 'Unsupported MCP integration for worker execution' };
   }
 
-  return executeNativeTool(userId, conversationId, toolExecutionId, toolName, input);
+  return executeNativeTool(
+    userId,
+    conversationId,
+    toolExecutionId,
+    toolName,
+    input,
+    execution.messageId,
+  );
 }
 
 async function continueConversationAfterToolExecution(
@@ -542,14 +570,11 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   }
 
   await toolExecutionRepository.updateStatus(toolExecutionId, 'running');
-  const toolStatusMessage = await messageRepository.create(conversationId, 'tool', [
-    {
-      type: 'tool_result',
-      toolExecutionId,
-      toolName,
-      status: 'running',
-    },
-  ]);
+  await updateInlineToolResult(execution.messageId, toolExecutionId, {
+    status: 'running',
+    detail: undefined,
+    output: undefined,
+  });
 
   const startEvent: ToolStartEvent = {
     type: 'tool.start',
@@ -571,12 +596,11 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
 
   if (result.success) {
     await toolExecutionRepository.updateStatus(toolExecutionId, 'completed', result.result);
-    await messageRepository.updateToolResultStatus(
-      toolStatusMessage.id,
-      toolExecutionId,
-      'completed',
-      result.result,
-    );
+    await updateInlineToolResult(execution.messageId, toolExecutionId, {
+      status: 'completed',
+      output: result.result,
+      detail: undefined,
+    });
 
     const doneEvent: ToolDoneEvent = {
       type: 'tool.done',
@@ -617,12 +641,11 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
 
   const errorOutput = { error: result.error ?? 'Tool execution failed' };
   await toolExecutionRepository.updateStatus(toolExecutionId, 'failed', errorOutput);
-  await messageRepository.updateToolResultStatus(
-    toolStatusMessage.id,
-    toolExecutionId,
-    'failed',
-    errorOutput,
-  );
+  await updateInlineToolResult(execution.messageId, toolExecutionId, {
+    status: 'failed',
+    output: errorOutput,
+    detail: undefined,
+  });
 
   const doneEvent: ToolDoneEvent = {
     type: 'tool.done',

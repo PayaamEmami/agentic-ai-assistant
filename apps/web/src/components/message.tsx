@@ -188,6 +188,9 @@ export function Message({ role, content }: MessageProps) {
               Declined. This tool run will not execute.
             </p>
           ) : null}
+          {block.detail ? (
+            <p className="mt-2 text-xs text-foreground-muted">{block.detail}</p>
+          ) : null}
           {typeof block.output === 'undefined' ? null : (
             <pre className="mt-2 overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
           )}

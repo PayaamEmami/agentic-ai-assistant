@@ -44,10 +44,14 @@ export class ApprovalService {
     if (status === 'approved') {
       await toolExecutionRepository.updateStatus(approval.toolExecutionId, 'pending');
       if (toolExecution.messageId) {
-        await messageRepository.updateToolResultStatus(
+        await messageRepository.updateToolResultBlock(
           toolExecution.messageId,
           toolExecution.id,
-          'approved',
+          {
+            status: 'approved',
+            detail: undefined,
+            output: undefined,
+          },
         );
       }
       await enqueueToolExecutionJob({
@@ -66,10 +70,14 @@ export class ApprovalService {
         rejectionOutput,
       );
       if (toolExecution.messageId) {
-        await messageRepository.updateToolResultStatus(
+        await messageRepository.updateToolResultBlock(
           toolExecution.messageId,
           toolExecution.id,
-          'rejected',
+          {
+            status: 'rejected',
+            detail: undefined,
+            output: undefined,
+          },
         );
       }
 

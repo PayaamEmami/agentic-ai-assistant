@@ -63,8 +63,11 @@ export interface BrowserSessionContent {
 
 export interface ToolResultContent {
   type: 'tool_result';
-  toolExecutionId: string;
-  output: unknown;
+  toolExecutionId?: string;
+  toolName?: string;
+  status?: 'planned' | 'pending' | 'approved' | 'rejected' | 'running' | 'completed' | 'failed';
+  detail?: string;
+  output?: unknown;
 }
 
 export interface CitationContent {
