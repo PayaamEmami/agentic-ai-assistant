@@ -5,7 +5,7 @@ import type { BrowserPageSummary, McpBrowserSessionSummary } from '@/lib/api-cli
 import { pageLabel } from '@/lib/use-browser-session';
 
 interface BrowserSessionSurfaceProps {
-  variant: 'fullscreen' | 'inline';
+  variant: 'dock' | 'fullscreen';
   session: McpBrowserSessionSummary | null;
   pages: BrowserPageSummary[];
   selectedPage: BrowserPageSummary | null;
@@ -24,6 +24,7 @@ interface BrowserSessionSurfaceProps {
   reconnect: () => void;
   onSave?: () => Promise<void>;
   onCancel?: () => Promise<void>;
+  onRequestControl?: () => void;
   onClose?: () => void;
   onToggleDisplay?: () => void;
   toggleDisplayLabel?: string;
@@ -167,6 +168,7 @@ export function BrowserSessionSurface({
   reconnect,
   onSave,
   onCancel,
+  onRequestControl,
   onClose,
   onToggleDisplay,
   toggleDisplayLabel,
@@ -247,7 +249,7 @@ export function BrowserSessionSurface({
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-surface-elevated">
       <div
-        className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-5 py-4' : 'px-6 py-4'}`}
+        className={`border-b border-border bg-surface ${variant === 'dock' ? 'px-5 py-4' : 'px-6 py-4'}`}
       >
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0">
@@ -277,6 +279,19 @@ export function BrowserSessionSurface({
                 {isSaving ? 'Saving...' : 'Save session'}
               </button>
             ) : null}
+            {onRequestControl &&
+            session?.status === 'active' &&
+            socketState === 'connected' &&
+            !controlGranted &&
+            !isTouchDevice ? (
+              <button
+                type="button"
+                onClick={onRequestControl}
+                className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
+              >
+                Take over
+              </button>
+            ) : null}
             <IconButton label="Reconnect browser" onClick={reconnect}>
               <ReconnectIcon />
             </IconButton>
@@ -284,16 +299,16 @@ export function BrowserSessionSurface({
               <IconButton
                 label={
                   toggleDisplayLabel ??
-                  (variant === 'inline' ? 'Open full screen' : 'Return to inline chat')
+                  (variant === 'dock' ? 'Open full screen' : 'Return to chat dock')
                 }
                 onClick={onToggleDisplay}
               >
-                {variant === 'inline' ? <ExpandIcon /> : <CollapseIcon />}
+                {variant === 'dock' ? <ExpandIcon /> : <CollapseIcon />}
               </IconButton>
             ) : null}
             {onClose ? (
               <IconButton
-                label={closeLabel ?? (variant === 'inline' ? 'Close browser preview' : 'Close browser')}
+                label={closeLabel ?? (variant === 'dock' ? 'Collapse to mini' : 'Close browser')}
                 onClick={onClose}
               >
                 <CloseIcon />
@@ -307,7 +322,7 @@ export function BrowserSessionSurface({
       </div>
 
       <div
-        className={`border-b border-border bg-surface ${variant === 'inline' ? 'px-5 py-4' : 'px-6 py-4'}`}
+        className={`border-b border-border bg-surface ${variant === 'dock' ? 'px-5 py-4' : 'px-6 py-4'}`}
       >
         {pages.length > 1 ? (
           <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
@@ -380,7 +395,7 @@ export function BrowserSessionSurface({
 
       <div
         className={`flex min-h-0 flex-1 items-center justify-center overflow-auto bg-[#111827] ${
-          variant === 'inline' ? 'p-6 lg:p-7' : 'p-6'
+          variant === 'dock' ? 'p-5 lg:p-6' : 'p-6'
         }`}
       >
         <div

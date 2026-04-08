@@ -153,6 +153,7 @@ export type {
   BrowserErrorEvent,
   BrowserAttachRequestEvent,
   BrowserHeartbeatEvent,
+  BrowserControlRequestEvent,
   BrowserResizeEvent,
   BrowserNavigateEvent,
   BrowserPageSelectEvent,

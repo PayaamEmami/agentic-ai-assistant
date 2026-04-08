@@ -167,6 +167,11 @@ export interface BrowserHeartbeatEvent {
   sessionId: string;
 }
 
+export interface BrowserControlRequestEvent {
+  type: 'browser.control.request';
+  sessionId: string;
+}
+
 export interface BrowserResizeEvent {
   type: 'browser.resize';
   sessionId: string;
@@ -244,6 +249,7 @@ export type BrowserServerEvent =
 export type BrowserClientEvent =
   | BrowserAttachRequestEvent
   | BrowserHeartbeatEvent
+  | BrowserControlRequestEvent
   | BrowserResizeEvent
   | BrowserNavigateEvent
   | BrowserPageSelectEvent

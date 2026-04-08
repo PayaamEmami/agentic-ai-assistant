@@ -4,12 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type McpBrowserSessionSummary, api } from '@/lib/api-client';
 import { useChatContext } from '@/lib/chat-context';
+import { useBrowserSession } from '@/lib/use-browser-session';
+import { ChatBrowserProvider, type ChatBrowserContextValue, type ChatBrowserView } from './chat-browser-context';
 import { BrowserSessionCard } from './browser-session-card';
+import { BrowserSessionSurface } from './browser-session-surface';
 import { ChatPanel } from './chat-panel';
-import { InlineBrowserPane } from './inline-browser-pane';
 import { InputBar } from './input-bar';
-
-const DESKTOP_INLINE_MEDIA_QUERY = '(min-width: 1200px)';
 
 function isLiveBrowserSession(session: McpBrowserSessionSummary): boolean {
   return session.status === 'active' || session.status === 'pending';
@@ -42,27 +42,38 @@ export function ChatWorkspace() {
   const [standaloneSessions, setStandaloneSessions] = useState<McpBrowserSessionSummary[]>([]);
   const [explicitSessionSummary, setExplicitSessionSummary] =
     useState<McpBrowserSessionSummary | null>(null);
-  const [dismissedAutoSessionIds, setDismissedAutoSessionIds] = useState<string[]>([]);
   const [browserError, setBrowserError] = useState<string | null>(null);
   const [isLoadingSessions, setIsLoadingSessions] = useState(false);
-  const [isDesktopInline, setIsDesktopInline] = useState(false);
-  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false);
 
   const explicitSessionId = searchParams.get('browserSessionId');
+  const browserView: ChatBrowserView = searchParams.get('browserView') === 'dock' ? 'dock' : 'mini';
 
-  const replaceBrowserSessionParam = useCallback(
-    (sessionId: string | null) => {
+  const replaceBrowserParams = useCallback(
+    (sessionId: string | null, view: ChatBrowserView = 'mini') => {
       const nextParams = new URLSearchParams(searchParams.toString());
       if (sessionId) {
         nextParams.set('browserSessionId', sessionId);
+        nextParams.set('browserView', view);
       } else {
         nextParams.delete('browserSessionId');
+        nextParams.delete('browserView');
       }
 
       const nextSearch = nextParams.toString();
       router.replace(nextSearch ? `/chat?${nextSearch}` : '/chat');
     },
     [router, searchParams],
+  );
+
+  const buildChatUrl = useCallback(
+    (sessionId: string, view: ChatBrowserView) => {
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.set('browserSessionId', sessionId);
+      nextParams.set('browserView', view);
+      const nextSearch = nextParams.toString();
+      return nextSearch ? `/chat?${nextSearch}` : '/chat';
+    },
+    [searchParams],
   );
 
   const loadConversationSessions = useCallback(
@@ -137,19 +148,6 @@ export function ChatWorkspace() {
   }, [explicitSessionId, loadExplicitSession]);
 
   useEffect(() => {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    const mediaQuery = window.matchMedia(DESKTOP_INLINE_MEDIA_QUERY);
-    const syncViewport = () => setIsDesktopInline(mediaQuery.matches);
-    syncViewport();
-    mediaQuery.addEventListener('change', syncViewport);
-
-    return () => mediaQuery.removeEventListener('change', syncViewport);
-  }, []);
-
-  useEffect(() => {
     if (!currentConversationId && !explicitSessionId) {
       return;
     }
@@ -163,12 +161,8 @@ export function ChatWorkspace() {
   }, [currentConversationId, explicitSessionId, loadConversationSessions, loadExplicitSession]);
 
   const activeConversationSession = useMemo(
-    () =>
-      conversationSessions.find(
-        (session) =>
-          isLiveBrowserSession(session) && !dismissedAutoSessionIds.includes(session.id),
-      ) ?? null,
-    [conversationSessions, dismissedAutoSessionIds],
+    () => conversationSessions.find((session) => isLiveBrowserSession(session)) ?? null,
+    [conversationSessions],
   );
 
   const activeSessionSummary = useMemo(() => {
@@ -192,10 +186,15 @@ export function ChatWorkspace() {
     explicitSessionSummary,
     standaloneSessions,
   ]);
+  const effectiveBrowserView: ChatBrowserView =
+    browserView === 'mini' && activeSessionSummary?.conversationId === null ? 'dock' : browserView;
 
   const activeSessionId = explicitSessionId ?? activeConversationSession?.id ?? null;
+  const browser = useBrowserSession({
+    sessionId: activeSessionId,
+    enabled: Boolean(activeSessionId),
+  });
   const previousConversationSessionSignatureRef = useRef<string | null>(null);
-  const previousMobileActiveSessionIdRef = useRef<string | null>(null);
 
   const rememberSession = useCallback((session: McpBrowserSessionSummary) => {
     if (session.conversationId) {
@@ -206,96 +205,23 @@ export function ChatWorkspace() {
     setStandaloneSessions((previous) => upsertBrowserSession(previous, session));
   }, []);
 
-  const handleSessionChange = useCallback(
-    (session: McpBrowserSessionSummary) => {
-      rememberSession(session);
-
-      if (explicitSessionId === session.id) {
-        setExplicitSessionSummary(session);
+  useEffect(() => {
+    if (browser.session) {
+      rememberSession(browser.session);
+      if (explicitSessionId === browser.session.id) {
+        setExplicitSessionSummary(browser.session);
       }
-    },
-    [explicitSessionId, rememberSession],
-  );
-
-  const collapseActiveSession = useCallback(
-    (session?: McpBrowserSessionSummary | null) => {
-      const targetSession = session ?? activeSessionSummary;
-      if (!targetSession) {
-        setIsMobilePreviewOpen(false);
-        if (explicitSessionId) {
-          replaceBrowserSessionParam(null);
-        }
-        return;
-      }
-
-      rememberSession(targetSession);
-      setIsMobilePreviewOpen(false);
-
-      if (explicitSessionId === targetSession.id) {
-        if (
-          targetSession.conversationId &&
-          targetSession.conversationId === currentConversationId
-        ) {
-          setDismissedAutoSessionIds((previous) =>
-            previous.includes(targetSession.id)
-              ? previous
-              : [...previous, targetSession.id],
-          );
-        }
-        replaceBrowserSessionParam(null);
-        return;
-      }
-
-      setDismissedAutoSessionIds((previous) =>
-        previous.includes(targetSession.id) ? previous : [...previous, targetSession.id],
-      );
-    },
-    [
-      activeSessionSummary,
-      currentConversationId,
-      explicitSessionId,
-      rememberSession,
-      replaceBrowserSessionParam,
-    ],
-  );
-
-  const openSessionInline = useCallback(
-    (sessionId: string) => {
-      setDismissedAutoSessionIds((previous) => previous.filter((item) => item !== sessionId));
-      if (!isDesktopInline) {
-        setIsMobilePreviewOpen(true);
-      }
-      replaceBrowserSessionParam(sessionId);
-    },
-    [isDesktopInline, replaceBrowserSessionParam],
-  );
+    }
+  }, [browser.session, explicitSessionId, rememberSession]);
 
   useEffect(() => {
-    if (isDesktopInline) {
-      setIsMobilePreviewOpen(false);
-      previousMobileActiveSessionIdRef.current = activeSessionId;
+    const sessionForCleanup = browser.session ?? activeSessionSummary;
+    if (!explicitSessionId || !sessionForCleanup || isLiveBrowserSession(sessionForCleanup)) {
       return;
     }
 
-    if (!activeSessionId) {
-      setIsMobilePreviewOpen(false);
-      previousMobileActiveSessionIdRef.current = null;
-      return;
-    }
-
-    if (previousMobileActiveSessionIdRef.current !== activeSessionId) {
-      previousMobileActiveSessionIdRef.current = activeSessionId;
-      setIsMobilePreviewOpen(true);
-    }
-  }, [activeSessionId, isDesktopInline]);
-
-  useEffect(() => {
-    if (!activeSessionSummary || isLiveBrowserSession(activeSessionSummary)) {
-      return;
-    }
-
-    collapseActiveSession(activeSessionSummary);
-  }, [activeSessionSummary, collapseActiveSession]);
+    replaceBrowserParams(null);
+  }, [activeSessionSummary, browser.session, explicitSessionId, replaceBrowserParams]);
 
   useEffect(() => {
     if (!currentConversationId) {
@@ -318,31 +244,68 @@ export function ChatWorkspace() {
     }
   }, [conversationSessions, currentConversationId, syncConversationState]);
 
+  const openSessionFullscreen = useCallback(
+    (sessionId: string) => {
+      const nextParams = new URLSearchParams();
+      nextParams.set('returnTo', buildChatUrl(sessionId, 'dock'));
+      router.push(`/chat/browser/${sessionId}?${nextParams.toString()}`);
+    },
+    [buildChatUrl, router],
+  );
+
+  const handleDockSave = useCallback(async () => {
+    const response = await browser.persistSession(true);
+    if (response?.session) {
+      rememberSession(response.session);
+      replaceBrowserParams(null);
+    }
+  }, [browser, rememberSession, replaceBrowserParams]);
+
+  const handleDockCancel = useCallback(async () => {
+    const response = await browser.cancelSession();
+    if (response?.session) {
+      rememberSession(response.session);
+      replaceBrowserParams(null);
+    }
+  }, [browser, rememberSession, replaceBrowserParams]);
+
   const sessionCards = useMemo(() => {
-    const cards = [
-      ...standaloneSessions,
-      ...conversationSessions.filter((session) => dismissedAutoSessionIds.includes(session.id)),
-    ].filter((session) => session.id !== activeSessionId);
-    const deduped = cards.reduce<McpBrowserSessionSummary[]>((items, session) => {
-      if (items.some((item) => item.id === session.id)) {
-        return items.map((item) => (item.id === session.id ? session : item));
-      }
+    const cards = standaloneSessions.filter((session) => session.id !== activeSessionId);
+    return sortBrowserSessions(cards).slice(0, 4);
+  }, [activeSessionId, standaloneSessions]);
 
-      return [...items, session];
-    }, []);
-
-    return sortBrowserSessions(deduped).slice(0, 4);
-  }, [activeSessionId, conversationSessions, dismissedAutoSessionIds, standaloneSessions]);
-
-  const mobileInlineBrowser =
-    !isDesktopInline && activeSessionId && activeSessionSummary && isMobilePreviewOpen ? (
+  const dockedBrowser =
+    effectiveBrowserView === 'dock' &&
+    activeSessionId &&
+    activeSessionSummary &&
+    isLiveBrowserSession(activeSessionSummary) ? (
       <section className="border-t border-border bg-surface px-4 py-4">
-        <div className="flex h-[440px] min-h-0 overflow-hidden rounded-[28px] border border-border shadow-sm sm:h-[540px]">
-          <InlineBrowserPane
-            sessionId={activeSessionId}
-            className="flex min-h-0 flex-1"
-            onClose={() => collapseActiveSession(activeSessionSummary)}
-            onSessionChange={handleSessionChange}
+        <div className="flex h-[min(50vh,36rem)] min-h-[320px] min-h-0 overflow-hidden rounded-[28px] border border-border shadow-sm">
+          <BrowserSessionSurface
+            variant="dock"
+            session={browser.session ?? activeSessionSummary}
+            pages={browser.pages}
+            selectedPage={browser.selectedPage}
+            addressValue={browser.addressValue}
+            setAddressValue={browser.setAddressValue}
+            frameUrl={browser.frameUrl}
+            frameSize={browser.frameSize}
+            controlGranted={browser.controlGranted}
+            socketState={browser.socketState}
+            isTouchDevice={browser.isTouchDevice}
+            error={browser.error}
+            controlsDisabled={browser.controlsDisabled}
+            isSaving={browser.isSaving}
+            isCancelling={browser.isCancelling}
+            sendBrowserEvent={browser.sendBrowserEvent}
+            reconnect={browser.reconnect}
+            onSave={handleDockSave}
+            onCancel={handleDockCancel}
+            onRequestControl={() => {
+              browser.requestControl();
+            }}
+            onToggleDisplay={() => openSessionFullscreen(activeSessionId)}
+            onClose={() => replaceBrowserParams(activeSessionId, 'mini')}
           />
         </div>
       </section>
@@ -366,15 +329,15 @@ export function ChatWorkspace() {
                 ...(isLiveBrowserSession(session)
                   ? [
                       {
-                        label: 'Open in chat',
-                        onClick: () => openSessionInline(session.id),
+                        label: 'Open dock',
+                        onClick: () => replaceBrowserParams(session.id, 'dock'),
                         tone: 'primary' as const,
                       },
                     ]
                   : []),
                 {
                   label: 'Open full screen',
-                  onClick: () => router.push(`/chat/browser/${session.id}`),
+                  onClick: () => openSessionFullscreen(session.id),
                 },
               ]}
             />
@@ -383,30 +346,44 @@ export function ChatWorkspace() {
       </section>
     ) : null;
 
-  const chatColumn = (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-elevated">
-      <ChatPanel />
-      {mobileInlineBrowser}
-      {sessionTray}
-      <InputBar />
-    </div>
+  const chatBrowserContextValue = useMemo<ChatBrowserContextValue>(
+    () => ({
+      activeSessionId,
+      activeSession: activeSessionSummary,
+      browserView: effectiveBrowserView,
+      browser: activeSessionId ? browser : null,
+      isSessionSelected: (sessionId) => Boolean(sessionId) && sessionId === activeSessionId,
+      isSessionDocked: (sessionId) =>
+        Boolean(sessionId) && sessionId === activeSessionId && effectiveBrowserView === 'dock',
+      canRenderMiniPreview: (sessionId) =>
+        Boolean(sessionId) &&
+        sessionId === activeSessionId &&
+        effectiveBrowserView === 'mini' &&
+        Boolean(activeSessionSummary && isLiveBrowserSession(activeSessionSummary)),
+      showSessionMini: (sessionId) => replaceBrowserParams(sessionId, 'mini'),
+      openSessionDock: (sessionId) => replaceBrowserParams(sessionId, 'dock'),
+      openSessionFullscreen,
+      collapseToMini: (sessionId) => replaceBrowserParams(sessionId ?? activeSessionId, 'mini'),
+      clearSession: () => replaceBrowserParams(null),
+    }),
+    [
+      activeSessionId,
+      activeSessionSummary,
+      browser,
+      effectiveBrowserView,
+      openSessionFullscreen,
+      replaceBrowserParams,
+    ],
   );
 
-  if (isDesktopInline && activeSessionId) {
-    return (
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(520px,56vw)] overflow-hidden">
-        {chatColumn}
-        <div className="flex min-h-0 min-w-0 border-l border-border bg-surface">
-          <InlineBrowserPane
-            sessionId={activeSessionId}
-            className="flex min-h-0 flex-1"
-            onClose={() => collapseActiveSession(activeSessionSummary)}
-            onSessionChange={handleSessionChange}
-          />
-        </div>
+  return (
+    <ChatBrowserProvider value={chatBrowserContextValue}>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-elevated">
+        <ChatPanel />
+        {sessionTray}
+        {dockedBrowser}
+        <InputBar />
       </div>
-    );
-  }
-
-  return chatColumn;
+    </ChatBrowserProvider>
+  );
 }

@@ -6,9 +6,10 @@ import { BrowserSessionSurface } from './browser-session-surface';
 
 interface BrowserWorkspaceProps {
   sessionId: string;
+  returnToChatUrl?: string | null;
 }
 
-export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
+export function BrowserWorkspace({ sessionId, returnToChatUrl }: BrowserWorkspaceProps) {
   const router = useRouter();
   const {
     session,
@@ -28,6 +29,7 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
     reconnect,
     persistSession,
     cancelSession,
+    requestControl,
     sendBrowserEvent,
   } = useBrowserSession({
     sessionId,
@@ -36,14 +38,14 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
   const handleSave = async () => {
     const response = await persistSession(true);
     if (response?.session) {
-      router.push('/chat/apps');
+      router.push(returnToChatUrl ?? '/chat/apps');
     }
   };
 
   const handleCancel = async () => {
     const response = await cancelSession();
     if (response?.session) {
-      router.push('/chat/apps');
+      router.push(returnToChatUrl ?? '/chat/apps');
     }
   };
 
@@ -68,8 +70,13 @@ export function BrowserWorkspace({ sessionId }: BrowserWorkspaceProps) {
       reconnect={reconnect}
       onSave={handleSave}
       onCancel={handleCancel}
-      onToggleDisplay={() => router.push(`/chat?browserSessionId=${sessionId}`)}
-      onClose={() => router.push('/chat/apps')}
+      onRequestControl={() => {
+        requestControl();
+      }}
+      onToggleDisplay={() =>
+        router.push(returnToChatUrl ?? `/chat?browserSessionId=${sessionId}&browserView=dock`)
+      }
+      onClose={() => router.push(returnToChatUrl ?? '/chat/apps')}
       closeLabel="Back"
     />
   );

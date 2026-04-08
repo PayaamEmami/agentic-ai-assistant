@@ -38,6 +38,7 @@ export function InlineBrowserPane({
     reconnect,
     persistSession,
     cancelSession,
+    requestControl,
     sendBrowserEvent,
   } = useBrowserSession({
     sessionId,
@@ -69,7 +70,7 @@ export function InlineBrowserPane({
   return (
     <div className={className}>
       <BrowserSessionSurface
-        variant="inline"
+        variant="dock"
         session={session}
         pages={pages}
         selectedPage={selectedPage}
@@ -88,8 +89,11 @@ export function InlineBrowserPane({
         reconnect={reconnect}
         onSave={handleSave}
         onCancel={handleCancel}
+        onRequestControl={() => {
+          requestControl();
+        }}
         onClose={onClose}
-        onToggleDisplay={() => router.push(`/chat/browser/${sessionId}`)}
+        onToggleDisplay={() => router.push(`/chat/browser/${sessionId}?returnTo=${encodeURIComponent(`/chat?browserSessionId=${sessionId}&browserView=dock`)}`)}
       />
     </div>
   );

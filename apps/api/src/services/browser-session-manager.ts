@@ -80,6 +80,39 @@ function asString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
+function asBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function asNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+interface SecretProfile {
+  url?: string;
+  username?: string;
+  password?: string;
+  usernameSelector?: string;
+  passwordSelector?: string;
+  submitSelector?: string;
+}
+
+function getSecretProfiles(credentials: Record<string, unknown>): Record<string, SecretProfile> {
+  const value = credentials['secretProfiles'];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, rawProfile]) => [
+      key,
+      rawProfile && typeof rawProfile === 'object' && !Array.isArray(rawProfile)
+        ? (rawProfile as SecretProfile)
+        : {},
+    ]),
+  );
+}
+
 function sanitizeUrl(url: string): string {
   try {
     const parsed = new URL(url);
@@ -300,12 +333,223 @@ export class BrowserSessionManager {
     return live.controlViewerId === viewerId;
   }
 
+  async getStorageState(sessionId: string): Promise<Record<string, unknown>> {
+    const live = this.requireLiveSession(sessionId);
+    return (await live.context.storageState()) as unknown as Record<string, unknown>;
+  }
+
+  async executePlaywrightTool(
+    sessionId: string,
+    toolName: string,
+    input: Record<string, unknown>,
+    credentials?: Record<string, unknown>,
+  ): Promise<{ success: boolean; result: unknown; error?: string }> {
+    const live = this.requireLiveSession(sessionId);
+    const page = this.getSelectedPage(live) ?? live.context.pages()[0] ?? (await live.context.newPage());
+
+    if (!this.getSelectedPage(live)) {
+      await this.registerPage(live, page, true);
+    }
+
+    const gotoIfProvided = async () => {
+      const url = asString(input['url']);
+      if (url) {
+        await page.goto(url, { waitUntil: 'domcontentloaded' });
+        await this.emitSnapshot(live);
+      }
+    };
+
+    try {
+      switch (toolName) {
+        case 'playwright.navigate': {
+          await page.goto(asString(input['url']) ?? 'about:blank', {
+            waitUntil: 'domcontentloaded',
+          });
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: {
+              title: await page.title(),
+              url: page.url(),
+            },
+          };
+        }
+        case 'playwright.extract_text': {
+          await gotoIfProvided();
+          const selector = asString(input['selector']);
+          const maxLength = asNumber(input['maxLength']) ?? 4000;
+          const text = selector
+            ? await page.locator(selector).innerText()
+            : await page.locator('body').innerText();
+          return {
+            success: true,
+            result: {
+              title: await page.title(),
+              url: page.url(),
+              text: text.slice(0, maxLength),
+            },
+          };
+        }
+        case 'playwright.screenshot': {
+          await gotoIfProvided();
+          const selector = asString(input['selector']);
+          const fullPage = asBoolean(input['fullPage']) ?? !selector;
+          const buffer = selector
+            ? await page.locator(selector).screenshot()
+            : await page.screenshot({ fullPage });
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: {
+              title: await page.title(),
+              url: page.url(),
+              mimeType: 'image/png',
+              base64: buffer.toString('base64'),
+            },
+          };
+        }
+        case 'playwright.click': {
+          await gotoIfProvided();
+          const selector = asString(input['selector']);
+          if (!selector) {
+            return { success: false, result: null, error: 'Missing selector' };
+          }
+          await page.locator(selector).click();
+          await page.waitForLoadState('domcontentloaded', { timeout: 3_000 }).catch(() => undefined);
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: { url: page.url(), title: await page.title(), clicked: selector },
+          };
+        }
+        case 'playwright.fill': {
+          await gotoIfProvided();
+          const selector = asString(input['selector']);
+          const value = asString(input['value']);
+          if (!selector || typeof value === 'undefined') {
+            return { success: false, result: null, error: 'Missing selector or value' };
+          }
+          await page.locator(selector).fill(value);
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: { url: page.url(), title: await page.title(), filled: selector },
+          };
+        }
+        case 'playwright.submit_form': {
+          await gotoIfProvided();
+          const selector = asString(input['selector']);
+          if (selector) {
+            await page.locator(selector).evaluate((form) => {
+              if (
+                form &&
+                typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function'
+              ) {
+                (form as { requestSubmit: () => void }).requestSubmit();
+              }
+            });
+          } else {
+            await page.locator('form').first().evaluate((form) => {
+              if (
+                form &&
+                typeof (form as { requestSubmit?: () => void }).requestSubmit === 'function'
+              ) {
+                (form as { requestSubmit: () => void }).requestSubmit();
+              }
+            });
+          }
+          await page.waitForLoadState('domcontentloaded', { timeout: 3_000 }).catch(() => undefined);
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: { url: page.url(), title: await page.title(), submitted: selector ?? 'form' },
+          };
+        }
+        case 'playwright.login_with_profile': {
+          const profileName = asString(input['profileName']);
+          if (!profileName) {
+            return { success: false, result: null, error: 'Missing profileName' };
+          }
+
+          const secretProfile = getSecretProfiles(credentials ?? {})[profileName];
+          if (!secretProfile) {
+            return {
+              success: false,
+              result: null,
+              error: `Unknown secret profile: ${profileName}`,
+            };
+          }
+
+          const loginUrl = asString(input['url']) ?? secretProfile.url;
+          if (loginUrl) {
+            await page.goto(loginUrl, { waitUntil: 'domcontentloaded' });
+          }
+
+          if (secretProfile.username && secretProfile.usernameSelector) {
+            await page.locator(secretProfile.usernameSelector).fill(secretProfile.username);
+          }
+          if (secretProfile.password && secretProfile.passwordSelector) {
+            await page.locator(secretProfile.passwordSelector).fill(secretProfile.password);
+          }
+          if (secretProfile.submitSelector) {
+            await page.locator(secretProfile.submitSelector).click();
+            await page.waitForLoadState('domcontentloaded', { timeout: 3_000 }).catch(() => undefined);
+          }
+
+          await this.emitSnapshot(live);
+          return {
+            success: true,
+            result: {
+              url: page.url(),
+              title: await page.title(),
+              profileName,
+            },
+          };
+        }
+        default:
+          return {
+            success: false,
+            result: null,
+            error: `Unknown Playwright tool: ${toolName}`,
+          };
+      }
+    } catch (error) {
+      await this.emitSnapshot(live).catch(() => undefined);
+      return {
+        success: false,
+        result: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
+  requestControl(sessionId: string, viewerId: string): boolean {
+    const live = this.requireLiveSession(sessionId);
+    if (!live.viewers.has(viewerId)) {
+      throw new AppError(409, 'This viewer is not attached to the browser session', 'BROWSER_VIEWER_NOT_ATTACHED');
+    }
+
+    if (live.controlViewerId === viewerId) {
+      return false;
+    }
+
+    live.controlViewerId = viewerId;
+    live.emitter.emit('controlChanged', { viewerId });
+    return true;
+  }
+
   async handleClientEvent(
     sessionId: string,
     viewerId: string,
     event: Exclude<BrowserClientEvent, { type: 'browser.attach' } | { type: 'browser.heartbeat' }>,
   ): Promise<void> {
     const live = this.requireLiveSession(sessionId);
+    if (event.type === 'browser.control.request') {
+      this.requestControl(sessionId, viewerId);
+      browserInputEventsTotal.inc({ input_type: event.type, outcome: 'success' });
+      return;
+    }
+
     if (live.controlViewerId !== viewerId) {
       browserInputEventsTotal.inc({ input_type: event.type, outcome: 'rejected' });
       throw new AppError(409, 'This viewer does not have browser control', 'BROWSER_CONTROL_DENIED');

@@ -157,6 +157,13 @@ async function parseInternalProxyError(response: Response): Promise<AppError> {
   );
 }
 
+function hasConversationContext(input: {
+  conversationId?: string;
+  toolExecutionId?: string;
+}): input is { conversationId: string; toolExecutionId?: string } {
+  return typeof input.conversationId === 'string' && input.conversationId.trim().length > 0;
+}
+
 export class McpService {
   private readonly runtime = getMcpRuntime();
   private readonly browserSessionManager = getBrowserSessionManager();
@@ -408,6 +415,133 @@ export class McpService {
       session: toBrowserSessionDto(crashed),
       pages: [],
     };
+  }
+
+  private async ensureConversationBrowserSession(
+    userId: string,
+    profile: McpProfile,
+    input: {
+      conversationId: string;
+      toolExecutionId?: string;
+      startUrl?: string;
+    },
+  ): Promise<{
+    session: McpBrowserSession;
+    pages: Array<{ id: string; url: string; title: string; isSelected: boolean }>;
+  }> {
+    const existing = await mcpBrowserSessionRepository.findActiveByProfile(profile.id);
+    if (existing) {
+      if (existing.conversationId && existing.conversationId !== input.conversationId) {
+        throw new AppError(
+          409,
+          'Browser profile already has an active live session in another conversation',
+          'BROWSER_PROFILE_BUSY',
+        );
+      }
+
+      const existingResult = await this.getExistingActiveSessionResult(existing);
+      const refreshedSession = (await mcpBrowserSessionRepository.findById(existing.id)) ?? existing;
+      if (refreshedSession.status !== 'pending' && refreshedSession.status !== 'active') {
+        const created = await this.createBrowserSession(userId, profile.id, {
+          purpose: 'manual',
+          conversationId: input.conversationId,
+          toolExecutionId: input.toolExecutionId,
+          startUrl: input.startUrl,
+        });
+        const session = await mcpBrowserSessionRepository.findById(created.session.id);
+        if (!session) {
+          throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
+        }
+
+        return {
+          session,
+          pages: created.pages,
+        };
+      }
+
+      if (!refreshedSession.conversationId) {
+        throw new AppError(
+          409,
+          'Browser profile already has an active standalone live session',
+          'BROWSER_PROFILE_BUSY',
+        );
+      }
+
+      return {
+        session: refreshedSession,
+        pages: existingResult.pages,
+      };
+    }
+
+    const created = await this.createBrowserSession(userId, profile.id, {
+      purpose: 'manual',
+      conversationId: input.conversationId,
+      toolExecutionId: input.toolExecutionId,
+      startUrl: input.startUrl,
+    });
+    const session = await mcpBrowserSessionRepository.findById(created.session.id);
+    if (!session) {
+      throw new AppError(404, 'Browser session not found', 'MCP_BROWSER_SESSION_NOT_FOUND');
+    }
+
+    return {
+      session,
+      pages: created.pages,
+    };
+  }
+
+  private async executePlaywrightToolInBrowserSession(
+    session: McpBrowserSession,
+    profile: McpProfile,
+    input: {
+      toolName: string;
+      arguments: Record<string, unknown>;
+    },
+  ) {
+    const credentials = decryptCredentials(profile.encryptedCredentials);
+
+    if (hasRemoteOwner(session)) {
+      return this.proxyBrowserSessionRequest<{
+        success: boolean;
+        result: unknown;
+        error?: string;
+      }>(session, {
+        suffix: 'execute-tool',
+        method: 'POST',
+        body: {
+          toolName: input.toolName,
+          input: input.arguments,
+        },
+      });
+    }
+
+    if (!this.browserSessionManager.hasLiveSession(session.id)) {
+      throw new AppError(
+        409,
+        'Browser session is no longer live on this API instance',
+        'MCP_BROWSER_SESSION_NOT_LIVE',
+      );
+    }
+
+    const result = await this.browserSessionManager.executePlaywrightTool(
+      session.id,
+      input.toolName,
+      input.arguments,
+      credentials,
+    );
+
+    if (result.success) {
+      const storageState = await this.browserSessionManager.getStorageState(session.id);
+      await mcpProfileRepository.update(profile.id, {
+        encryptedCredentials: encryptCredentials({
+          ...credentials,
+          storageState,
+        }),
+        lastError: null,
+      });
+    }
+
+    return result;
   }
 
   async createBrowserSession(
@@ -755,6 +889,17 @@ export class McpService {
     };
   }
 
+  async executePlaywrightToolInBrowserSessionInternal(
+    sessionId: string,
+    input: {
+      toolName: string;
+      arguments: Record<string, unknown>;
+    },
+  ) {
+    const { session, profile } = await requireBrowserSession(sessionId);
+    return this.executePlaywrightToolInBrowserSession(session, profile, input);
+  }
+
   private async startHandoffTool(
     userId: string,
     profileId: string,
@@ -824,6 +969,36 @@ export class McpService {
 
     if (input.toolName === 'playwright.start_handoff') {
       return this.startHandoffTool(userId, profile.id, input);
+    }
+
+    if (hasConversationContext(input)) {
+      try {
+        const { session } = await this.ensureConversationBrowserSession(userId, profile, {
+          conversationId: input.conversationId,
+          toolExecutionId: input.toolExecutionId,
+          startUrl:
+            typeof input.arguments['url'] === 'string' && input.arguments['url'].trim().length > 0
+              ? input.arguments['url'].trim()
+              : undefined,
+        });
+
+        const result = await this.executePlaywrightToolInBrowserSession(session, profile, {
+          toolName: input.toolName,
+          arguments: input.arguments,
+        });
+
+        return {
+          success: result.success,
+          result: result.result,
+          error: result.error,
+        };
+      } catch (error) {
+        return {
+          success: false,
+          result: null,
+          error: error instanceof Error ? error.message : 'Failed to execute Playwright tool',
+        };
+      }
     }
 
     const activeSession = await mcpBrowserSessionRepository.findActiveByProfile(profile.id);

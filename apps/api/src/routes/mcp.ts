@@ -182,6 +182,35 @@ export async function mcpRoutes(app: FastifyInstance) {
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/mcp/internal/browser-sessions/:id/execute-tool',
+    async (request, reply) => {
+      await authenticateInternal(request);
+      const body = request.body as { toolName?: unknown; input?: unknown } | null;
+      if (
+        !body ||
+        typeof body.toolName !== 'string' ||
+        body.toolName.trim().length === 0 ||
+        !body.input ||
+        typeof body.input !== 'object' ||
+        Array.isArray(body.input)
+      ) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: 'toolName and input are required' },
+        });
+      }
+
+      const result = await mcpService.executePlaywrightToolInBrowserSessionInternal(
+        request.params.id,
+        {
+          toolName: body.toolName,
+          arguments: body.input as Record<string, unknown>,
+        },
+      );
+      return reply.status(200).send(result);
+    },
+  );
+
   app.post(
     '/mcp/internal/playwright/execute',
     async (request, reply) => {
@@ -195,10 +224,16 @@ export async function mcpRoutes(app: FastifyInstance) {
       }
 
       const startedAt = Date.now();
-      const result = await mcpService.executePlaywrightTool(parsed.data.userId, parsed.data.mcpProfileId, {
-        toolName: parsed.data.toolName,
-        arguments: parsed.data.input,
-      });
+      const result = await mcpService.executePlaywrightTool(
+        parsed.data.userId,
+        parsed.data.mcpProfileId,
+        {
+          toolName: parsed.data.toolName,
+          arguments: parsed.data.input,
+          conversationId: parsed.data.conversationId,
+          toolExecutionId: parsed.data.toolExecutionId,
+        },
+      );
       internalPlaywrightRpcDurationMs.observe(
         { outcome: result.success ? 'success' : 'failure' },
         Date.now() - startedAt,

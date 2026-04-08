@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import {
   api,
   buildBrowserWebSocketUrl,
@@ -88,10 +88,37 @@ interface UseBrowserSessionOptions {
   enabled?: boolean;
 }
 
+export interface UseBrowserSessionResult {
+  session: McpBrowserSessionSummary | null;
+  pages: BrowserPageSummary[];
+  selectedPage: BrowserPageSummary | null;
+  addressValue: string;
+  setAddressValue: (value: string) => void;
+  frameUrl: string | null;
+  frameSize: { width: number; height: number } | null;
+  controlGranted: boolean;
+  socketState: 'connecting' | 'connected' | 'disconnected';
+  isTouchDevice: boolean;
+  error: string | null;
+  setError: Dispatch<SetStateAction<string | null>>;
+  isSaving: boolean;
+  isCancelling: boolean;
+  controlsDisabled: boolean;
+  isLiveSession: boolean;
+  loadSession: () => Promise<McpBrowserSessionSummary | null>;
+  reconnect: () => void;
+  persistSession: (
+    persistAsDefault?: boolean,
+  ) => Promise<Awaited<ReturnType<typeof api.mcp.persistBrowserSession>> | null>;
+  cancelSession: () => Promise<{ ok: true; session: McpBrowserSessionSummary } | null>;
+  requestControl: () => boolean;
+  sendBrowserEvent: (payload: Record<string, unknown>) => boolean;
+}
+
 export function useBrowserSession({
   sessionId,
   enabled = true,
-}: UseBrowserSessionOptions) {
+}: UseBrowserSessionOptions): UseBrowserSessionResult {
   const { token } = useAuthContext();
   const [session, setSession] = useState<McpBrowserSessionSummary | null>(null);
   const [pages, setPages] = useState<BrowserPageSummary[]>([]);
@@ -401,6 +428,21 @@ export function useBrowserSession({
     void loadSession();
   }, [clearFrameUrl, loadSession]);
 
+  const requestControl = useCallback(() => {
+    if (!sessionId) {
+      setError('Browser session is unavailable.');
+      return false;
+    }
+    if (!socketRef.current || socketState !== 'connected' || !isAttached) {
+      setError('Browser session is disconnected.');
+      return false;
+    }
+
+    setError(null);
+    socketRef.current.send(JSON.stringify({ type: 'browser.control.request', sessionId }));
+    return true;
+  }, [isAttached, sessionId, socketState]);
+
   const persistSession = useCallback(
     async (persistAsDefault = true) => {
       if (!sessionId) {
@@ -474,10 +516,12 @@ export function useBrowserSession({
     isSaving,
     isCancelling,
     controlsDisabled,
+    isLiveSession,
     loadSession,
     reconnect,
     persistSession,
     cancelSession,
+    requestControl,
     sendBrowserEvent,
   };
 }

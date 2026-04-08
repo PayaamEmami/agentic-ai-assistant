@@ -5,8 +5,7 @@ import {
   type MessageContentBlock,
   useChatContext,
 } from '@/lib/chat-context';
-import { useRouter } from 'next/navigation';
-import { BrowserSessionCard } from './browser-session-card';
+import { BrowserSessionMessage } from './browser-session-message';
 import { CitationCard } from './citation-card';
 
 interface MessageProps {
@@ -83,7 +82,6 @@ function getDisplayToolStatus(
 }
 
 export function Message({ role, content }: MessageProps) {
-  const router = useRouter();
   const {
     pendingApprovals,
     approvalStatusesByToolExecution,
@@ -97,6 +95,8 @@ export function Message({ role, content }: MessageProps) {
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
   );
   const primaryContent = visibleContent.filter((block) => block.type !== 'status');
+  const isBrowserOnlyMessage =
+    primaryContent.length > 0 && primaryContent.every((block) => block.type === 'browser_session');
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
@@ -207,54 +207,7 @@ export function Message({ role, content }: MessageProps) {
     }
 
     if (block.type === 'browser_session') {
-      const sessionStatus = block.status ?? 'pending';
-      const sessionPurpose = block.purpose ?? 'manual';
-      const browserSessionId = block.browserSessionId;
-      const isLive = sessionStatus === 'pending' || sessionStatus === 'active';
-
-      return (
-        <BrowserSessionCard
-          key={index}
-          session={{
-            purpose: sessionPurpose,
-            status: sessionStatus,
-            expiresAt: block.expiresAt ?? null,
-            endedAt: block.endedAt ?? null,
-            metadata: {
-              handoffReason: block.handoffReason ?? undefined,
-              terminalReason: block.terminalReason ?? undefined,
-            },
-          }}
-          title={block.profileLabel ?? 'Browser session'}
-          description={
-            sessionPurpose === 'sign_in'
-              ? 'Authentication browser linked to this conversation'
-              : sessionPurpose === 'handoff'
-                ? 'Interactive browser handoff linked to this conversation'
-                : 'Interactive browser session linked to this conversation'
-          }
-          actions={
-            browserSessionId
-              ? [
-                  ...(isLive
-                    ? [
-                        {
-                          label: 'Open in chat',
-                          onClick: () =>
-                            router.push(`/chat?browserSessionId=${browserSessionId}`),
-                          tone: 'primary' as const,
-                        },
-                      ]
-                    : []),
-                  {
-                    label: 'Open full screen',
-                    onClick: () => router.push(`/chat/browser/${browserSessionId}`),
-                  },
-                ]
-              : []
-          }
-        />
-      );
+      return <BrowserSessionMessage key={index} block={block} />;
     }
 
     if (block.type === 'status') {
@@ -276,13 +229,13 @@ export function Message({ role, content }: MessageProps) {
     );
   };
 
-  const bubbleClassName = `max-w-[70%] rounded-lg px-4 py-2 text-sm ${
-    isUser
-      ? 'bg-accent text-white'
-      : isSystem
-        ? 'border border-border-subtle bg-surface-input/70 text-foreground-muted'
-        : 'border border-border bg-surface-overlay text-foreground'
-  } ${isUser ? '' : 'space-y-2'}`;
+  const bubbleClassName = isUser
+    ? 'max-w-[70%] rounded-lg bg-accent px-4 py-2 text-sm text-white'
+    : isSystem
+      ? 'max-w-[70%] rounded-lg border border-border-subtle bg-surface-input/70 px-4 py-2 text-sm text-foreground-muted space-y-2'
+      : isBrowserOnlyMessage
+        ? 'w-full max-w-[min(52rem,100%)] text-sm text-foreground space-y-2'
+        : 'max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground space-y-2';
 
   return (
     <div
