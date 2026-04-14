@@ -69,6 +69,13 @@ export interface ApprovalResolvedEvent {
   status: 'approved' | 'rejected';
 }
 
+export interface BrowserSessionCreatedEvent {
+  type: 'browser.session.created';
+  conversationId: string;
+  browserSessionId: string;
+  messageId: string | null;
+}
+
 export interface CitationEvent {
   type: 'citation';
   conversationId: string;
@@ -233,6 +240,7 @@ export type RealtimeEvent =
   | ToolDoneEvent
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
+  | BrowserSessionCreatedEvent
   | CitationEvent
   | VoiceTranscriptEvent
   | VoiceSessionEndedEvent

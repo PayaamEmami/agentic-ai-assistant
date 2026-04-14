@@ -18,6 +18,7 @@ import {
   buildBrowserSessionContentBlock,
   buildBrowserSessionContentPatch,
 } from './browser-session-content.js';
+import { broadcast } from '../ws/connections.js';
 
 const SESSION_TTL_MS = 30 * 60 * 1000;
 const OWNER_UNREACHABLE_CODES = new Set([
@@ -327,14 +328,22 @@ export class McpService {
       }),
     ]);
 
-    return (
+    const updatedSession =
       (await mcpBrowserSessionRepository.update(session.id, {
         messageId: message.id,
       })) ?? {
         ...session,
         messageId: message.id,
-      }
-    );
+      };
+
+    broadcast(session.conversationId, {
+      type: 'browser.session.created',
+      conversationId: session.conversationId,
+      browserSessionId: updatedSession.id,
+      messageId: updatedSession.messageId,
+    });
+
+    return updatedSession;
   }
 
   private async proxyBrowserSessionRequest<T>(

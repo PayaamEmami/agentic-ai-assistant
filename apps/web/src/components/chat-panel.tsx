@@ -5,6 +5,25 @@ import { useChatContext } from '@/lib/chat-context';
 import { useAuthContext } from '@/lib/auth-context';
 import { Message } from './message';
 
+function ThinkingIndicator() {
+  return (
+    <div className="flex justify-start">
+      <div
+        className="rounded-lg border border-border bg-surface-overlay px-4 py-3 text-sm text-foreground"
+        aria-label="Agent is thinking"
+      >
+        <div className="flex items-center gap-1.5">
+          <span className="inline-flex gap-1" aria-hidden="true">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted [animation-delay:150ms]" />
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted [animation-delay:300ms]" />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function getFirstName(displayName: string | undefined) {
   const normalized = displayName?.trim();
   if (!normalized) {
@@ -43,6 +62,7 @@ export function ChatPanel() {
           <Message key={message.id} role={message.role} content={message.content} />
         ))
       )}
+      {loading.isSendingMessage ? <ThinkingIndicator /> : null}
       <div ref={scrollRef} />
     </div>
   );

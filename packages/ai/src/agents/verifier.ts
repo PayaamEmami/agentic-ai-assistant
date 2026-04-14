@@ -58,8 +58,7 @@ export class VerifierAgent implements Agent {
       };
     }
 
-    const response =
-      verified.status === 'revise' ? verified.response : context.previousResult.response;
+    const response = selectUserFacingVerifiedResponse(verified, context.previousResult);
 
     return {
       response,
@@ -90,6 +89,61 @@ function buildPreviousResultMessage(context: AgentContext): ChatMessage {
       'Reply with JSON only.\n' +
       JSON.stringify(context.previousResult),
   };
+}
+
+function selectUserFacingVerifiedResponse(
+  verified: { status: 'approved' | 'revise'; response: string | null },
+  previousResult: AgentResult,
+): string | null {
+  if (verified.status !== 'revise') {
+    return previousResult.response;
+  }
+
+  if (!verified.response || isLikelyInternalVerifierResponse(verified.response)) {
+    return previousResult.response;
+  }
+
+  return verified.response;
+}
+
+function isLikelyInternalVerifierResponse(response: string): boolean {
+  const normalized = response.trim().toLowerCase();
+  if (!normalized) {
+    return false;
+  }
+
+  if (
+    /^(the\s+)?(prior|previous)\s+(agent\s+)?(message|output|response|result)\b/.test(
+      normalized,
+    ) ||
+    /^the\s+assistant'?s\s+(prior|previous)\s+(message|output|response|result)\b/.test(
+      normalized,
+    )
+  ) {
+    return true;
+  }
+
+  const markers = [
+    'prior agent',
+    'previous agent',
+    'prior output',
+    'previous output',
+    'prior response',
+    'previous response',
+    'user-facing',
+    'policy-aligned',
+    'aligned with the user',
+    'unsupported claims',
+    'retrieved context',
+    'tool use that did not happen',
+    'live browsing/search/tool use',
+  ];
+  const markerCount = markers.reduce(
+    (count, marker) => count + (normalized.includes(marker) ? 1 : 0),
+    0,
+  );
+
+  return markerCount >= 2;
 }
 
 function parseVerificationContent(

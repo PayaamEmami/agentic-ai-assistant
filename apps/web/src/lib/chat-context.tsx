@@ -1026,6 +1026,9 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           void loadPendingApprovals();
           return;
         }
+        case 'browser.session.created':
+          void refreshConversation(currentConversationId);
+          return;
         case 'error':
           setError('Realtime connection was rejected.');
           return;

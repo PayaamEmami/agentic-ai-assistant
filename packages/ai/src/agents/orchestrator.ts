@@ -6,6 +6,7 @@ import {
   requiresApprovalForCalls,
   shouldDelegateToCoding,
   shouldDelegateToResearch,
+  shouldDelegateToTool,
   toChatMessages,
   toSystemPromptContext,
   toToolDefinitions,
@@ -36,7 +37,7 @@ export class OrchestratorAgent implements Agent {
     const toolCalls = parseToolCalls(completion.toolCalls);
     const delegateTo = shouldDelegateToCoding(context)
       ? 'coding'
-      : toolCalls.length > 0
+      : shouldDelegateToTool(context) || toolCalls.length > 0
         ? 'tool'
         : shouldDelegateToResearch(context)
           ? 'research'

@@ -309,6 +309,12 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
       return `Allow navigating the browser${profileSuffix}`;
     case 'playwright.extract_text':
       return `Allow reading page text${profileSuffix}`;
+    case 'playwright.search_web': {
+      const query = getStringField(input, 'query');
+      return query
+        ? `Allow searching the web for "${truncateLabel(query)}"${profileSuffix}`
+        : `Allow searching the web${profileSuffix}`;
+    }
     case 'playwright.screenshot':
       return `Allow capturing a screenshot${profileSuffix}`;
     case 'playwright.click': {

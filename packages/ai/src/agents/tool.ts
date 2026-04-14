@@ -2,6 +2,7 @@ import type { ModelProvider } from '../model-provider.js';
 import { buildAgentSystemPrompt } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
+  buildExplicitToolCallForRequest,
   parseToolCalls,
   requiresApprovalForCalls,
   toChatMessages,
@@ -31,10 +32,18 @@ export class ToolAgent implements Agent {
       signal: context.signal,
     });
 
-    const toolCalls = parseToolCalls(completion.toolCalls);
+    let toolCalls = parseToolCalls(completion.toolCalls);
+    let response = completion.content;
+    if (toolCalls.length === 0) {
+      const explicitToolCall = buildExplicitToolCallForRequest(context);
+      if (explicitToolCall) {
+        toolCalls = [explicitToolCall];
+        response = null;
+      }
+    }
 
     return {
-      response: completion.content,
+      response,
       toolCalls,
       delegateTo: null,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),

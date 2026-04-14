@@ -7,6 +7,7 @@ import {
   type McpBrowserSession,
   type McpProfile,
 } from '@aaa/db';
+import { executeSearchWeb } from '@aaa/mcp';
 import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogger } from '@aaa/observability';
 import type {
@@ -389,6 +390,11 @@ export class BrowserSessionManager {
               text: text.slice(0, maxLength),
             },
           };
+        }
+        case 'playwright.search_web': {
+          const result = await executeSearchWeb(page, input);
+          await this.emitSnapshot(live);
+          return result;
         }
         case 'playwright.screenshot': {
           await gotoIfProvided();

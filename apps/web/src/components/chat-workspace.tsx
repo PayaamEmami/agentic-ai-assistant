@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type McpBrowserSessionSummary, api } from '@/lib/api-client';
-import { useChatContext } from '@/lib/chat-context';
+import { type BrowserSessionContentBlock, useChatContext } from '@/lib/chat-context';
 import { useBrowserSession } from '@/lib/use-browser-session';
 import { ChatBrowserProvider, type ChatBrowserContextValue, type ChatBrowserView } from './chat-browser-context';
 import { BrowserSessionCard } from './browser-session-card';
@@ -37,7 +37,7 @@ function upsertBrowserSession(
 export function ChatWorkspace() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentConversationId, syncConversationState } = useChatContext();
+  const { currentConversationId, messages, syncConversationState } = useChatContext();
   const [conversationSessions, setConversationSessions] = useState<McpBrowserSessionSummary[]>([]);
   const [standaloneSessions, setStandaloneSessions] = useState<McpBrowserSessionSummary[]>([]);
   const [explicitSessionSummary, setExplicitSessionSummary] =
@@ -164,6 +164,23 @@ export function ChatWorkspace() {
     () => conversationSessions.find((session) => isLiveBrowserSession(session)) ?? null,
     [conversationSessions],
   );
+  const activeMessageSessionId = useMemo(() => {
+    for (const message of [...messages].reverse()) {
+      const block = [...message.content]
+        .reverse()
+        .find(
+          (candidate): candidate is BrowserSessionContentBlock =>
+            candidate.type === 'browser_session' &&
+            Boolean(candidate.browserSessionId) &&
+            (candidate.status === 'active' || candidate.status === 'pending'),
+        );
+      if (block?.browserSessionId) {
+        return block.browserSessionId;
+      }
+    }
+
+    return null;
+  }, [messages]);
 
   const activeSessionSummary = useMemo(() => {
     if (explicitSessionId) {
@@ -189,7 +206,7 @@ export function ChatWorkspace() {
   const effectiveBrowserView: ChatBrowserView =
     browserView === 'mini' && activeSessionSummary?.conversationId === null ? 'dock' : browserView;
 
-  const activeSessionId = explicitSessionId ?? activeConversationSession?.id ?? null;
+  const activeSessionId = explicitSessionId ?? activeConversationSession?.id ?? activeMessageSessionId;
   const browser = useBrowserSession({
     sessionId: activeSessionId,
     enabled: Boolean(activeSessionId),
@@ -349,7 +366,7 @@ export function ChatWorkspace() {
   const chatBrowserContextValue = useMemo<ChatBrowserContextValue>(
     () => ({
       activeSessionId,
-      activeSession: activeSessionSummary,
+      activeSession: browser.session ?? activeSessionSummary,
       browserView: effectiveBrowserView,
       browser: activeSessionId ? browser : null,
       isSessionSelected: (sessionId) => Boolean(sessionId) && sessionId === activeSessionId,
@@ -359,7 +376,10 @@ export function ChatWorkspace() {
         Boolean(sessionId) &&
         sessionId === activeSessionId &&
         effectiveBrowserView === 'mini' &&
-        Boolean(activeSessionSummary && isLiveBrowserSession(activeSessionSummary)),
+        Boolean(
+          (browser.session && isLiveBrowserSession(browser.session)) ||
+            (activeSessionSummary && isLiveBrowserSession(activeSessionSummary)),
+        ),
       showSessionMini: (sessionId) => replaceBrowserParams(sessionId, 'mini'),
       openSessionDock: (sessionId) => replaceBrowserParams(sessionId, 'dock'),
       openSessionFullscreen,

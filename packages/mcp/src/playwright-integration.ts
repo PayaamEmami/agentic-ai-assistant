@@ -6,6 +6,7 @@ import type {
   ToolExecutionOutput,
   UnifiedToolDescriptor,
 } from './types.js';
+import { executeSearchWeb } from './playwright-search.js';
 
 interface SecretProfile {
   url?: string;
@@ -123,6 +124,32 @@ export class PlaywrightProfileClient {
             selector: { type: 'string' },
             maxLength: { type: 'number' },
           },
+          additionalProperties: false,
+        },
+        origin: 'mcp',
+        mcpProfileId: this.profile.id,
+        integrationKind: 'playwright',
+        profileLabel: label,
+        requiresApproval: false,
+      },
+      {
+        name: 'playwright.search_web',
+        description: `Search the public web using a live Playwright browser with the "${label}" browser profile and return structured search results, including the first result.`,
+        parameters: {
+          type: 'object',
+          properties: {
+            query: { type: 'string' },
+            searchEngine: {
+              type: 'string',
+              enum: ['duckduckgo', 'google', 'bing'],
+              description: 'Search engine to use. Defaults to bing.',
+            },
+            maxResults: {
+              type: 'number',
+              description: 'Maximum number of organic results to return, from 1 to 10.',
+            },
+          },
+          required: ['query'],
           additionalProperties: false,
         },
         origin: 'mcp',
@@ -290,6 +317,18 @@ export class PlaywrightProfileClient {
               this.profile,
               (await context.storageState()) as unknown as Record<string, unknown>,
             ),
+          };
+        }
+        case 'playwright.search_web': {
+          const searchResult = await executeSearchWeb(page, input.arguments);
+          return {
+            ...searchResult,
+            profileUpdate: searchResult.success
+              ? withUpdatedStorageState(
+                  this.profile,
+                  (await context.storageState()) as unknown as Record<string, unknown>,
+                )
+              : undefined,
           };
         }
         case 'playwright.screenshot': {

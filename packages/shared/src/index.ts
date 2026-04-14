@@ -138,6 +138,7 @@ export type {
   ToolDoneEvent,
   ApprovalRequestedEvent,
   ApprovalResolvedEvent,
+  BrowserSessionCreatedEvent,
   CitationEvent,
   VoiceTranscriptEvent,
   VoiceSessionEndedEvent,
