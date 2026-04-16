@@ -45,6 +45,3 @@ export type { AppSyncRun, AppSyncRunRepository } from './app-sync-runs.js';
 
 export { mcpProfileRepository } from './mcp-connections.js';
 export type { McpProfile, McpProfileRepository } from './mcp-connections.js';
-
-export { mcpBrowserSessionRepository } from './mcp-browser-sessions.js';
-export type { McpBrowserSession, McpBrowserSessionRepository } from './mcp-browser-sessions.js';

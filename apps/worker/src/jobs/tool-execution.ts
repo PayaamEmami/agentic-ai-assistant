@@ -9,7 +9,6 @@ import {
 import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
 import type {
-  InternalPlaywrightExecuteResponse,
   ToolDoneEvent,
   ToolProgressEvent,
   ToolStartEvent,
@@ -420,52 +419,6 @@ function requireReviewEvent(value: unknown): 'APPROVE' | 'COMMENT' | 'REQUEST_CH
   throw new Error('Expected "event" to be APPROVE, COMMENT, or REQUEST_CHANGES');
 }
 
-async function executePlaywrightViaApi(
-  userId: string,
-  mcpProfileId: string,
-  conversationId: string,
-  toolExecutionId: string,
-  toolName: string,
-  input: Record<string, unknown>,
-): Promise<{ success: boolean; result: unknown; error?: string }> {
-  const response = await fetch(`${getInternalApiBaseUrl()}/api/mcp/internal/playwright/execute`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-internal-service-secret': getInternalServiceSecret(),
-    },
-    body: JSON.stringify({
-      userId,
-      mcpProfileId,
-      conversationId,
-      toolExecutionId,
-      toolName,
-      input,
-    }),
-  });
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
-    return {
-      success: false,
-      result: null,
-      error:
-        typeof body?.error?.message === 'string'
-          ? body.error.message
-          : `Internal Playwright execution failed with status ${response.status}`,
-    };
-  }
-
-  const body = (await response.json()) as InternalPlaywrightExecuteResponse;
-  return {
-    success: body.success,
-    result: body.result,
-    error: body.error,
-  };
-}
-
 async function executeTool(
   userId: string,
   conversationId: string,
@@ -479,22 +432,7 @@ async function executeTool(
   }
 
   if (execution.origin === 'mcp') {
-    if (!execution.mcpProfileId || !execution.integrationKind) {
-      return { success: false, result: null, error: 'MCP execution is missing profile binding' };
-    }
-
-    if (execution.integrationKind === 'playwright') {
-      return executePlaywrightViaApi(
-        userId,
-        execution.mcpProfileId,
-        conversationId,
-        toolExecutionId,
-        toolName,
-        input,
-      );
-    }
-
-    return { success: false, result: null, error: 'Unsupported MCP integration for worker execution' };
+    return { success: false, result: null, error: 'No MCP integrations are available' };
   }
 
   return executeNativeTool(

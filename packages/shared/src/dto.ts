@@ -161,7 +161,7 @@ export type AppKindDto = z.infer<typeof AppKindDto>;
 export const AppCapabilityDto = z.enum(['knowledge', 'tools']);
 export type AppCapabilityDto = z.infer<typeof AppCapabilityDto>;
 
-export const McpIntegrationKindDto = z.enum(['playwright']);
+export const McpIntegrationKindDto = z.string().trim().min(1).max(120);
 export type McpIntegrationKindDto = z.infer<typeof McpIntegrationKindDto>;
 
 export const MemoryKindDto = z.enum([
@@ -253,27 +253,13 @@ export type AppDisconnectResponse = z.infer<typeof AppDisconnectResponse>;
 export const McpProfileStatusDto = z.enum(['pending', 'connected', 'failed']);
 export type McpProfileStatusDto = z.infer<typeof McpProfileStatusDto>;
 
-export const McpBrowserSessionPurposeDto = z.enum(['sign_in', 'manual', 'handoff']);
-export type McpBrowserSessionPurposeDto = z.infer<typeof McpBrowserSessionPurposeDto>;
-
-export const McpBrowserSessionStatusDto = z.enum([
-  'pending',
-  'active',
-  'completed',
-  'cancelled',
-  'failed',
-  'expired',
-  'crashed',
-]);
-export type McpBrowserSessionStatusDto = z.infer<typeof McpBrowserSessionStatusDto>;
-
 export const McpCatalogEntryDto = z.object({
   kind: McpIntegrationKindDto,
   displayName: z.string(),
   description: z.string(),
   supportsMultipleProfiles: z.boolean(),
   requiresDefaultProfile: z.boolean(),
-  authModes: z.array(z.enum(['embedded_browser', 'stored_secret'])),
+  authModes: z.array(z.string()),
 });
 export type McpCatalogEntryDto = z.infer<typeof McpCatalogEntryDto>;
 
@@ -303,7 +289,7 @@ export type McpProfileListResponse = z.infer<typeof McpProfileListResponse>;
 export const McpProfileCreateRequest = z.object({
   integrationKind: McpIntegrationKindDto,
   profileLabel: z.string().trim().min(1).max(120),
-  authMode: z.enum(['embedded_browser', 'stored_secret']).optional(),
+  authMode: z.string().trim().min(1).max(120).optional(),
   secretProfile: z.record(z.unknown()).optional(),
 });
 export type McpProfileCreateRequest = z.infer<typeof McpProfileCreateRequest>;
@@ -318,74 +304,6 @@ export const McpProfileDefaultResponse = z.object({
   profile: McpProfileSummaryDto,
 });
 export type McpProfileDefaultResponse = z.infer<typeof McpProfileDefaultResponse>;
-
-export const BrowserPageDto = z.object({
-  id: z.string(),
-  url: z.string(),
-  title: z.string(),
-  isSelected: z.boolean(),
-});
-export type BrowserPageDto = z.infer<typeof BrowserPageDto>;
-
-export const McpBrowserSessionDto = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
-  mcpProfileId: z.string().uuid(),
-  messageId: z.string().uuid().nullable(),
-  purpose: McpBrowserSessionPurposeDto,
-  status: McpBrowserSessionStatusDto,
-  conversationId: z.string().uuid().nullable(),
-  toolExecutionId: z.string().uuid().nullable(),
-  selectedPageId: z.string().nullable(),
-  metadata: z.record(z.unknown()),
-  lastClientSeenAt: z.string().datetime().nullable(),
-  lastFrameAt: z.string().datetime().nullable(),
-  expiresAt: z.string().datetime(),
-  endedAt: z.string().datetime().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-export type McpBrowserSessionDto = z.infer<typeof McpBrowserSessionDto>;
-
-export const McpBrowserSessionResponse = z.object({
-  session: McpBrowserSessionDto,
-  pages: z.array(BrowserPageDto),
-});
-export type McpBrowserSessionResponse = z.infer<typeof McpBrowserSessionResponse>;
-
-export const McpBrowserSessionListResponse = z.object({
-  sessions: z.array(McpBrowserSessionDto),
-});
-export type McpBrowserSessionListResponse = z.infer<typeof McpBrowserSessionListResponse>;
-
-export const McpBrowserSessionCreateRequest = z.object({
-  purpose: McpBrowserSessionPurposeDto.default('manual'),
-  conversationId: z.string().uuid().optional(),
-  toolExecutionId: z.string().uuid().optional(),
-});
-export type McpBrowserSessionCreateRequest = z.infer<typeof McpBrowserSessionCreateRequest>;
-
-export const McpBrowserSessionPersistRequest = z.object({
-  persistAsDefault: z.boolean().optional(),
-});
-export type McpBrowserSessionPersistRequest = z.infer<typeof McpBrowserSessionPersistRequest>;
-
-export const InternalPlaywrightExecuteRequest = z.object({
-  toolExecutionId: z.string().uuid().optional(),
-  toolName: z.string().min(1),
-  input: z.record(z.unknown()),
-  conversationId: z.string().uuid().optional(),
-  userId: z.string().uuid(),
-  mcpProfileId: z.string().uuid(),
-});
-export type InternalPlaywrightExecuteRequest = z.infer<typeof InternalPlaywrightExecuteRequest>;
-
-export const InternalPlaywrightExecuteResponse = z.object({
-  success: z.boolean(),
-  result: z.unknown().nullable(),
-  error: z.string().optional(),
-});
-export type InternalPlaywrightExecuteResponse = z.infer<typeof InternalPlaywrightExecuteResponse>;
 
 export const GitHubRepositoryDto = z.object({
   id: z.number().int(),

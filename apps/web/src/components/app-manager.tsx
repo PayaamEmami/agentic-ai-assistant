@@ -1,17 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import {
   api,
   type AppCapabilitySummary,
   type AppSummary,
   type GitHubRepositorySummary,
-  type McpBrowserSessionSummary,
   type McpCatalogEntrySummary,
   type McpProfileSummary,
 } from '@/lib/api-client';
-import { useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 
 function appLabel(kind: string): string {
@@ -21,10 +19,6 @@ function appLabel(kind: string): string {
 
   if (kind === 'google') {
     return 'Google';
-  }
-
-  if (kind === 'playwright') {
-    return 'Playwright Browser';
   }
 
   return kind;
@@ -95,21 +89,16 @@ function mcpStatusSummary(profile: McpProfileSummary): string {
     return 'Needs attention before it can be used.';
   }
 
-  return 'Waiting for sign-in or credentials.';
+  return 'Waiting for credentials.';
 }
 
 export function AppManager() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { currentConversationId } = useChatContext();
   const [apps, setApps] = useState<AppSummary[]>([]);
   const [githubRepositories, setGitHubRepositories] = useState<GitHubRepositorySummary[]>([]);
   const [selectedRepoIds, setSelectedRepoIds] = useState<number[]>([]);
   const [mcpCatalog, setMcpCatalog] = useState<McpCatalogEntrySummary[]>([]);
   const [mcpProfiles, setMcpProfiles] = useState<McpProfileSummary[]>([]);
-  const [mcpSessionsByProfile, setMcpSessionsByProfile] = useState<
-    Record<string, McpBrowserSessionSummary>
-  >({});
   const [loading, setLoading] = useState(true);
   const [savingRepos, setSavingRepos] = useState(false);
   const [disconnectingKind, setDisconnectingKind] = useState<AppSummary['kind'] | null>(null);
@@ -125,22 +114,16 @@ export function AppManager() {
     }
 
     try {
-      const [appResponse, catalogResponse, profileResponse, sessionResponse] =
+      const [appResponse, catalogResponse, profileResponse] =
         await Promise.all([
           api.apps.list(),
           api.mcp.catalog(),
           api.mcp.listProfiles(),
-          api.mcp.listBrowserSessions(),
         ]);
 
       setApps(appResponse.apps);
       setMcpCatalog(catalogResponse.integrations);
       setMcpProfiles(profileResponse.profiles);
-      setMcpSessionsByProfile(
-        Object.fromEntries(
-          sessionResponse.sessions.map((session) => [session.mcpProfileId, session]),
-        ),
-      );
 
       const githubApp = appResponse.apps.find((candidate) => candidate.kind === 'github');
       if (githubApp?.knowledge.hasCredentials) {
@@ -274,7 +257,6 @@ export function AppManager() {
       await api.mcp.createProfile({
         integrationKind: entry.kind,
         profileLabel: profileLabel.trim(),
-        authMode: 'embedded_browser',
       });
       await load(false);
     } catch (error) {
@@ -285,27 +267,6 @@ export function AppManager() {
         error,
       });
       setActionError(error instanceof Error ? error.message : 'Failed to create app');
-    }
-  };
-
-  const openSignInSession = async (profile: McpProfileSummary) => {
-    setActionError(null);
-
-    try {
-      const response = await api.mcp.createBrowserSession(profile.id, {
-        purpose: 'sign_in',
-        conversationId: currentConversationId,
-      });
-      router.push(`/chat?browserSessionId=${response.session.id}`);
-      await load(false);
-    } catch (error) {
-      void reportClientError({
-        event: 'client.mcp.browser_session_start_failed',
-        component: 'app-manager',
-        message: `Failed to start browser session for ${profile.id}`,
-        error,
-      });
-      setActionError(error instanceof Error ? error.message : 'Failed to open browser session');
     }
   };
 
@@ -589,7 +550,7 @@ export function AppManager() {
               >
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                   <div className="max-w-2xl">
-                    <p className="text-lg font-semibold text-foreground">Browser Profiles</p>
+                    <p className="text-lg font-semibold text-foreground">{entry.displayName}</p>
                     <p className="mt-1 text-sm text-foreground-muted">{entry.description}</p>
                   </div>
 
@@ -606,8 +567,6 @@ export function AppManager() {
                 {profiles.length > 0 ? (
                   <div className="mt-4 space-y-3">
                     {profiles.map((profile) => {
-                      const session = mcpSessionsByProfile[profile.id];
-
                       return (
                         <div
                           key={profile.id}
@@ -634,12 +593,6 @@ export function AppManager() {
                                 </button>
                               ) : null}
                               <button
-                                onClick={() => void openSignInSession(profile)}
-                                className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover"
-                              >
-                                Open sign-in session
-                              </button>
-                              <button
                                 onClick={() => void deleteMcpProfile(profile)}
                                 className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error"
                               >
@@ -648,12 +601,6 @@ export function AppManager() {
                             </div>
                           </div>
 
-                          {session ? (
-                            <p className="mt-3 text-foreground-muted">
-                              Browser session: {session.status} until{' '}
-                              {formatTimestamp(session.expiresAt)}
-                            </p>
-                          ) : null}
                         </div>
                       );
                     })}

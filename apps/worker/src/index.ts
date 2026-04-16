@@ -1,6 +1,5 @@
 import { withLogContext } from '@aaa/observability';
 import { closePool } from '@aaa/db';
-import { closeMcpRuntime } from '@aaa/mcp';
 import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
 import { closeJobQueues } from './lib/job-queues.js';
@@ -58,7 +57,6 @@ async function main() {
     });
     await Promise.all(workers.map(w => w.close()));
     await closeJobQueues();
-    await closeMcpRuntime();
     await closePool();
     await shutdownTracing();
     logger.info(

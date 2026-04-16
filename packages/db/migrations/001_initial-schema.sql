@@ -86,27 +86,6 @@ CREATE TABLE mcp_profiles (
   UNIQUE(user_id, integration_kind, profile_label)
 );
 
-CREATE TABLE browser_sessions (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  mcp_profile_id UUID NOT NULL REFERENCES mcp_profiles(id) ON DELETE CASCADE,
-  message_id UUID REFERENCES messages(id) ON DELETE SET NULL,
-  purpose TEXT NOT NULL DEFAULT 'manual',
-  status TEXT NOT NULL DEFAULT 'pending',
-  conversation_id UUID REFERENCES conversations(id) ON DELETE SET NULL,
-  tool_execution_id UUID,
-  selected_page_id TEXT,
-  metadata JSONB NOT NULL DEFAULT '{}',
-  owner_api_instance_id TEXT,
-  owner_api_instance_url TEXT,
-  last_client_seen_at TIMESTAMPTZ,
-  last_frame_at TIMESTAMPTZ,
-  expires_at TIMESTAMPTZ NOT NULL,
-  ended_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES users(id),
@@ -220,17 +199,6 @@ CREATE INDEX idx_app_capability_configs_user ON app_capability_configs(user_id);
 CREATE INDEX idx_app_sync_runs_user_kind_started
   ON app_sync_runs(user_id, app_kind, capability, started_at DESC);
 CREATE INDEX idx_mcp_profiles_user ON mcp_profiles(user_id);
-CREATE INDEX idx_browser_sessions_profile
-  ON browser_sessions(mcp_profile_id, created_at DESC);
-CREATE INDEX idx_browser_sessions_user_status_updated
-  ON browser_sessions(user_id, status, updated_at DESC);
-CREATE INDEX idx_browser_sessions_message
-  ON browser_sessions(message_id);
-CREATE INDEX idx_browser_sessions_owner_status
-  ON browser_sessions(owner_api_instance_id, status);
-CREATE UNIQUE INDEX idx_browser_sessions_active_profile
-  ON browser_sessions(mcp_profile_id)
-  WHERE status IN ('pending', 'active');
 CREATE UNIQUE INDEX idx_mcp_profiles_default
   ON mcp_profiles(user_id, integration_kind)
   WHERE is_default = TRUE;

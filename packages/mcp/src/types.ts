@@ -5,18 +5,18 @@ export interface UnifiedToolDescriptor {
   origin: 'native' | 'mcp';
   mcpServerId?: string;
   mcpProfileId?: string;
-  integrationKind?: 'playwright';
+  integrationKind?: string;
   profileLabel?: string;
   requiresApproval: boolean;
 }
 
 export interface McpCatalogEntry {
-  kind: 'playwright';
+  kind: string;
   displayName: string;
   description: string;
   supportsMultipleProfiles: boolean;
   requiresDefaultProfile: boolean;
-  authModes: Array<'embedded_browser' | 'stored_secret'>;
+  authModes: string[];
 }
 
 export interface RuntimeMcpProfile {

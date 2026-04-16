@@ -116,26 +116,6 @@ function extractTextFromContent(content: unknown[]): string {
       continue;
     }
 
-    if (type === 'browser_session') {
-      const purpose = typeof block.purpose === 'string' ? block.purpose : 'manual';
-      const status = typeof block.status === 'string' ? block.status : 'pending';
-      const profileLabel =
-        typeof block.profileLabel === 'string' && block.profileLabel.trim().length > 0
-          ? block.profileLabel.trim()
-          : null;
-      const purposeLabel =
-        purpose === 'sign_in'
-          ? 'Browser sign-in session'
-          : purpose === 'handoff'
-            ? 'Browser handoff session'
-            : 'Browser session';
-
-      parts.push(
-        profileLabel
-          ? `${purposeLabel} on ${profileLabel} is ${status}.`
-          : `${purposeLabel} is ${status}.`,
-      );
-    }
   }
 
   const toolSummary = summarizeToolContent(content, { terminalOnly: true });
@@ -246,7 +226,6 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
   const repoSuffix = repo ? ` in ${repo}` : '';
   const pullNumber = getNumberField(input, 'pullNumber');
   const pullSuffix = pullNumber !== null ? ` for PR #${pullNumber}` : '';
-  const profileSuffix = tool.profileLabel ? ` using ${tool.profileLabel}` : '';
 
   switch (tool.name) {
     case 'external.execute': {
@@ -305,38 +284,6 @@ function buildApprovalDescription(tool: AvailableTool, input: Record<string, unk
     }
     case 'google_docs.batch_update_document':
       return 'Allow updating this Google Doc';
-    case 'playwright.navigate':
-      return `Allow navigating the browser${profileSuffix}`;
-    case 'playwright.extract_text':
-      return `Allow reading page text${profileSuffix}`;
-    case 'playwright.search_web': {
-      const query = getStringField(input, 'query');
-      return query
-        ? `Allow searching the web for "${truncateLabel(query)}"${profileSuffix}`
-        : `Allow searching the web${profileSuffix}`;
-    }
-    case 'playwright.screenshot':
-      return `Allow capturing a screenshot${profileSuffix}`;
-    case 'playwright.click': {
-      const selector = getStringField(input, 'selector');
-      return selector
-        ? `Allow clicking "${selector}"${profileSuffix}`
-        : `Allow clicking in the browser${profileSuffix}`;
-    }
-    case 'playwright.fill': {
-      const selector = getStringField(input, 'selector');
-      return selector
-        ? `Allow filling "${selector}"${profileSuffix}`
-        : `Allow filling a browser input${profileSuffix}`;
-    }
-    case 'playwright.submit_form':
-      return `Allow submitting a browser form${profileSuffix}`;
-    case 'playwright.login_with_profile': {
-      const profileName = getStringField(input, 'profileName');
-      return profileName
-        ? `Allow browser login with profile "${profileName}"${profileSuffix}`
-        : `Allow browser login${profileSuffix}`;
-    }
     default:
       return `Allow ${tool.description.charAt(0).toLowerCase()}${tool.description.slice(1)}`;
   }
@@ -880,7 +827,7 @@ export class ChatService {
         ),
       );
       const activeMcpProfiles = (await mcpProfileRepository.listConnectedByUser(userId)).map(
-        (profile) => `Browser profile (${profile.integrationKind}): ${profile.profileLabel}`,
+        (profile) => `MCP profile (${profile.integrationKind}): ${profile.profileLabel}`,
       );
       activeApps.push(...activeMcpProfiles);
       throwIfAborted(signal);

@@ -10,8 +10,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@aaa/observability": "workspace:*",
-    "playwright": "^1.55.0"
+    "@aaa/observability": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

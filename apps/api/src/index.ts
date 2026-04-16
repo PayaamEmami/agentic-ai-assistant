@@ -8,13 +8,11 @@ import { initializeApiTelemetry } from './lib/telemetry.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
 import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
 import { closeAppSyncQueue } from './services/app-queue.js';
-import { closeBrowserSessionManager, getBrowserSessionManager } from './services/browser-session-manager.js';
 
 async function main() {
   const config = loadConfig();
   await initializeApiTelemetry();
   getPool();
-  await getBrowserSessionManager().initialize();
   await startToolEventRelay();
   const server = await buildServer(config);
   let shuttingDown = false;
@@ -39,7 +37,6 @@ async function main() {
       await server.close();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
-      await closeBrowserSessionManager();
       await closeMcpRuntime();
       await stopToolEventRelay();
       await closePool();
@@ -99,7 +96,6 @@ async function main() {
     );
     await closeToolExecutionQueue();
     await closeAppSyncQueue();
-    await closeBrowserSessionManager();
     await closeMcpRuntime();
     await stopToolEventRelay();
     await closePool();

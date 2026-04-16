@@ -48,19 +48,6 @@ export interface TranscriptContent {
   durationMs: number;
 }
 
-export interface BrowserSessionContent {
-  type: 'browser_session';
-  browserSessionId: string;
-  mcpProfileId: string;
-  purpose: 'sign_in' | 'manual' | 'handoff';
-  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
-  profileLabel?: string;
-  handoffReason?: string | null;
-  terminalReason?: string | null;
-  expiresAt?: string | null;
-  endedAt?: string | null;
-}
-
 export interface ToolResultContent {
   type: 'tool_result';
   toolExecutionId?: string;
@@ -80,7 +67,6 @@ export type MessageContent =
   | TextContent
   | AttachmentRefContent
   | TranscriptContent
-  | BrowserSessionContent
   | ToolResultContent
   | CitationContent;
 
@@ -234,27 +220,6 @@ export interface McpProfile {
   settings: Record<string, unknown>;
   lastError: string | null;
   isDefault: boolean;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface McpBrowserSession {
-  id: string;
-  userId: string;
-  mcpProfileId: string;
-  messageId: string | null;
-  purpose: 'sign_in' | 'manual' | 'handoff';
-  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'expired' | 'failed' | 'crashed';
-  conversationId: string | null;
-  toolExecutionId: string | null;
-  selectedPageId: string | null;
-  metadata: Record<string, unknown>;
-  ownerApiInstanceId: string | null;
-  ownerApiInstanceUrl: string | null;
-  lastClientSeenAt: Date | null;
-  lastFrameAt: Date | null;
-  expiresAt: Date;
-  endedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }

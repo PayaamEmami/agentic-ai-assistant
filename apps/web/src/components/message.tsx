@@ -5,7 +5,6 @@ import {
   type MessageContentBlock,
   useChatContext,
 } from '@/lib/chat-context';
-import { BrowserSessionMessage } from './browser-session-message';
 import { CitationCard } from './citation-card';
 
 interface MessageProps {
@@ -95,8 +94,6 @@ export function Message({ role, content }: MessageProps) {
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
   );
   const primaryContent = visibleContent.filter((block) => block.type !== 'status');
-  const isBrowserOnlyMessage =
-    primaryContent.length > 0 && primaryContent.every((block) => block.type === 'browser_session');
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
@@ -206,10 +203,6 @@ export function Message({ role, content }: MessageProps) {
       );
     }
 
-    if (block.type === 'browser_session') {
-      return <BrowserSessionMessage key={index} block={block} />;
-    }
-
     if (block.type === 'status') {
       return (
         <div
@@ -233,9 +226,7 @@ export function Message({ role, content }: MessageProps) {
     ? 'max-w-[70%] rounded-lg bg-accent px-4 py-2 text-sm text-white'
     : isSystem
       ? 'max-w-[70%] rounded-lg border border-border-subtle bg-surface-input/70 px-4 py-2 text-sm text-foreground-muted space-y-2'
-      : isBrowserOnlyMessage
-        ? 'w-full max-w-[min(52rem,100%)] text-sm text-foreground space-y-2'
-        : 'max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground space-y-2';
+      : 'max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground space-y-2';
 
   return (
     <div

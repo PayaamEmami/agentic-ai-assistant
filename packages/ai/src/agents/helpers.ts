@@ -107,29 +107,9 @@ export function shouldDelegateToTool(context: AgentContext): boolean {
 }
 
 export function buildExplicitToolCallForRequest(
-  context: AgentContext,
+  _context: AgentContext,
 ): AgentResult['toolCalls'][number] | null {
-  if (!hasAvailableTool(context, 'playwright.search_web')) {
-    return null;
-  }
-
-  const latestMessage = latestUserMessage(context);
-  if (!isExplicitPlaywrightWebSearchRequest(latestMessage)) {
-    return null;
-  }
-
-  const query = extractWebSearchQuery(latestMessage);
-  if (!query) {
-    return null;
-  }
-
-  return {
-    name: 'playwright.search_web',
-    arguments: {
-      query,
-      maxResults: wantsFirstResult(latestMessage) ? 1 : 5,
-    },
-  };
+  return null;
 }
 
 const CODING_HINTS = [
@@ -190,69 +170,6 @@ function parseToolArguments(argumentsJson: string): Record<string, unknown> {
   } catch {
     return { rawArguments: argumentsJson };
   }
-}
-
-function hasAvailableTool(context: AgentContext, name: string): boolean {
-  return context.availableTools.some(
-    (tool) => (typeof tool === 'string' ? tool : tool.name) === name,
-  );
-}
-
-function isExplicitPlaywrightWebSearchRequest(message: string): boolean {
-  const normalized = message.toLowerCase();
-  if (!normalized) {
-    return false;
-  }
-
-  const mentionsSearchIntent = /\b(search|look up|lookup|browse|searching)\b/.test(normalized);
-  const mentionsBrowserTool =
-    normalized.includes('playwright') ||
-    normalized.includes('browser tool') ||
-    normalized.includes('browser automation');
-  const mentionsWebSearchContext =
-    /\b(web|internet|online|search engine|first result|top result)\b/.test(normalized);
-
-  return mentionsSearchIntent && (mentionsBrowserTool || mentionsWebSearchContext);
-}
-
-function extractWebSearchQuery(message: string): string | null {
-  const quoted = Array.from(message.matchAll(/"([^"]+)"/g))
-    .map((match) => match[1]?.trim())
-    .filter((value): value is string => Boolean(value));
-  if (quoted.length > 0) {
-    return quoted[quoted.length - 1] ?? null;
-  }
-
-  const patterns = [
-    /\bsearch(?:\s+(?:the\s+)?(?:web|internet)|\s+online)?\s+(?:for|about)\s+(.+)$/i,
-    /\b(?:web|internet|online)\s+search\s+(?:for|about)\s+(.+)$/i,
-    /\blook\s*up\s+(?:online|on\s+the\s+web|on\s+the\s+internet)?\s*(.+)$/i,
-    /\bsearching\s+(.+)$/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = message.match(pattern);
-    const candidate = cleanSearchQuery(match?.[1]);
-    if (candidate) {
-      return candidate;
-    }
-  }
-
-  return null;
-}
-
-function cleanSearchQuery(value: string | undefined): string | null {
-  const normalized = value
-    ?.replace(/\s+(?:and|then)\b.*$/i, '')
-    .replace(/^[\s"']+|[\s"'.?!]+$/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  return normalized && normalized.length > 0 ? normalized : null;
-}
-
-function wantsFirstResult(message: string): boolean {
-  return /\b(first|top)\s+(?:web\s+)?result\b/i.test(message);
 }
 
 function normalizeRole(role: string): ChatMessage['role'] {

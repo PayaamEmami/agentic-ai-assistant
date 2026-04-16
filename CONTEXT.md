@@ -38,7 +38,7 @@ Shared packages:
 - `packages/shared`: shared types, DTOs, schemas, enums
 - `packages/ai`: prompts, model gateway, orchestration logic
 - `packages/tool-providers`: native tool providers used by tool execution
-- `packages/mcp`: per-user MCP runtime and built-in integrations
+- `packages/mcp`: per-user MCP runtime shell for future integrations
 - `packages/retrieval`: chunking, embeddings, indexing, search
 - `packages/knowledge-sources`: retrieval-oriented external source integrations and credential helpers
 - `packages/memory`: personalization and memory logic
@@ -130,7 +130,7 @@ See `.env.example` for the full template.
 
 ## Logging Notes
 
-The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, the per-user MCP path, OpenAI boundaries, and selected browser failures.
+The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, the per-user MCP path, and OpenAI boundaries.
 
 Local logging defaults:
 
@@ -189,7 +189,7 @@ At a high level, the assistant currently supports:
 - RAG over connected sources
 - Native tool execution with approval flow
 - Provider apps with separate knowledge and tool capabilities under one connection
-- Per-user MCP support via `packages/mcp`, beginning with Playwright browser automation
+- Per-user MCP support via `packages/mcp`; no built-in MCP integrations are currently enabled
 - A small multi-agent pattern with orchestrator, research, tool, and verifier roles
 
 ## Maintenance

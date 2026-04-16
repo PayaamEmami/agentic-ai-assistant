@@ -51,10 +51,7 @@ export const AppCapability = {
 } as const;
 export type AppCapability = (typeof AppCapability)[keyof typeof AppCapability];
 
-export const McpIntegrationKind = {
-  Playwright: 'playwright',
-} as const;
-export type McpIntegrationKind = (typeof McpIntegrationKind)[keyof typeof McpIntegrationKind];
+export type McpIntegrationKind = string;
 
 export const MemoryKind = {
   Fact: 'fact',

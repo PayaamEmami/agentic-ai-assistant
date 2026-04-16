@@ -15,7 +15,6 @@
     "@aaa/ai": "workspace:*",
     "@aaa/knowledge-sources": "workspace:*",
     "@aaa/db": "workspace:*",
-    "@aaa/mcp": "workspace:*",
     "@aaa/observability": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",

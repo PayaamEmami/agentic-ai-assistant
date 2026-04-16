@@ -47,15 +47,6 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
   sections.push(
     'When the user explicitly asks you to use an available tool by name or capability, use that tool unless the request is unsafe or a required input is missing. Do not answer from memory while implying that tool or live access happened.',
   );
-  sections.push(
-    'If a Playwright browser task hits sign-in, CAPTCHA, MFA, consent, or another manual step, prefer the `playwright.start_handoff` tool over telling the user to visit the Apps page.',
-  );
-  sections.push(
-    'Use `playwright.search_web` for browser-backed public web searches, especially when the user asks for search results or the first/top result.',
-  );
-  sections.push(
-    'A browser profile is durable saved browser state. A browser session is a temporary live interactive browser.',
-  );
 
   return sections.join('\n\n');
 }
@@ -86,12 +77,10 @@ Role instructions (research):
 Role instructions (tool):
 - Focus on planning and executing tool calls needed to satisfy the request.
 - Return precise tool inputs and report outcomes clearly.
-- If the user explicitly asked for Playwright, browser automation, web search through the browser, or another available tool capability, call the matching tool instead of giving a model-only answer.
-- Prefer "playwright.search_web" for browser-backed public web searches and first-result requests.
+- If the user explicitly asked for an available tool by name or capability, call the matching tool instead of giving a model-only answer.
 - When a selected tool requires approval, prepare the tool call and rely on the system approval flow instead of asking for separate verbal confirmation.
 - If a GitHub task refers to "my repo" or gives only a repo name, try resolving it through the authenticated GitHub tools before asking the user for owner/repo.
 - Only ask the user for a full GitHub owner/repo identifier when repo resolution is ambiguous or no accessible repo matches.
-- Use "playwright.start_handoff" when a browser workflow needs the user to complete a manual step in a live session.
 - Avoid unsupported claims; rely on tool outputs.`;
     case 'coding':
       return `${basePrompt}

@@ -12,7 +12,7 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 | Cache/Queue    | Redis 7, BullMQ                                |
 | Storage        | AWS S3                                         |
 | AI             | OpenAI API                                     |
-| Tools          | Native tool handlers, per-user MCP integrations |
+| Tools          | Native tool handlers, provider tools, MCP shell |
 | Infrastructure | AWS, Terraform, Docker, Kubernetes             |
 | Monorepo       | pnpm workspaces                                |
 
@@ -47,7 +47,8 @@ Current behavior:
 The assistant exposes a unified tool surface that can include both:
 
 - **Native tools** — Built-in functions with direct handlers; this is the primary tool path today
-- **MCP tools** — First-party per-user integrations managed by the app, starting with Playwright browser automation
+- **Provider tools** — GitHub and Google tools backed by connected provider apps
+- **MCP tools** — A first-party per-user integration shell reserved for future tool integrations
 
 Tools requiring user confirmation go through an approval flow before execution.
 
@@ -64,7 +65,7 @@ Current live voice behavior:
 
 - Automatic turn detection and interruption are enabled
 - Live voice is conversational-only in v1
-- Native tools, approvals, per-user MCP tools, and retrieval stay available in text chat
+- Native tools, provider tools, approvals, and retrieval stay available in text chat
 
 ## Infrastructure
 
@@ -116,7 +117,7 @@ kubectl apply -f infra/kubernetes/
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
 │   ├── ai/                   # Model gateway, prompts, agent orchestration
 │   ├── tool-providers/       # Native tool providers used by tool execution
-│   ├── mcp/                  # Per-user MCP runtime and built-in integrations
+│   ├── mcp/                  # Per-user MCP runtime shell for future integrations
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
 │   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
 │   ├── memory/               # Preferences, personalization, memory
@@ -163,12 +164,6 @@ See `.env.example` for the full template.
 ```bash
 pnpm install
 ```
-
-### Reset Local Database After MCP Schema Changes
-
-The MCP profile and browser session rename updates the initial schema directly and assumes a local database reset instead of backward-compatibility migrations.
-
-If you already have a local database from an older build, drop and recreate it before starting the app again.
 
 ### Start The App
 

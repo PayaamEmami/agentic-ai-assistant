@@ -169,17 +169,17 @@ export interface GitHubRepositorySummary {
 }
 
 export interface McpCatalogEntrySummary {
-  kind: 'playwright';
+  kind: string;
   displayName: string;
   description: string;
   supportsMultipleProfiles: boolean;
   requiresDefaultProfile: boolean;
-  authModes: Array<'embedded_browser' | 'stored_secret'>;
+  authModes: string[];
 }
 
 export interface McpProfileSummary {
   id: string;
-  integrationKind: 'playwright';
+  integrationKind: string;
   profileLabel: string;
   status: 'pending' | 'connected' | 'failed';
   hasCredentials: boolean;
@@ -211,38 +211,6 @@ export interface AppSummary {
   selectedRepoCount?: number;
   knowledge: AppCapabilitySummary;
   tools: AppCapabilitySummary;
-}
-
-export interface BrowserPageSummary {
-  id: string;
-  url: string;
-  title: string;
-  isSelected: boolean;
-}
-
-export interface McpBrowserSessionSummary {
-  id: string;
-  userId: string;
-  mcpProfileId: string;
-  messageId: string | null;
-  purpose: 'sign_in' | 'manual' | 'handoff';
-  status: 'pending' | 'active' | 'completed' | 'cancelled' | 'failed' | 'expired' | 'crashed';
-  conversationId: string | null;
-  toolExecutionId: string | null;
-  selectedPageId: string | null;
-  metadata: Record<string, unknown>;
-  lastClientSeenAt: string | null;
-  lastFrameAt: string | null;
-  expiresAt: string;
-  endedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface BrowserSessionListFilters {
-  conversationId?: string;
-  includeEnded?: boolean;
-  limit?: number;
 }
 
 export type PersonalizationMemoryKind =
@@ -280,18 +248,6 @@ export function buildWebSocketUrl(
   const base = new URL(API_BASE);
   base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
   base.pathname = '/ws/events';
-  base.searchParams.set('token', token);
-  base.searchParams.set('correlationId', correlationId);
-  return base.toString();
-}
-
-export function buildBrowserWebSocketUrl(
-  token: string,
-  correlationId = createCorrelationId('browser-ws'),
-): string {
-  const base = new URL(API_BASE);
-  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
-  base.pathname = '/ws/browser';
   base.searchParams.set('token', token);
   base.searchParams.set('correlationId', correlationId);
   return base.toString();
@@ -454,9 +410,9 @@ export const api = {
       return request<{ profiles: McpProfileSummary[] }>('/api/mcp/profiles');
     },
     createProfile(input: {
-      integrationKind: 'playwright';
+      integrationKind: string;
       profileLabel: string;
-      authMode?: 'embedded_browser' | 'stored_secret';
+      authMode?: string;
       secretProfile?: Record<string, unknown>;
     }) {
       return request<{ profile: McpProfileSummary }>('/api/mcp/profiles', {
@@ -476,62 +432,6 @@ export const api = {
       return request<{ ok: true }>(`/api/mcp/profiles/${id}`, {
         method: 'DELETE',
       });
-    },
-    listBrowserSessions(filters?: BrowserSessionListFilters) {
-      const params = new URLSearchParams();
-      if (filters?.conversationId) {
-        params.set('conversationId', filters.conversationId);
-      }
-      if (filters?.includeEnded) {
-        params.set('includeEnded', 'true');
-      }
-      if (typeof filters?.limit === 'number' && Number.isFinite(filters.limit)) {
-        params.set('limit', String(filters.limit));
-      }
-      const search = params.toString();
-      return request<{ sessions: McpBrowserSessionSummary[] }>(
-        `/api/mcp/browser-sessions${search ? `?${search}` : ''}`,
-      );
-    },
-    createBrowserSession(
-      profileId: string,
-      input: {
-        purpose?: 'sign_in' | 'manual' | 'handoff';
-        conversationId?: string;
-        toolExecutionId?: string;
-      },
-    ) {
-      return request<{
-        session: McpBrowserSessionSummary;
-        pages: BrowserPageSummary[];
-      }>(`/api/mcp/profiles/${profileId}/browser-sessions`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      });
-    },
-    getBrowserSession(id: string) {
-      return request<{
-        session: McpBrowserSessionSummary;
-        pages: BrowserPageSummary[];
-      }>(`/api/mcp/browser-sessions/${id}`);
-    },
-    persistBrowserSession(id: string, persistAsDefault = true) {
-      return request<{
-        session: McpBrowserSessionSummary;
-        profile: McpProfileSummary;
-        pages: BrowserPageSummary[];
-      }>(`/api/mcp/browser-sessions/${id}/persist`, {
-        method: 'POST',
-        body: JSON.stringify({ persistAsDefault }),
-      });
-    },
-    cancelBrowserSession(id: string) {
-      return request<{ ok: true; session: McpBrowserSessionSummary }>(
-        `/api/mcp/browser-sessions/${id}/cancel`,
-        {
-          method: 'POST',
-        },
-      );
     },
   },
   voice: {
