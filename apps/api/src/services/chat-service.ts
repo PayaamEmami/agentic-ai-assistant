@@ -19,26 +19,28 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import { decryptCredentials } from '@aaa/knowledge-sources';
 import { getLogContext } from '@aaa/observability';
 import {
-  getMcpRuntime,
-  type RuntimeMcpProfile,
-  type UnifiedToolDescriptor,
-} from '@aaa/mcp';
-import {
-  NATIVE_TOOL_DEFINITIONS,
   type ApprovalRequestedEvent,
   type AssistantInterruptedEvent,
   type AssistantTextDoneEvent,
   type InterruptChatRunResponse,
 } from '@aaa/shared';
+import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
+import { buildApprovalDescription } from './tool-call-service.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
-import type { RetrievalCitation, RetrievalResponse } from './retrieval-bridge.js';
+import type { RetrievalResponse } from './retrieval-bridge.js';
 import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
 import { decideRetrieval } from './retrieval-policy.js';
+import {
+  appLabel,
+  buildRetrievalContextSections,
+  extractExplicitCitationIndexes,
+  selectDisplayedCitations,
+  toCitationContentBlocks,
+} from './retrieval-helpers.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
@@ -46,7 +48,6 @@ const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
-const MAX_CITATIONS = 6;
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'Review the pending approval request below to continue.';
@@ -65,16 +66,6 @@ const activeChatRuns = new Map<string, ActiveChatRun>();
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
 type AgentToolCall = { name: string; arguments: Record<string, unknown> };
-type AvailableTool = {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  requiresApproval: boolean;
-  origin: 'native' | 'mcp';
-  mcpProfileId?: string;
-  integrationKind?: string;
-  profileLabel?: string;
-};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -203,91 +194,6 @@ function summarizeToolContent(
   return summaries.join('\n').trim();
 }
 
-function getStringField(input: Record<string, unknown>, key: string): string | null {
-  const value = input[key];
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-}
-
-function getNumberField(input: Record<string, unknown>, key: string): number | null {
-  const value = input[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : null;
-}
-
-function truncateLabel(value: string, maxLength = 80): string {
-  if (value.length <= maxLength) {
-    return value;
-  }
-
-  return `${value.slice(0, maxLength - 3).trimEnd()}...`;
-}
-
-function buildApprovalDescription(tool: AvailableTool, input: Record<string, unknown>): string {
-  const repo = getStringField(input, 'repo');
-  const repoSuffix = repo ? ` in ${repo}` : '';
-  const pullNumber = getNumberField(input, 'pullNumber');
-  const pullSuffix = pullNumber !== null ? ` for PR #${pullNumber}` : '';
-
-  switch (tool.name) {
-    case 'external.execute': {
-      const operation = getStringField(input, 'operation');
-      return operation
-        ? `Allow external action: ${operation}`
-        : 'Allow this external action';
-    }
-    case 'github.create_pull_request':
-      return `Allow creating a pull request${repoSuffix}`;
-    case 'github.update_pull_request':
-      return `Allow updating a pull request${pullSuffix}${repoSuffix}`;
-    case 'github.add_pull_request_comment':
-      return `Allow posting a pull request comment${pullSuffix}${repoSuffix}`;
-    case 'github.reply_to_review_comment':
-      return `Allow replying to a review comment${pullSuffix}${repoSuffix}`;
-    case 'github.submit_pull_request_review': {
-      const event = getStringField(input, 'event');
-      if (event === 'APPROVE') {
-        return `Allow approving a pull request${pullSuffix}${repoSuffix}`;
-      }
-      if (event === 'REQUEST_CHANGES') {
-        return `Allow requesting changes on a pull request${pullSuffix}${repoSuffix}`;
-      }
-      return `Allow submitting a pull request review${pullSuffix}${repoSuffix}`;
-    }
-    case 'github.coding_task': {
-      const task = getStringField(input, 'task');
-      return task
-        ? `Allow running this coding task${repoSuffix}: ${truncateLabel(task)}`
-        : `Allow running this coding task${repoSuffix}`;
-    }
-    case 'google_drive.create_text_file': {
-      const name = getStringField(input, 'name');
-      return name
-        ? `Allow creating "${name}" in Google Drive`
-        : 'Allow creating a file in Google Drive';
-    }
-    case 'google_drive.update_text_file':
-      return 'Allow updating this Google Drive file';
-    case 'google_drive.rename_file': {
-      const name = getStringField(input, 'name');
-      return name
-        ? `Allow renaming this Google Drive file to "${name}"`
-        : 'Allow renaming this Google Drive file';
-    }
-    case 'google_drive.move_file':
-      return 'Allow moving this Google Drive file';
-    case 'google_drive.trash_file':
-      return 'Allow moving this Google Drive file to trash';
-    case 'google_docs.create_document': {
-      const title = getStringField(input, 'title');
-      return title
-        ? `Allow creating the Google Doc "${title}"`
-        : 'Allow creating a Google Doc';
-    }
-    case 'google_docs.batch_update_document':
-      return 'Allow updating this Google Doc';
-    default:
-      return `Allow ${tool.description.charAt(0).toLowerCase()}${tool.description.slice(1)}`;
-  }
-}
 
 async function toAgentHistoryMessages(
   messages: DbMessage[],
@@ -381,106 +287,6 @@ async function toAgentHistoryMessages(
     .filter((message): message is AgentHistoryMessage => message !== null);
 }
 
-function toCitationContentBlocks(citations: RetrievalCitation[]): Array<Record<string, unknown>> {
-  return citations.slice(0, MAX_CITATIONS).map((citation) => ({
-    type: 'citation',
-    sourceId: citation.sourceId,
-    title: citation.documentTitle,
-    excerpt: citation.excerpt,
-    uri: citation.uri,
-    score: citation.score,
-  }));
-}
-
-function truncateCitationExcerpt(content: string, maxLength = 300): string {
-  const normalized = content.trim();
-  if (normalized.length <= maxLength) {
-    return normalized;
-  }
-
-  const slice = normalized.slice(0, maxLength);
-  const lastSpace = slice.lastIndexOf(' ');
-  if (lastSpace <= 0) {
-    return slice.trimEnd();
-  }
-
-  return slice.slice(0, lastSpace).trimEnd();
-}
-
-function extractExplicitCitationIndexes(text: string): number[] {
-  const matches = text.matchAll(/\[Sources?\s+([^\]]+)\]/gi);
-  const indexes = new Set<number>();
-
-  for (const match of matches) {
-    const body = match[1];
-    if (!body) {
-      continue;
-    }
-
-    const numberMatches = body.matchAll(/\d+/g);
-    for (const numberMatch of numberMatches) {
-      const rawValue = numberMatch[0];
-      if (!rawValue) {
-        continue;
-      }
-
-      const parsed = Number.parseInt(rawValue, 10);
-      if (Number.isInteger(parsed) && parsed > 0) {
-        indexes.add(parsed);
-      }
-    }
-  }
-
-  return Array.from(indexes).sort((a, b) => a - b);
-}
-
-function selectDisplayedCitations(
-  assistantResponse: string,
-  retrieval: RetrievalResponse,
-): RetrievalCitation[] {
-  const citedIndexes = extractExplicitCitationIndexes(assistantResponse);
-  if (citedIndexes.length === 0) {
-    return [];
-  }
-
-  const citationsBySource = new Map<string, RetrievalCitation>();
-
-  for (const citedIndex of citedIndexes) {
-    const result = retrieval.results[citedIndex - 1];
-    if (!result) {
-      continue;
-    }
-
-    const citation: RetrievalCitation = {
-      sourceId: result.sourceId,
-      chunkId: result.chunkId,
-      documentTitle: result.documentTitle,
-      excerpt: truncateCitationExcerpt(result.content),
-      score: result.score,
-      uri: result.uri,
-    };
-
-    const current = citationsBySource.get(citation.sourceId);
-    if (!current || citation.score > current.score) {
-      citationsBySource.set(citation.sourceId, citation);
-    }
-  }
-
-  return Array.from(citationsBySource.values())
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_CITATIONS);
-}
-
-function toNativeAvailableTools(): AvailableTool[] {
-  return NATIVE_TOOL_DEFINITIONS.map((tool) => ({
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
-    requiresApproval: tool.requiresApproval,
-    origin: 'native',
-  }));
-}
-
 function toAgentToolContexts(tools: AvailableTool[]) {
   return tools.map((tool) => ({
     name: tool.name,
@@ -488,17 +294,6 @@ function toAgentToolContexts(tools: AvailableTool[]) {
     parameters: tool.parameters,
     requiresApproval: tool.requiresApproval,
   }));
-}
-
-function appLabel(kind: string): string {
-  switch (kind) {
-    case 'github':
-      return 'GitHub';
-    case 'google':
-      return 'Google';
-    default:
-      return kind;
-  }
 }
 
 function buildConversationTitle(content: string): string | undefined {
@@ -534,70 +329,6 @@ function normalizeAssistantResponse(
 function getLatestUserRequestText(messages: DbMessage[]): string {
   const latestUser = [...messages].reverse().find((message) => message.role === 'user');
   return latestUser ? extractTextFromContent(latestUser.content) : '';
-}
-
-function toRuntimeMcpProfile(
-  profile: Awaited<ReturnType<typeof mcpProfileRepository.listConnectedByUser>>[number],
-): RuntimeMcpProfile {
-  return {
-    id: profile.id,
-    userId: profile.userId,
-    integrationKind: profile.integrationKind as RuntimeMcpProfile['integrationKind'],
-    profileLabel: profile.profileLabel,
-    status: profile.status,
-    settings: profile.settings,
-    credentials: decryptCredentials(profile.encryptedCredentials),
-  };
-}
-
-async function loadAvailableTools(userId: string, requestContent: string): Promise<AvailableTool[]> {
-  const tools = [...toNativeAvailableTools()];
-
-  try {
-    const runtime = getMcpRuntime();
-    const connectedMcpProfiles = await mcpProfileRepository.listConnectedByUser(userId);
-    const requestContentLower = requestContent.toLowerCase();
-    const byKind = new Map<string, typeof connectedMcpProfiles>();
-
-    for (const profile of connectedMcpProfiles) {
-      const existing = byKind.get(profile.integrationKind) ?? [];
-      existing.push(profile);
-      byKind.set(profile.integrationKind, existing);
-    }
-
-    const selectedProfiles: RuntimeMcpProfile[] = [];
-    for (const profiles of byKind.values()) {
-      const explicit = profiles.find((profile) =>
-        requestContentLower.includes(profile.profileLabel.toLowerCase()),
-      );
-      const selected = explicit ?? profiles.find((profile) => profile.isDefault) ?? profiles[0];
-      if (selected) {
-        selectedProfiles.push(toRuntimeMcpProfile(selected));
-      }
-    }
-
-    const mcpTools = runtime
-      .listTools(selectedProfiles)
-      .map<AvailableTool>((tool) => toAvailableTool(tool));
-    tools.push(...mcpTools);
-  } catch {
-    // Fall back to native tools only if MCP loading fails.
-  }
-
-  return tools;
-}
-
-function toAvailableTool(tool: UnifiedToolDescriptor): AvailableTool {
-  return {
-    name: tool.name,
-    description: tool.description,
-    parameters: tool.parameters,
-    requiresApproval: tool.requiresApproval,
-    origin: tool.origin,
-    mcpProfileId: tool.mcpProfileId,
-    integrationKind: tool.integrationKind,
-    profileLabel: tool.profileLabel,
-  };
 }
 
 interface SendMessageOptions {
@@ -804,17 +535,7 @@ export class ChatService {
         : { results: [], citations: [] };
       throwIfAborted(signal);
 
-      const retrievalContext = retrieval.results.map((result) => {
-        const appKind = typeof result.metadata.appKind === 'string' ? result.metadata.appKind : null;
-        const lines = [
-          `Title: ${result.documentTitle}`,
-          appKind ? `App: ${appLabel(appKind)}` : null,
-          result.uri ? `URI: ${result.uri}` : null,
-          `Content:\n${result.content}`,
-        ].filter((line): line is string => line !== null);
-
-        return lines.join('\n');
-      });
+      const retrievalContext = buildRetrievalContextSections(retrieval);
 
       const personalContext = await this.personalizationService.getPersonalContext(userId);
       throwIfAborted(signal);
@@ -908,6 +629,7 @@ export class ChatService {
           tool.origin,
           tool.mcpProfileId ?? null,
           tool.integrationKind ?? null,
+          { originMode: 'text' },
         );
         toolExecutionIds.push(toolExecution.id);
 

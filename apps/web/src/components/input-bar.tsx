@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
+import { ApprovalCard } from './approval-card';
 
 const INDEXABLE_MIME_TYPES = new Set(['application/json', 'application/xml']);
 
@@ -27,18 +28,34 @@ export function InputBar() {
     startLiveVoiceSession,
     appendVoiceMessage,
     syncConversationState,
+    subscribeToolEvents,
+    pendingApprovals,
     loading,
   } = useChatContext();
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
+  const [focusRequestId, setFocusRequestId] = useState(0);
 
   const liveVoice = useLiveVoiceSession({
     startSession: startLiveVoiceSession,
     appendVoiceMessage,
     syncConversation: syncConversationState,
+    subscribeToolEvents,
   });
+
+  useEffect(() => {
+    if (focusRequestId === 0 || liveVoice.isActive) {
+      return;
+    }
+    const textarea = messageInputRef.current;
+    textarea?.focus();
+    if (textarea) {
+      const value = textarea.value;
+      textarea.setSelectionRange(value.length, value.length);
+    }
+  }, [focusRequestId, liveVoice.isActive]);
 
   useEffect(() => {
     const textarea = messageInputRef.current;
@@ -109,6 +126,30 @@ export function InputBar() {
     setAttachments((previous) => previous.filter((attachment) => attachment.id !== attachmentId));
   };
 
+  const voiceApprovalsByToolExecution = useMemo(() => {
+    const pendingExecutionIds = new Set(
+      liveVoice.pendingToolCalls
+        .filter((call) => call.status === 'requires_approval')
+        .map((call) => call.toolExecutionId),
+    );
+    return pendingApprovals.filter((approval) =>
+      pendingExecutionIds.has(approval.toolExecutionId),
+    );
+  }, [liveVoice.pendingToolCalls, pendingApprovals]);
+
+  const micDisabledReason = useMemo(() => {
+    if (loading.isSendingMessage) {
+      return 'End the current text response before starting voice.';
+    }
+    if (pendingApprovals.length > 0) {
+      return 'Resolve pending approvals before starting voice.';
+    }
+    if (loading.isUploadingAttachment) {
+      return 'Wait for attachment upload to finish before starting voice.';
+    }
+    return null;
+  }, [loading.isSendingMessage, loading.isUploadingAttachment, pendingApprovals.length]);
+
   if (liveVoice.isActive) {
     return (
       <section className="border-t border-border bg-surface-elevated p-4">
@@ -118,13 +159,29 @@ export function InputBar() {
               <p className="text-sm font-semibold text-foreground">Live Voice</p>
               <p className="mt-1 text-xs text-foreground-muted">{liveVoice.connectionLabel}</p>
             </div>
-            <button
-              type="button"
-              onClick={() => void liveVoice.stop()}
-              className="rounded-full border border-error/30 bg-error/10 px-4 py-2 text-xs font-medium text-error transition-colors hover:bg-error/20"
-            >
-              End voice mode
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const partial = liveVoice.userCaption.trim();
+                  void liveVoice.stop();
+                  if (partial) {
+                    setMessage((current) => (current.trim().length > 0 ? current : partial));
+                  }
+                  setFocusRequestId((value) => value + 1);
+                }}
+                className="rounded-full border border-border bg-surface-input px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
+              >
+                Switch to text
+              </button>
+              <button
+                type="button"
+                onClick={() => void liveVoice.stop()}
+                className="rounded-full border border-error/30 bg-error/10 px-4 py-2 text-xs font-medium text-error transition-colors hover:bg-error/20"
+              >
+                End voice mode
+              </button>
+            </div>
           </div>
 
           <div className="mt-4 grid gap-3 md:grid-cols-2">
@@ -148,10 +205,28 @@ export function InputBar() {
             </div>
           </div>
 
+          {voiceApprovalsByToolExecution.length > 0 ? (
+            <div className="mt-4 space-y-2">
+              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
+                Awaiting approval
+              </p>
+              {voiceApprovalsByToolExecution.map((approval) => (
+                <ApprovalCard
+                  key={approval.id}
+                  id={approval.id}
+                  description={approval.description}
+                />
+              ))}
+            </div>
+          ) : null}
+
           <p className="mt-3 text-[11px] text-foreground-inactive">
-            Live voice is conversational-only in this version. Use text chat for tools and
-            operations.
+            Live voice can invoke tools. Sensitive tools will pause for approval here before
+            running.
           </p>
+          {liveVoice.error ? (
+            <p className="mt-2 text-xs text-error">{liveVoice.error}</p>
+          ) : null}
         </div>
       </section>
     );
@@ -207,9 +282,10 @@ export function InputBar() {
         <button
           type="button"
           onClick={() => void liveVoice.toggle()}
-          disabled={loading.isSendingMessage}
-          className="rounded-lg p-2 text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground"
-          title="Live voice mode"
+          disabled={Boolean(micDisabledReason)}
+          className="rounded-lg p-2 text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
+          title={micDisabledReason ?? 'Live voice mode'}
+          aria-label={micDisabledReason ?? 'Live voice mode'}
         >
           <MicIcon />
         </button>

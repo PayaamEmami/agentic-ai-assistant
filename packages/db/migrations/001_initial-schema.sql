@@ -139,6 +139,7 @@ CREATE TABLE tool_executions (
   output JSONB,
   status TEXT NOT NULL DEFAULT 'pending',
   origin TEXT NOT NULL DEFAULT 'native',
+  origin_mode TEXT NOT NULL DEFAULT 'text',
   mcp_profile_id UUID REFERENCES mcp_profiles(id) ON DELETE SET NULL,
   integration_kind TEXT,
   approval_id UUID,

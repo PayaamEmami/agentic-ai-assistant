@@ -11,6 +11,19 @@ export interface SystemPromptContext {
   personalContext?: string;
   availableTools?: Array<string | PromptToolContext>;
   activeApps?: string[];
+  /**
+   * When false, the base prompt omits the retrieval and tool-approval guidance
+   * blocks. Callers that run without retrieval or tools (such as a strictly
+   * conversational voice session) set this to false to avoid sending
+   * contradictory instructions to the model.
+   */
+  includeToolGuidance?: boolean;
+  /**
+   * When false, the retrieval/citation guidance block is omitted. Useful for
+   * runtimes that cannot inject retrieved context (for example, voice without
+   * per-turn RAG wiring). Defaults to the value of `includeToolGuidance`.
+   */
+  includeRetrievalGuidance?: boolean;
 }
 
 export function buildSystemPrompt(context: SystemPromptContext): string {
@@ -32,21 +45,29 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
     sections.push(`Connected apps:\n${apps}`);
   }
 
-  sections.push(
-    'If you use retrieved context, explicitly cite supporting sources (for example: [Source 1], [Source 2]).',
-  );
-  sections.push(
-    "Retrieved context already present in the prompt is pre-authorized, read-only source material from the user's workspace, attachments, or connected and synced integrations.",
-  );
-  sections.push(
-    'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, upload, reconnect, or share a link for that same content again.',
-  );
-  sections.push(
-    'For tools marked as requiring approval, prepare the tool call and let the system request approval through the UI. Do not ask the user for separate verbal confirmation unless the request is ambiguous, materially underspecified, or a required parameter is missing.',
-  );
-  sections.push(
-    'When the user explicitly asks you to use an available tool by name or capability, use that tool unless the request is unsafe or a required input is missing. Do not answer from memory while implying that tool or live access happened.',
-  );
+  const includeToolGuidance = context.includeToolGuidance ?? true;
+  const includeRetrievalGuidance = context.includeRetrievalGuidance ?? includeToolGuidance;
+
+  if (includeRetrievalGuidance) {
+    sections.push(
+      'If you use retrieved context, explicitly cite supporting sources (for example: [Source 1], [Source 2]).',
+    );
+    sections.push(
+      "Retrieved context already present in the prompt is pre-authorized, read-only source material from the user's workspace, attachments, or connected and synced integrations.",
+    );
+    sections.push(
+      'When retrieved context is already present, treat it as authorized source material. Do not ask the user for permission to fetch, open, paste, upload, reconnect, or share a link for that same content again.',
+    );
+  }
+
+  if (includeToolGuidance) {
+    sections.push(
+      'For tools marked as requiring approval, prepare the tool call and let the system request approval through the UI. Do not ask the user for separate verbal confirmation unless the request is ambiguous, materially underspecified, or a required parameter is missing.',
+    );
+    sections.push(
+      'When the user explicitly asks you to use an available tool by name or capability, use that tool unless the request is unsafe or a required input is missing. Do not answer from memory while implying that tool or live access happened.',
+    );
+  }
 
   return sections.join('\n\n');
 }

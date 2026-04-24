@@ -22,6 +22,8 @@ export interface MessageRepository {
       detail?: string;
     },
   ): Promise<void>;
+  replaceAssistantText(id: string, text: string): Promise<void>;
+  appendContentBlocks(id: string, blocks: unknown[]): Promise<void>;
 }
 
 function hasOwn(object: object, key: string): boolean {
@@ -156,4 +158,94 @@ export const messageRepository: MessageRepository = {
     }
   },
 
+  async replaceAssistantText(id: string, text: string): Promise<void> {
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<Message>(
+        `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+         FROM messages
+         WHERE id = $1
+         FOR UPDATE`,
+        [id],
+      );
+      const existing = result.rows[0];
+      if (!existing) {
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      let replaced = false;
+      const nextContent = existing.content.map((block) => {
+        if (
+          !replaced &&
+          block &&
+          typeof block === 'object' &&
+          !Array.isArray(block) &&
+          (block as Record<string, unknown>).type === 'text'
+        ) {
+          replaced = true;
+          return { ...(block as Record<string, unknown>), text };
+        }
+        return block;
+      });
+
+      const finalContent = replaced ? nextContent : [{ type: 'text', text }, ...existing.content];
+
+      await client.query(
+        `UPDATE messages
+         SET content = $1
+         WHERE id = $2`,
+        [JSON.stringify(finalContent), id],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  async appendContentBlocks(id: string, blocks: unknown[]): Promise<void> {
+    if (blocks.length === 0) {
+      return;
+    }
+
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const result = await client.query<Message>(
+        `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+         FROM messages
+         WHERE id = $1
+         FOR UPDATE`,
+        [id],
+      );
+      const existing = result.rows[0];
+      if (!existing) {
+        await client.query('ROLLBACK');
+        return;
+      }
+
+      const nextContent = [...existing.content, ...blocks];
+
+      await client.query(
+        `UPDATE messages
+         SET content = $1
+         WHERE id = $2`,
+        [JSON.stringify(nextContent), id],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
 };

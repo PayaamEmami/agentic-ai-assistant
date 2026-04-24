@@ -10,6 +10,7 @@ interface ToolExecutionRow {
   output: unknown | null;
   status: string;
   origin: string;
+  originMode: string;
   mcpProfileId: string | null;
   integrationKind: string | null;
   approvalId: string | null;
@@ -18,6 +19,10 @@ interface ToolExecutionRow {
 }
 
 export interface ToolExecution extends ToolExecutionRow {}
+
+export interface ToolExecutionCreateOptions {
+  originMode?: string;
+}
 
 export interface ToolExecutionRepository {
   findById(id: string): Promise<ToolExecution | null>;
@@ -31,6 +36,7 @@ export interface ToolExecutionRepository {
     origin: string,
     mcpProfileId?: string | null,
     integrationKind?: string | null,
+    options?: ToolExecutionCreateOptions,
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
   setApproval(id: string, approvalId: string): Promise<void>;
@@ -38,14 +44,16 @@ export interface ToolExecutionRepository {
   findPendingApproval(conversationId: string): Promise<ToolExecution | null>;
 }
 
+const SELECT_COLUMNS = `id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
+              input, output, status, origin, origin_mode AS "originMode", mcp_profile_id AS "mcpProfileId",
+              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
+              completed_at AS "completedAt"`;
+
 export const toolExecutionRepository: ToolExecutionRepository = {
   async findById(id: string): Promise<ToolExecution | null> {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
-      `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, mcp_profile_id AS "mcpProfileId",
-              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
-              completed_at AS "completedAt"
+      `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE id = $1`,
       [id],
@@ -60,10 +68,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
   ): Promise<ToolExecution[]> {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
-      `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, mcp_profile_id AS "mcpProfileId",
-              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
-              completed_at AS "completedAt"
+      `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE conversation_id = $1
        ORDER BY started_at ASC
@@ -76,10 +81,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
   async listByMessage(messageId: string): Promise<ToolExecution[]> {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
-      `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, mcp_profile_id AS "mcpProfileId",
-              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
-              completed_at AS "completedAt"
+      `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE message_id = $1
        ORDER BY started_at ASC`,
@@ -96,18 +98,17 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     origin: string,
     mcpProfileId: string | null = null,
     integrationKind: string | null = null,
+    options: ToolExecutionCreateOptions = {},
   ): Promise<ToolExecution> {
     const pool = getPool();
     const id = crypto.randomUUID();
+    const originMode = options.originMode ?? 'text';
     const result = await pool.query<ToolExecutionRow>(
       `INSERT INTO tool_executions (
-         id, conversation_id, message_id, tool_name, input, origin, mcp_profile_id, integration_kind
+         id, conversation_id, message_id, tool_name, input, origin, origin_mode, mcp_profile_id, integration_kind
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-                 input, output, status, origin, mcp_profile_id AS "mcpProfileId",
-                 integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
-                 completed_at AS "completedAt"`,
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       RETURNING ${SELECT_COLUMNS}`,
       [
         id,
         conversationId,
@@ -115,6 +116,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
         toolName,
         JSON.stringify(input),
         origin,
+        originMode,
         mcpProfileId,
         integrationKind,
       ],
@@ -168,10 +170,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
   async findPendingApproval(conversationId: string): Promise<ToolExecution | null> {
     const pool = getPool();
     const result = await pool.query<ToolExecutionRow>(
-      `SELECT id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, mcp_profile_id AS "mcpProfileId",
-              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
-              completed_at AS "completedAt"
+      `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE conversation_id = $1 AND status = 'requires_approval'
        ORDER BY started_at ASC

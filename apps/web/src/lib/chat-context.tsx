@@ -126,6 +126,16 @@ export interface ChatLoadingState {
   isLoadingApprovals: boolean;
 }
 
+export interface ToolEventPayload {
+  type: 'tool.done' | 'approval.resolved';
+  conversationId?: string;
+  toolExecutionId?: string;
+  output?: unknown;
+  status?: string;
+}
+
+export type ToolEventListener = (event: ToolEventPayload) => void;
+
 interface ChatContextValue {
   conversations: ConversationSummary[];
   currentConversationId?: string;
@@ -157,6 +167,7 @@ interface ChatContextValue {
   }>;
   appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
   syncConversationState: (conversationId: string) => Promise<void>;
+  subscribeToolEvents: (listener: ToolEventListener) => () => void;
 }
 
 const ChatContext = createContext<ChatContextValue | null>(null);
@@ -520,6 +531,29 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const socketRef = useRef<WebSocket | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunConversationIdRef = useRef<string | undefined>(undefined);
+  const toolEventListenersRef = useRef<Set<ToolEventListener>>(new Set());
+
+  const subscribeToolEvents = useCallback((listener: ToolEventListener) => {
+    toolEventListenersRef.current.add(listener);
+    return () => {
+      toolEventListenersRef.current.delete(listener);
+    };
+  }, []);
+
+  const emitToolEvent = useCallback((payload: ToolEventPayload) => {
+    for (const listener of toolEventListenersRef.current) {
+      try {
+        listener(payload);
+      } catch (listenerError) {
+        void reportClientError({
+          event: 'client.chat.tool_listener_failed',
+          component: 'chat-context',
+          message: 'Tool event listener threw an error',
+          error: listenerError,
+        });
+      }
+    }
+  }, []);
 
   const loadPendingApprovals = useCallback(async () => {
     setIsLoadingApprovals(true);
@@ -940,6 +974,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             toolExecutionId?: string;
             output?: unknown;
             status?: 'completed' | 'failed';
+            conversationId?: string;
           };
           setMessages((previous) =>
             patchMessagesToolResult(previous, done.toolExecutionId, {
@@ -948,6 +983,13 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               detail: undefined,
             }),
           );
+          emitToolEvent({
+            type: 'tool.done',
+            conversationId: done.conversationId,
+            toolExecutionId: done.toolExecutionId,
+            output: done.output,
+            status: done.status,
+          });
           return;
         }
         case 'approval.requested':
@@ -958,6 +1000,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
           const resolved = parsed as {
             toolExecutionId?: string;
             status?: 'approved' | 'rejected';
+            conversationId?: string;
           };
           if (
             resolved.toolExecutionId &&
@@ -975,6 +1018,12 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
               }),
             );
           }
+          emitToolEvent({
+            type: 'approval.resolved',
+            conversationId: resolved.conversationId,
+            toolExecutionId: resolved.toolExecutionId,
+            status: resolved.status,
+          });
           void loadPendingApprovals();
           return;
         }
@@ -998,7 +1047,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         socketRef.current = null;
       }
     };
-  }, [currentConversationId, loadPendingApprovals, refreshConversation, token]);
+  }, [currentConversationId, emitToolEvent, loadPendingApprovals, refreshConversation, token]);
 
   useEffect(() => {
     setCitations(extractCitations(messages));
@@ -1045,6 +1094,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       startLiveVoiceSession,
       appendVoiceMessage,
       syncConversationState,
+      subscribeToolEvents,
     }),
     [
       approveAction,
@@ -1066,6 +1116,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       startLiveVoiceSession,
       appendVoiceMessage,
       syncConversationState,
+      subscribeToolEvents,
       uploadAttachment,
     ],
   );

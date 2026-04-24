@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { API_BASE, ApiError, getStoredAuthToken, api } from './api-client';
+import type { ToolEventListener, ToolEventPayload } from './chat-context';
 import { reportClientError } from './client-logging';
 
 type VoicePhase =
@@ -21,10 +22,18 @@ interface SessionInit {
   voice: string;
 }
 
+interface VoicePendingToolCall {
+  callId: string;
+  toolExecutionId: string;
+  toolName: string;
+  status: 'running' | 'requires_approval';
+}
+
 interface UseLiveVoiceSessionOptions {
   startSession: () => Promise<SessionInit>;
   appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
   syncConversation: (conversationId: string) => Promise<void>;
+  subscribeToolEvents?: (listener: ToolEventListener) => () => void;
 }
 
 function parseEvent(raw: string): { type?: string; [key: string]: unknown } | null {
@@ -73,12 +82,14 @@ export function useLiveVoiceSession({
   startSession,
   appendVoiceMessage,
   syncConversation,
+  subscribeToolEvents,
 }: UseLiveVoiceSessionOptions) {
   const [phase, setPhase] = useState<VoicePhase>('idle');
   const [connectionLabel, setConnectionLabel] = useState('Voice mode is off.');
   const [userCaption, setUserCaption] = useState('');
   const [assistantCaption, setAssistantCaption] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [pendingToolCalls, setPendingToolCalls] = useState<VoicePendingToolCall[]>([]);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
@@ -94,6 +105,10 @@ export function useLiveVoiceSession({
   const userMessageAddedRef = useRef(false);
   const assistantMessageAddedRef = useRef(false);
   const assistantCaptionSourceRef = useRef<'audio_transcript' | 'output_text' | null>(null);
+  const activeVoiceTurnIdRef = useRef<string | null>(null);
+  const pendingTurnStartPromiseRef = useRef<Promise<string | null> | null>(null);
+  const toolCallsByExecutionIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
+  const toolCallsByCallIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
 
   const setVoicePhase = (nextPhase: VoicePhase) => {
     phaseRef.current = nextPhase;
@@ -107,6 +122,81 @@ export function useLiveVoiceSession({
     userMessageAddedRef.current = false;
     assistantMessageAddedRef.current = false;
     assistantCaptionSourceRef.current = null;
+    activeVoiceTurnIdRef.current = null;
+    pendingTurnStartPromiseRef.current = null;
+  };
+
+  const resetToolCalls = () => {
+    toolCallsByExecutionIdRef.current.clear();
+    toolCallsByCallIdRef.current.clear();
+    setPendingToolCalls([]);
+  };
+
+  const syncPendingToolCallsState = () => {
+    setPendingToolCalls(Array.from(toolCallsByCallIdRef.current.values()));
+  };
+
+  const registerToolCall = (call: VoicePendingToolCall) => {
+    toolCallsByCallIdRef.current.set(call.callId, call);
+    toolCallsByExecutionIdRef.current.set(call.toolExecutionId, call);
+    syncPendingToolCallsState();
+  };
+
+  const updateToolCallStatus = (
+    toolExecutionId: string,
+    status: VoicePendingToolCall['status'],
+  ) => {
+    const existing = toolCallsByExecutionIdRef.current.get(toolExecutionId);
+    if (!existing) {
+      return;
+    }
+    const updated = { ...existing, status };
+    toolCallsByExecutionIdRef.current.set(toolExecutionId, updated);
+    toolCallsByCallIdRef.current.set(updated.callId, updated);
+    syncPendingToolCallsState();
+  };
+
+  const removeToolCallByExecutionId = (toolExecutionId: string): VoicePendingToolCall | null => {
+    const existing = toolCallsByExecutionIdRef.current.get(toolExecutionId);
+    if (!existing) {
+      return null;
+    }
+    toolCallsByExecutionIdRef.current.delete(toolExecutionId);
+    toolCallsByCallIdRef.current.delete(existing.callId);
+    syncPendingToolCallsState();
+    return existing;
+  };
+
+  const withRetry = async <T,>(
+    label: string,
+    fn: () => Promise<T>,
+    maxAttempts = 3,
+  ): Promise<T> => {
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      try {
+        return await fn();
+      } catch (retryError) {
+        lastError = retryError;
+        if (attempt === maxAttempts) {
+          break;
+        }
+        const delay = 200 * 2 ** (attempt - 1);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+
+    void reportClientError({
+      event: 'client.voice.persist_retry_exhausted',
+      component: 'use-live-voice-session',
+      message: `Voice turn ${label} failed after ${maxAttempts} attempts`,
+      error: lastError,
+      conversationId: conversationIdRef.current ?? undefined,
+      voiceSessionId: sessionIdRef.current ?? undefined,
+    });
+    throw lastError instanceof Error
+      ? lastError
+      : new Error(typeof lastError === 'string' ? lastError : 'Voice request failed');
   };
 
   const addVoiceMessageToChat = (role: 'user' | 'assistant', text: string) => {
@@ -118,7 +208,41 @@ export function useLiveVoiceSession({
     appendVoiceMessage(conversationId, role, text);
   };
 
-  const finalizeUserTranscript = (transcript: string) => {
+  const ensureTurnStarted = async (userTranscript: string): Promise<string | null> => {
+    if (activeVoiceTurnIdRef.current) {
+      return activeVoiceTurnIdRef.current;
+    }
+
+    if (pendingTurnStartPromiseRef.current) {
+      return pendingTurnStartPromiseRef.current;
+    }
+
+    const conversationId = conversationIdRef.current ?? undefined;
+    const startPromise = (async () => {
+      try {
+        const result = await withRetry('start', () =>
+          api.voice.startTurn(conversationId, userTranscript),
+        );
+        activeVoiceTurnIdRef.current = result.voiceTurnId;
+        conversationIdRef.current = result.conversationId;
+        return result.voiceTurnId;
+      } catch (startError) {
+        setError(
+          startError instanceof Error
+            ? startError.message
+            : 'Failed to start the live voice turn.',
+        );
+        return null;
+      } finally {
+        pendingTurnStartPromiseRef.current = null;
+      }
+    })();
+
+    pendingTurnStartPromiseRef.current = startPromise;
+    return startPromise;
+  };
+
+  const finalizeUserTranscript = async (transcript: string) => {
     const trimmed = transcript.trim();
     if (!trimmed) {
       return;
@@ -130,6 +254,33 @@ export function useLiveVoiceSession({
     if (!userMessageAddedRef.current) {
       addVoiceMessageToChat('user', trimmed);
       userMessageAddedRef.current = true;
+    }
+
+    const voiceTurnId = await ensureTurnStarted(trimmed);
+    if (!voiceTurnId) {
+      return;
+    }
+
+    try {
+      const prepared = await api.voice.prepareTurn(voiceTurnId, trimmed);
+      sendRealtimeEvent({
+        type: 'session.update',
+        session: {
+          type: 'realtime',
+          instructions: prepared.instructions,
+        },
+      });
+      sendRealtimeEvent({ type: 'response.create' });
+    } catch (prepareError) {
+      void reportClientError({
+        event: 'client.voice.prepare_failed',
+        component: 'use-live-voice-session',
+        message: 'Failed to prepare voice turn context; proceeding without retrieval',
+        error: prepareError,
+        conversationId: conversationIdRef.current ?? undefined,
+        voiceSessionId: sessionIdRef.current ?? undefined,
+      });
+      sendRealtimeEvent({ type: 'response.create' });
     }
   };
 
@@ -183,6 +334,10 @@ export function useLiveVoiceSession({
       return;
     }
 
+    if (toolCallsByCallIdRef.current.size > 0) {
+      return;
+    }
+
     const conversationId = conversationIdRef.current;
     const userTranscript = pendingUserTranscriptRef.current.trim();
     const assistantTranscript = pendingAssistantTranscriptRef.current.trim();
@@ -193,7 +348,17 @@ export function useLiveVoiceSession({
 
     isPersistingTurnRef.current = true;
     try {
-      await api.voice.persistTurn(conversationId, userTranscript, assistantTranscript);
+      const voiceTurnId = await ensureTurnStarted(userTranscript);
+      if (!voiceTurnId) {
+        return;
+      }
+
+      await withRetry('assistant-text', () =>
+        api.voice.updateAssistantText(voiceTurnId, assistantTranscript),
+      );
+      await withRetry('complete', () =>
+        api.voice.completeTurn(voiceTurnId, assistantTranscript),
+      );
       await syncConversation(conversationId);
       resetPendingTurn();
     } catch (persistError) {
@@ -224,8 +389,149 @@ export function useLiveVoiceSession({
     channel.send(JSON.stringify(event));
   };
 
+  const forwardToolResultToRealtime = (callId: string, output: unknown) => {
+    sendRealtimeEvent({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: callId,
+        output: typeof output === 'string' ? output : JSON.stringify(output ?? null),
+      },
+    });
+    sendRealtimeEvent({ type: 'response.create' });
+  };
+
+  const handleFunctionCallArgumentsDone = async (event: {
+    call_id?: unknown;
+    name?: unknown;
+    arguments?: unknown;
+  }) => {
+    const conversationId = conversationIdRef.current;
+    if (!conversationId) {
+      return;
+    }
+
+    const callId = typeof event.call_id === 'string' ? event.call_id : '';
+    const toolName = typeof event.name === 'string' ? event.name : '';
+    const argumentsJson = typeof event.arguments === 'string' ? event.arguments : '';
+
+    if (!callId || !toolName) {
+      return;
+    }
+
+    const voiceTurnId = await ensureTurnStarted(
+      pendingUserTranscriptRef.current.trim() || '(voice tool call)',
+    );
+    if (!voiceTurnId) {
+      forwardToolResultToRealtime(callId, {
+        error: 'Voice turn has not been initialized; cannot execute tool.',
+      });
+      return;
+    }
+
+    try {
+      const result = await api.voice.tools.submitCall({
+        conversationId,
+        voiceTurnId,
+        callId,
+        toolName,
+        argumentsJson,
+      });
+
+      const status: VoicePendingToolCall['status'] =
+        result.status === 'requires_approval' ? 'requires_approval' : 'running';
+      registerToolCall({
+        callId,
+        toolExecutionId: result.toolExecutionId,
+        toolName,
+        status,
+      });
+
+      if (status === 'requires_approval') {
+        setConnectionLabel('Waiting for approval...');
+        setVoicePhase('thinking');
+      } else {
+        setConnectionLabel('Running tool...');
+        setVoicePhase('thinking');
+      }
+    } catch (submitError) {
+      void reportClientError({
+        event: 'client.voice.tool_submit_failed',
+        component: 'use-live-voice-session',
+        message: 'Failed to submit voice tool call',
+        error: submitError,
+        conversationId,
+        voiceSessionId: sessionIdRef.current ?? undefined,
+        context: { toolName, callId },
+      });
+      forwardToolResultToRealtime(callId, {
+        error:
+          submitError instanceof Error
+            ? submitError.message
+            : 'Voice tool submission failed.',
+      });
+    }
+  };
+
+  const handleToolEventFromServer = (payload: ToolEventPayload) => {
+    if (!payload.toolExecutionId) {
+      return;
+    }
+
+    if (payload.type === 'tool.done') {
+      const removed = removeToolCallByExecutionId(payload.toolExecutionId);
+      if (!removed) {
+        return;
+      }
+      const output =
+        payload.status === 'failed'
+          ? { error: payload.output ?? 'Tool execution failed.' }
+          : payload.output ?? null;
+      forwardToolResultToRealtime(removed.callId, output);
+      return;
+    }
+
+    if (payload.type === 'approval.resolved') {
+      if (payload.status === 'approved') {
+        updateToolCallStatus(payload.toolExecutionId, 'running');
+        return;
+      }
+      if (payload.status === 'rejected') {
+        const removed = removeToolCallByExecutionId(payload.toolExecutionId);
+        if (!removed) {
+          return;
+        }
+        forwardToolResultToRealtime(removed.callId, {
+          error: 'User rejected this tool call.',
+        });
+      }
+    }
+  };
+
   const canInterruptAssistant = () =>
     phaseRef.current === 'thinking' || phaseRef.current === 'speaking';
+
+  const broadcastInterruptToServer = () => {
+    const sessionId = sessionIdRef.current;
+    const conversationId = conversationIdRef.current;
+    if (!sessionId || !conversationId) {
+      return;
+    }
+
+    const voiceTurnId = activeVoiceTurnIdRef.current ?? undefined;
+    api.voice
+      .interrupt(sessionId, { conversationId, voiceTurnId })
+      .catch((interruptError) => {
+        void reportClientError({
+          event: 'client.voice.interrupt_broadcast_failed',
+          component: 'use-live-voice-session',
+          message: 'Failed to broadcast voice session interrupt',
+          error: interruptError,
+          conversationId,
+          voiceSessionId: sessionId,
+        });
+      });
+  };
 
   const interruptAssistant = () => {
     if (!canInterruptAssistant()) {
@@ -237,6 +543,7 @@ export function useLiveVoiceSession({
     pendingAssistantTranscriptRef.current = '';
     responseDoneRef.current = false;
     setAssistantCaption('');
+    broadcastInterruptToServer();
   };
 
   const teardown = () => {
@@ -267,6 +574,7 @@ export function useLiveVoiceSession({
     }
 
     resetPendingTurn();
+    resetToolCalls();
     sessionIdRef.current = null;
     setUserCaption('');
     setAssistantCaption('');
@@ -275,6 +583,13 @@ export function useLiveVoiceSession({
   };
 
   useEffect(() => teardown, []);
+
+  useEffect(() => {
+    if (!subscribeToolEvents) {
+      return;
+    }
+    return subscribeToolEvents(handleToolEventFromServer);
+  }, [subscribeToolEvents]);
 
   const handleRealtimeEvent = async (event: { type?: string; [key: string]: unknown }) => {
     switch (event.type) {
@@ -305,7 +620,7 @@ export function useLiveVoiceSession({
       case 'conversation.item.input_audio_transcription.completed': {
         const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : '';
         if (transcript) {
-          finalizeUserTranscript(transcript);
+          await finalizeUserTranscript(transcript);
         }
         return;
       }
@@ -338,6 +653,12 @@ export function useLiveVoiceSession({
         if (text) {
           updateAssistantCaption('output_text', text, 'replace');
         }
+        return;
+      }
+      case 'response.function_call_arguments.done': {
+        await handleFunctionCallArgumentsDone(
+          event as { call_id?: unknown; name?: unknown; arguments?: unknown },
+        );
         return;
       }
       case 'response.done':
@@ -511,6 +832,7 @@ export function useLiveVoiceSession({
     userCaption,
     assistantCaption,
     error,
+    pendingToolCalls,
     start,
     stop,
     toggle,

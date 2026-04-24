@@ -78,20 +78,6 @@ export interface CitationEvent {
   score: number;
 }
 
-export interface VoiceTranscriptEvent {
-  type: 'voice.transcript';
-  conversationId: string;
-  role: 'user' | 'assistant';
-  text: string;
-  isFinal: boolean;
-}
-
-export interface VoiceSessionEndedEvent {
-  type: 'voice.session.ended';
-  conversationId: string;
-  reason: string;
-}
-
 export interface ErrorEvent {
   type: 'error';
   conversationId: string;
@@ -109,6 +95,4 @@ export type RealtimeEvent =
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
   | CitationEvent
-  | VoiceTranscriptEvent
-  | VoiceSessionEndedEvent
   | ErrorEvent;

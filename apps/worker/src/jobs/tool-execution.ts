@@ -549,20 +549,37 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
       status: 'completed',
     };
     await publishToolEvent(doneEvent);
-    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
-      logger.warn(
+    if (execution.originMode !== 'voice') {
+      await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch(
+        (error) => {
+          logger.warn(
+            {
+              event: 'tool.execution.continuation_failed',
+              outcome: 'failure',
+              toolExecutionId,
+              toolName,
+              conversationId,
+              correlationId,
+              error,
+            },
+            'Failed to continue conversation after tool execution',
+          );
+        },
+      );
+    } else {
+      logger.info(
         {
-          event: 'tool.execution.continuation_failed',
-          outcome: 'failure',
+          event: 'tool.execution.continuation_skipped',
+          outcome: 'success',
           toolExecutionId,
           toolName,
           conversationId,
           correlationId,
-          error,
+          reason: 'voice_origin',
         },
-        'Failed to continue conversation after tool execution',
+        'Skipping HTTP continuation for voice-origin tool execution',
       );
-    });
+    }
     logger.info(
       {
         event: 'tool.execution.completed',
@@ -594,20 +611,37 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     status: 'failed',
   };
   await publishToolEvent(doneEvent);
-  await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
-    logger.warn(
+  if (execution.originMode !== 'voice') {
+    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch(
+      (error) => {
+        logger.warn(
+          {
+            event: 'tool.execution.continuation_failed',
+            outcome: 'failure',
+            toolExecutionId,
+            toolName,
+            conversationId,
+            correlationId,
+            error,
+          },
+          'Failed to continue conversation after tool execution',
+        );
+      },
+    );
+  } else {
+    logger.info(
       {
-        event: 'tool.execution.continuation_failed',
-        outcome: 'failure',
+        event: 'tool.execution.continuation_skipped',
+        outcome: 'success',
         toolExecutionId,
         toolName,
         conversationId,
         correlationId,
-        error,
+        reason: 'voice_origin',
       },
-      'Failed to continue conversation after tool execution',
+      'Skipping HTTP continuation for voice-origin tool execution',
     );
-  });
+  }
   logger.warn(
     {
       event: 'tool.execution.completed',
