@@ -96,7 +96,23 @@ Run quality checks:
 ```bash
 pnpm lint
 pnpm typecheck
+pnpm test
 pnpm format:check
+```
+
+Run tests:
+
+```bash
+pnpm test
+pnpm test:watch
+pnpm test:coverage
+```
+
+Run tests for one workspace:
+
+```bash
+pnpm --filter @aaa/shared test
+pnpm --filter @aaa/api test
 ```
 
 Build everything:
@@ -165,28 +181,6 @@ When deciding where a change belongs:
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
-
-## Guardrails For AI Agents
-
-- Read the existing package boundary before moving logic across apps/packages.
-- Prefer updating shared contracts in `packages/shared` instead of duplicating types.
-- If an API request or response changes, verify whether `apps/web`, `apps/api`, and shared DTOs all need updates.
-- If a database shape changes, make sure the migration, repositories, and any dependent API/worker code stay aligned.
-- If a feature touches retrieval, apps, or tools, check for downstream effects in orchestration code.
-- Treat provider apps as having separate knowledge and tool capabilities internally. Even when they target the same external provider, keep those capabilities loosely coupled and avoid making one depend on the other.
-- Prefer minimal, targeted changes over broad refactors unless the task clearly calls for one.
-- Run at least relevant validation (`pnpm lint`, `pnpm typecheck`, or a focused package command) after edits when feasible.
-
-## Current Product Context
-
-At a high level, the assistant currently supports:
-
-- Chat-first interaction
-- Live voice sessions using OpenAI Realtime
-- RAG over connected sources
-- Native tool execution with approval flow
-- Provider apps with separate knowledge and tool capabilities under one connection
-- A small multi-agent pattern with orchestrator, research, tool, and verifier roles
 
 ## Maintenance
 

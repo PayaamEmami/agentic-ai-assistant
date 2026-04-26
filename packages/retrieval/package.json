@@ -6,6 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "test": "vitest run --config ../../vitest.config.mts packages/retrieval/src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
