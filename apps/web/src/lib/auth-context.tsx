@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import {
@@ -39,20 +40,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const authMutationRef = useRef(0);
 
   const applyAuth = useCallback((nextToken: string, nextUser: AuthUser) => {
+    authMutationRef.current += 1;
     setStoredAuthToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);
+    setIsReady(true);
   }, []);
 
   const logout = useCallback(() => {
+    authMutationRef.current += 1;
     clearStoredAuthToken();
     setToken(null);
     setUser(null);
+    setIsReady(true);
   }, []);
 
   const refresh = useCallback(async () => {
+    const refreshMutation = authMutationRef.current;
     const existingToken = getStoredAuthToken();
     if (!existingToken) {
       setToken(null);
@@ -64,11 +71,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(existingToken);
     try {
       const response = await api.auth.me();
+      if (
+        authMutationRef.current !== refreshMutation ||
+        getStoredAuthToken() !== existingToken
+      ) {
+        return;
+      }
       setUser(response.user);
     } catch {
-      logout();
+      if (
+        authMutationRef.current === refreshMutation &&
+        getStoredAuthToken() === existingToken
+      ) {
+        logout();
+      }
     } finally {
-      setIsReady(true);
+      if (
+        authMutationRef.current === refreshMutation &&
+        getStoredAuthToken() === existingToken
+      ) {
+        setIsReady(true);
+      }
     }
   }, [logout]);
 

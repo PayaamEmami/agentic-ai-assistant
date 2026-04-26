@@ -34,7 +34,6 @@ export default function Home() {
       } else {
         await login(email, password);
       }
-      router.replace('/chat');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Authentication failed');
     } finally {
@@ -47,7 +46,6 @@ export default function Home() {
     setIsSubmitting(true);
     try {
       await devLogin();
-      router.replace('/chat');
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Development login failed');
     } finally {
