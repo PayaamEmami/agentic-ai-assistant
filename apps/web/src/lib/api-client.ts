@@ -1,4 +1,16 @@
 import { createCorrelationId } from './client-observability';
+import type {
+  AppCapabilitySummaryDto,
+  AppSourceDto,
+  AppSummaryDto,
+  AppSyncRunDto,
+  ConversationListItem,
+  GitHubRepositoryDto,
+  McpCatalogEntryDto,
+  McpProfileSummaryDto,
+  MemoryItemDto,
+  PersonalizationProfileDto,
+} from '@aaa/shared';
 
 export const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001';
 const TOKEN_STORAGE_KEY = 'aaa_auth_token';
@@ -136,82 +148,13 @@ interface AuthPayload {
   };
 }
 
-export interface AppSyncRunSummary {
-  id: string;
-  trigger: string;
-  status: 'running' | 'completed' | 'failed';
-  itemsDiscovered: number;
-  itemsQueued: number;
-  itemsDeleted: number;
-  errorCount: number;
-  errorSummary: string | null;
-  startedAt: string;
-  completedAt: string | null;
-}
-
-export interface AppSourceSummary {
-  id: string;
-  kind: string;
-  title: string;
-  uri: string | null;
-  mimeType: string | null;
-  updatedAt: string;
-}
-
-export interface GitHubRepositorySummary {
-  id: number;
-  name: string;
-  fullName: string;
-  owner: string;
-  defaultBranch: string;
-  private: boolean;
-  selected: boolean;
-}
-
-export interface McpCatalogEntrySummary {
-  kind: string;
-  displayName: string;
-  description: string;
-  supportsMultipleProfiles: boolean;
-  requiresDefaultProfile: boolean;
-  authModes: string[];
-}
-
-export interface McpProfileSummary {
-  id: string;
-  integrationKind: string;
-  profileLabel: string;
-  status: 'pending' | 'connected' | 'failed';
-  hasCredentials: boolean;
-  lastError: string | null;
-  isDefault: boolean;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AppCapabilitySummary {
-  capability: 'knowledge' | 'tools';
-  status: 'pending' | 'connected' | 'failed';
-  lastSyncAt: string | null;
-  lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
-  lastError: string | null;
-  hasCredentials: boolean;
-  totalSourceCount: number;
-  searchableSourceCount: number;
-  recentSyncRuns: AppSyncRunSummary[];
-  recentSources: AppSourceSummary[];
-}
-
-export interface AppSummary {
-  kind: 'github' | 'google';
-  displayName: string;
-  status: 'pending' | 'connected' | 'failed';
-  hasCredentials: boolean;
-  lastError: string | null;
-  selectedRepoCount?: number;
-  knowledge: AppCapabilitySummary;
-  tools: AppCapabilitySummary;
-}
+export type AppSyncRunSummary = AppSyncRunDto;
+export type AppSourceSummary = AppSourceDto;
+export type GitHubRepositorySummary = GitHubRepositoryDto;
+export type McpCatalogEntrySummary = McpCatalogEntryDto;
+export type McpProfileSummary = McpProfileSummaryDto;
+export type AppCapabilitySummary = AppCapabilitySummaryDto;
+export type AppSummary = AppSummaryDto;
 
 export type PersonalizationMemoryKind =
   | 'fact'
@@ -221,25 +164,9 @@ export type PersonalizationMemoryKind =
   | 'person'
   | 'instruction';
 
-export interface PersonalizationProfile {
-  writingStyle: string | null;
-  tonePreference: string | null;
-}
-
-export interface PersonalizationMemory {
-  id: string;
-  kind: PersonalizationMemoryKind;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface ConversationSummaryResponse {
-  id: string;
-  title: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type PersonalizationProfile = PersonalizationProfileDto;
+export type PersonalizationMemory = MemoryItemDto;
+export type ConversationSummaryResponse = ConversationListItem;
 
 export function buildWebSocketUrl(
   token: string,
@@ -391,9 +318,7 @@ export const api = {
       });
     },
     listGitHubRepositories() {
-      return request<{ repositories: GitHubRepositorySummary[] }>(
-        '/api/apps/github/repositories',
-      );
+      return request<{ repositories: GitHubRepositorySummary[] }>('/api/apps/github/repositories');
     },
     saveGitHubRepositories(repositoryIds: number[]) {
       return request<{ ok: boolean }>('/api/apps/github/repositories', {
@@ -421,12 +346,9 @@ export const api = {
       });
     },
     setDefaultProfile(id: string) {
-      return request<{ ok: true; profile: McpProfileSummary }>(
-        `/api/mcp/profiles/${id}/default`,
-        {
-          method: 'POST',
-        },
-      );
+      return request<{ ok: true; profile: McpProfileSummary }>(`/api/mcp/profiles/${id}/default`, {
+        method: 'POST',
+      });
     },
     deleteProfile(id: string) {
       return request<{ ok: true }>(`/api/mcp/profiles/${id}`, {

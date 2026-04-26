@@ -3,8 +3,12 @@ import { McpProfileCreateRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { McpService } from '../services/mcp-service.js';
 
-export async function mcpRoutes(app: FastifyInstance) {
-  const mcpService = new McpService();
+interface McpRouteOptions {
+  mcpService?: McpService;
+}
+
+export async function mcpRoutes(app: FastifyInstance, options: McpRouteOptions = {}) {
+  const mcpService = options.mcpService ?? new McpService();
 
   app.get('/mcp/catalog', { preHandler: authenticate }, async (_request, reply) => {
     return reply.status(200).send({ integrations: mcpService.listCatalog() });

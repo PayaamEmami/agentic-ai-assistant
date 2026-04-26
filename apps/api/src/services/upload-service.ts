@@ -55,7 +55,10 @@ function extractTextContent(mimeType: string, buffer: Buffer): string | null {
 }
 
 class UploadEmbeddingService implements EmbeddingService {
-  constructor(private readonly modelProvider: OpenAIProvider) {}
+  constructor(
+    private readonly modelProvider: OpenAIProvider,
+    private readonly embeddingModel?: string,
+  ) {}
 
   async generateEmbeddings(chunks: Array<{ id: string; content: string }>) {
     if (chunks.length === 0) {
@@ -64,7 +67,7 @@ class UploadEmbeddingService implements EmbeddingService {
 
     const response = await this.modelProvider.embed({
       input: chunks.map((chunk) => chunk.content),
-      model: process.env['OPENAI_EMBEDDING_MODEL'],
+      model: this.embeddingModel,
     });
 
     return chunks.map((chunk, index) => {
@@ -88,8 +91,9 @@ class UploadEmbeddingService implements EmbeddingService {
 
 export class UploadService {
   private readonly modelProvider: OpenAIProvider;
+  private readonly embeddingModel: string | undefined;
 
-  constructor(modelProvider?: OpenAIProvider) {
+  constructor(modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
     this.modelProvider =
       modelProvider ??
       new OpenAIProvider(
@@ -97,6 +101,7 @@ export class UploadService {
         process.env['OPENAI_MODEL'],
         process.env['OPENAI_EMBEDDING_MODEL'],
       );
+    this.embeddingModel = options?.embeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'];
   }
 
   private async indexAttachmentForRetrieval(
@@ -106,14 +111,7 @@ export class UploadService {
     mimeType: string,
     textContent: string,
   ): Promise<string> {
-    const source = await sourceRepository.create(
-      userId,
-      'document',
-      null,
-      null,
-      fileName,
-      null,
-    );
+    const source = await sourceRepository.create(userId, 'document', null, null, fileName, null);
 
     const document = await documentRepository.create(
       userId,
@@ -125,7 +123,7 @@ export class UploadService {
 
     const reindexingService = new DocumentReindexingServiceImpl(
       new SimpleChunkingService(),
-      new UploadEmbeddingService(this.modelProvider),
+      new UploadEmbeddingService(this.modelProvider, this.embeddingModel),
       async (documentId) => {
         const existingChunks = await chunkRepository.listByDocument(documentId);
         await embeddingRepository.deleteByChunkIds(existingChunks.map((chunk) => chunk.id));

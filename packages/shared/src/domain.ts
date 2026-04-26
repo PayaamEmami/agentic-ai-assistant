@@ -34,10 +34,10 @@ export interface TextContent {
 
 export interface AttachmentRefContent {
   type: 'attachment_ref';
-  attachmentId: string;
-  attachmentKind: AttachmentKind;
-  mimeType: string;
-  fileName: string;
+  attachmentId?: string;
+  attachmentKind?: AttachmentKind;
+  mimeType?: string;
+  fileName?: string;
   indexedForRag?: boolean;
   documentId?: string | null;
 }
@@ -45,7 +45,7 @@ export interface AttachmentRefContent {
 export interface TranscriptContent {
   type: 'transcript';
   text: string;
-  durationMs: number;
+  durationMs?: number;
 }
 
 export interface ToolResultContent {
@@ -59,8 +59,16 @@ export interface ToolResultContent {
 
 export interface CitationContent {
   type: 'citation';
-  sourceId: string;
-  excerpt: string;
+  sourceId?: string;
+  title?: string;
+  excerpt?: string;
+  uri?: string;
+}
+
+export interface StatusContent {
+  type: 'status';
+  status: 'interrupted';
+  label?: string;
 }
 
 export type MessageContent =
@@ -68,7 +76,8 @@ export type MessageContent =
   | AttachmentRefContent
   | TranscriptContent
   | ToolResultContent
-  | CitationContent;
+  | CitationContent
+  | StatusContent;
 
 export interface Message {
   id: string;

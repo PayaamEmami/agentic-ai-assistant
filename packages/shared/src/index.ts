@@ -32,6 +32,7 @@ export type {
   TranscriptContent,
   ToolResultContent,
   CitationContent,
+  StatusContent,
   Attachment,
   Source,
   Citation,

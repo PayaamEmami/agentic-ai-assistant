@@ -1,3 +1,5 @@
+import { loadEnv } from '@aaa/config';
+
 export interface AppConfig {
   host: string;
   port: number;
@@ -36,7 +38,8 @@ declare module 'fastify' {
 }
 
 export function loadConfig(): AppConfig {
-  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const env = loadEnv();
+  const nodeEnv = env.NODE_ENV;
   const required = (key: string): string => {
     const val = process.env[key];
     if (!val) throw new Error(`Missing required env var: ${key}`);
@@ -44,51 +47,44 @@ export function loadConfig(): AppConfig {
   };
 
   const jwtSecret =
-    process.env.JWT_SECRET ??
+    env.JWT_SECRET ??
     (nodeEnv === 'production' ? required('JWT_SECRET') : 'dev-insecure-jwt-secret');
 
   return {
-    host: process.env.API_HOST ?? '0.0.0.0',
-    port: parseInt(process.env.API_PORT ?? '3001', 10),
+    host: env.API_HOST,
+    port: env.API_PORT,
     nodeEnv,
-    logLevel: process.env.LOG_LEVEL ?? 'info',
-    logFormat:
-      process.env.LOG_FORMAT === 'json'
-        ? 'json'
-        : process.env.LOG_FORMAT === 'pretty'
-          ? 'pretty'
-          : nodeEnv === 'development'
-            ? 'pretty'
-            : 'json',
-    databaseUrl: required('DATABASE_URL'),
-    redisUrl: process.env.REDIS_URL ?? 'redis://localhost:6379',
-    openaiApiKey: required('OPENAI_API_KEY'),
-    openaiModel: process.env.OPENAI_MODEL ?? 'gpt-5-mini',
-    openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL ?? 'text-embedding-3-small',
-    openaiRealtimeModel: process.env.OPENAI_REALTIME_MODEL ?? 'gpt-realtime-1.5',
-    openaiRealtimeVoice: process.env.OPENAI_REALTIME_VOICE ?? 'marin',
+    logLevel: env.LOG_LEVEL,
+    logFormat: env.LOG_FORMAT,
+    databaseUrl: env.DATABASE_URL,
+    redisUrl: env.REDIS_URL,
+    openaiApiKey: env.OPENAI_API_KEY,
+    openaiModel: env.OPENAI_MODEL,
+    openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
+    openaiRealtimeModel: env.OPENAI_REALTIME_MODEL,
+    openaiRealtimeVoice: env.OPENAI_REALTIME_VOICE,
     jwtSecret,
-    s3Bucket: process.env.S3_BUCKET ?? 'aaa-uploads',
-    s3Region: process.env.S3_REGION ?? 'us-west-1',
-    s3Endpoint: process.env.S3_ENDPOINT,
-    webBaseUrl: process.env.WEB_BASE_URL ?? 'http://localhost:3000',
+    s3Bucket: env.S3_BUCKET,
+    s3Region: env.S3_REGION,
+    s3Endpoint: env.S3_ENDPOINT,
+    webBaseUrl: env.WEB_BASE_URL,
     appCredentialsSecret:
-      process.env.APP_CREDENTIALS_SECRET ??
+      env.APP_CREDENTIALS_SECRET ??
       (nodeEnv === 'production'
         ? required('APP_CREDENTIALS_SECRET')
         : 'dev-app-credentials-secret'),
-    otlpEndpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-    otelServiceNamespace: process.env.OTEL_SERVICE_NAMESPACE,
-    otelResourceAttributes: process.env.OTEL_RESOURCE_ATTRIBUTES,
+    otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
+    otelServiceNamespace: env.OTEL_SERVICE_NAMESPACE,
+    otelResourceAttributes: env.OTEL_RESOURCE_ATTRIBUTES,
     logFileEnabled:
-      typeof process.env.LOG_FILE_ENABLED === 'string'
-        ? process.env.LOG_FILE_ENABLED === '1' || process.env.LOG_FILE_ENABLED === 'true'
+      typeof env.LOG_FILE_ENABLED === 'string'
+        ? env.LOG_FILE_ENABLED === '1' || env.LOG_FILE_ENABLED === 'true'
         : undefined,
-    googleClientId: process.env.GOOGLE_CLIENT_ID,
-    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    googleAppRedirectUriBase: process.env.GOOGLE_APP_REDIRECT_URI_BASE,
-    githubClientId: process.env.GITHUB_CLIENT_ID,
-    githubClientSecret: process.env.GITHUB_CLIENT_SECRET,
-    githubAppRedirectUriBase: process.env.GITHUB_APP_REDIRECT_URI_BASE,
+    googleClientId: env.GOOGLE_CLIENT_ID,
+    googleClientSecret: env.GOOGLE_CLIENT_SECRET,
+    googleAppRedirectUriBase: env.GOOGLE_APP_REDIRECT_URI_BASE,
+    githubClientId: env.GITHUB_CLIENT_ID,
+    githubClientSecret: env.GITHUB_CLIENT_SECRET,
+    githubAppRedirectUriBase: env.GITHUB_APP_REDIRECT_URI_BASE,
   };
 }

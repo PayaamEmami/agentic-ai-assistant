@@ -12,8 +12,12 @@ import {
 import { authenticate } from '../middleware/auth.js';
 import { VoiceService } from '../services/voice-service.js';
 
-export async function voiceRoutes(app: FastifyInstance) {
-  const voiceService = new VoiceService();
+interface VoiceRouteOptions {
+  voiceService?: VoiceService;
+}
+
+export async function voiceRoutes(app: FastifyInstance, options: VoiceRouteOptions = {}) {
+  const voiceService = options.voiceService ?? new VoiceService();
 
   app.addHook('preHandler', authenticate);
 
@@ -26,10 +30,7 @@ export async function voiceRoutes(app: FastifyInstance) {
     }
 
     const userId = request.user!.id;
-    const session = await voiceService.createSession(
-      userId,
-      parsed.data.conversationId,
-    );
+    const session = await voiceService.createSession(userId, parsed.data.conversationId);
     return reply.status(200).send(session);
   });
 

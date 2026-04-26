@@ -15,11 +15,7 @@ import {
 import type { AppConfig } from './config.js';
 import { logger } from './lib/logger.js';
 import { errorHandler } from './lib/errors.js';
-import {
-  httpInFlight,
-  httpRequestDurationMs,
-  httpRequestsTotal,
-} from './lib/telemetry.js';
+import { httpInFlight, httpRequestDurationMs, httpRequestsTotal } from './lib/telemetry.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { chatRoutes } from './routes/chat.js';
@@ -32,6 +28,7 @@ import { mcpRoutes } from './routes/mcp.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
 import { wsHandler } from './ws/handler.js';
+import { buildApiServices, type ApiServices } from './services/container.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
@@ -40,7 +37,10 @@ declare module 'fastify' {
   }
 }
 
-export async function buildServer(config: AppConfig) {
+export async function buildServer(
+  config: AppConfig,
+  services: ApiServices = buildApiServices(config),
+) {
   const app = Fastify({
     loggerInstance: logger,
     disableRequestLogging: true,
@@ -144,13 +144,23 @@ export async function buildServer(config: AppConfig) {
 
   await app.register(healthRoutes);
   await app.register(authRoutes, { prefix: '/api' });
-  await app.register(chatRoutes, { prefix: '/api' });
-  await app.register(uploadRoutes, { prefix: '/api' });
-  await app.register(approvalRoutes, { prefix: '/api' });
-  await app.register(personalizationRoutes, { prefix: '/api' });
-  await app.register(voiceRoutes, { prefix: '/api' });
-  await app.register(appRoutes, { prefix: '/api' });
-  await app.register(mcpRoutes, { prefix: '/api' });
+  await app.register(chatRoutes, { prefix: '/api', chatService: services.chatService });
+  await app.register(uploadRoutes, { prefix: '/api', uploadService: services.uploadService });
+  await app.register(approvalRoutes, {
+    prefix: '/api',
+    approvalService: services.approvalService,
+  });
+  await app.register(personalizationRoutes, {
+    prefix: '/api',
+    personalizationService: services.personalizationService,
+  });
+  await app.register(voiceRoutes, { prefix: '/api', voiceService: services.voiceService });
+  await app.register(appRoutes, {
+    prefix: '/api',
+    appService: services.appService,
+    webBaseUrl: config.webBaseUrl,
+  });
+  await app.register(mcpRoutes, { prefix: '/api', mcpService: services.mcpService });
   await app.register(clientLogRoutes, { prefix: '/api' });
   await app.register(clientTelemetryRoutes, { prefix: '/api' });
   await app.register(wsHandler, { prefix: '/ws' });

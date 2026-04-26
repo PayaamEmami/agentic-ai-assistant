@@ -10,10 +10,15 @@ interface OAuthCallbackQuery {
   error?: string;
 }
 
-export async function appRoutes(app: FastifyInstance) {
-  const appService = new AppService();
+interface AppRouteOptions {
+  appService?: AppService;
+  webBaseUrl?: string;
+}
+
+export async function appRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
+  const appService = options.appService ?? new AppService();
   const logger = getLogger({ component: 'app-routes' });
-  const webBaseUrl = process.env.WEB_BASE_URL ?? 'http://localhost:3000';
+  const webBaseUrl = options.webBaseUrl ?? process.env.WEB_BASE_URL ?? 'http://localhost:3000';
 
   function buildErrorRedirect(kind: string, message: string): string {
     return (
@@ -107,7 +112,10 @@ export async function appRoutes(app: FastifyInstance) {
         });
       }
 
-      const authorizationUrl = await appService.createAuthorizationUrl(request.user!.id, parsed.data);
+      const authorizationUrl = await appService.createAuthorizationUrl(
+        request.user!.id,
+        parsed.data,
+      );
       return reply.status(200).send({ authorizationUrl });
     },
   );

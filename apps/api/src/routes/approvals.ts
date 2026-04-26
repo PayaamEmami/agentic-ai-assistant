@@ -3,8 +3,12 @@ import { ApprovalDecisionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { ApprovalService } from '../services/approval-service.js';
 
-export async function approvalRoutes(app: FastifyInstance) {
-  const approvalService = new ApprovalService();
+interface ApprovalRouteOptions {
+  approvalService?: ApprovalService;
+}
+
+export async function approvalRoutes(app: FastifyInstance, options: ApprovalRouteOptions = {}) {
+  const approvalService = options.approvalService ?? new ApprovalService();
 
   app.addHook('preHandler', authenticate);
 

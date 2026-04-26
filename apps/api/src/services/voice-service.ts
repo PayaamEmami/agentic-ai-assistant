@@ -11,6 +11,7 @@ import type {
   AssistantInterruptedEvent,
   AssistantTextDoneEvent,
 } from '@aaa/shared';
+import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { broadcast } from '../ws/connections.js';
 import { PersonalizationService } from './personalization-service.js';
@@ -57,7 +58,6 @@ function extractMessageText(content: unknown[]): string {
       textParts.push(candidate.text.trim());
       continue;
     }
-
   }
 
   return textParts.filter(Boolean).join('\n').trim();
@@ -223,13 +223,20 @@ export class VoiceService {
   private readonly personalizationService: PersonalizationService;
   private readonly retrievalBridge: RetrievalBridge;
   private readonly preparedTurns = new Map<string, PreparedTurnCache>();
+  private readonly config?: AppConfig;
 
   constructor(
     personalizationService?: PersonalizationService,
     retrievalBridge?: RetrievalBridge,
+    options?: { config?: AppConfig },
   ) {
     this.personalizationService = personalizationService ?? new PersonalizationService();
-    this.retrievalBridge = retrievalBridge ?? new RetrievalBridge();
+    this.retrievalBridge =
+      retrievalBridge ??
+      new RetrievalBridge(undefined, {
+        embeddingModel: options?.config?.openaiEmbeddingModel,
+      });
+    this.config = options?.config;
   }
 
   private cachePreparedTurn(voiceTurnId: string, cache: PreparedTurnCache): void {
@@ -266,8 +273,12 @@ export class VoiceService {
       userId,
       conversationId: conversation.id,
     });
-    const model = process.env['OPENAI_REALTIME_MODEL'] ?? 'gpt-realtime-1.5';
-    const voice = process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
+    const model =
+      this.config?.openaiRealtimeModel ??
+      process.env['OPENAI_REALTIME_MODEL'] ??
+      'gpt-realtime-1.5';
+    const voice =
+      this.config?.openaiRealtimeVoice ?? process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
 
     getLogger({
       component: 'voice-service',
@@ -319,8 +330,12 @@ export class VoiceService {
       this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
       loadAvailableTools(userId, '').catch(() => [] as AvailableTool[]),
     ]);
-    const model = process.env['OPENAI_REALTIME_MODEL'] ?? 'gpt-realtime-1.5';
-    const voice = process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
+    const model =
+      this.config?.openaiRealtimeModel ??
+      process.env['OPENAI_REALTIME_MODEL'] ??
+      'gpt-realtime-1.5';
+    const voice =
+      this.config?.openaiRealtimeVoice ?? process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
     const instructions = buildRealtimeInstructions(
       personalContext,
       recentMessages,
@@ -341,7 +356,7 @@ export class VoiceService {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${process.env['OPENAI_API_KEY'] ?? ''}`,
+          Authorization: `Bearer ${this.config?.openaiApiKey ?? process.env['OPENAI_API_KEY'] ?? ''}`,
         },
         body: formData,
       },

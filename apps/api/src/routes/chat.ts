@@ -4,21 +4,19 @@ import { authenticate } from '../middleware/auth.js';
 import { assertInternalServiceSecret } from '../lib/internal-service.js';
 import { ChatService } from '../services/chat-service.js';
 
-async function authenticateInternal(request: {
-  headers: Record<string, unknown>;
-}): Promise<void> {
+async function authenticateInternal(request: { headers: Record<string, unknown> }): Promise<void> {
   const header = request.headers['x-internal-service-secret'];
   const provided =
-    typeof header === 'string'
-      ? header
-      : Array.isArray(header)
-        ? (header[0] ?? null)
-        : null;
+    typeof header === 'string' ? header : Array.isArray(header) ? (header[0] ?? null) : null;
   assertInternalServiceSecret(provided);
 }
 
-export async function chatRoutes(app: FastifyInstance) {
-  const chatService = new ChatService();
+interface ChatRouteOptions {
+  chatService?: ChatService;
+}
+
+export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions = {}) {
+  const chatService = options.chatService ?? new ChatService();
 
   app.post<{ Params: { toolExecutionId: string } }>(
     '/chat/internal/tool-executions/:toolExecutionId/continue',

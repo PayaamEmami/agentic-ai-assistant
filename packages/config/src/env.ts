@@ -34,6 +34,12 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   OPENAI_REALTIME_MODEL: z.string().default('gpt-realtime-1.5'),
   OPENAI_REALTIME_VOICE: z.string().default('marin'),
+  JWT_SECRET: z.string().optional(),
+  INTERNAL_SERVICE_SECRET: z.string().optional(),
+  API_INSTANCE_ID: z.string().optional(),
+  API_INTERNAL_BASE_URL: z.string().optional(),
+  INTERNAL_API_BASE_URL: z.string().optional(),
+  API_BASE_URL: z.string().optional(),
 
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),

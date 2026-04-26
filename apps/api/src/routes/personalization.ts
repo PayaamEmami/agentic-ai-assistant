@@ -7,7 +7,10 @@ import {
 import { authenticate } from '../middleware/auth.js';
 import { PersonalizationService } from '../services/personalization-service.js';
 
-function toProfileResponse(profile: { writingStyle: string | null; tonePreference: string | null }) {
+function toProfileResponse(profile: {
+  writingStyle: string | null;
+  tonePreference: string | null;
+}) {
   return {
     writingStyle: profile.writingStyle,
     tonePreference: profile.tonePreference,
@@ -30,8 +33,15 @@ function toMemoryResponse(memory: {
   };
 }
 
-export async function personalizationRoutes(app: FastifyInstance) {
-  const personalizationService = new PersonalizationService();
+interface PersonalizationRouteOptions {
+  personalizationService?: PersonalizationService;
+}
+
+export async function personalizationRoutes(
+  app: FastifyInstance,
+  options: PersonalizationRouteOptions = {},
+) {
+  const personalizationService = options.personalizationService ?? new PersonalizationService();
 
   app.addHook('preHandler', authenticate);
 
@@ -73,24 +83,21 @@ export async function personalizationRoutes(app: FastifyInstance) {
     return reply.status(201).send({ memory: toMemoryResponse(memory) });
   });
 
-  app.patch<{ Params: { id: string } }>(
-    '/personalization/memories/:id',
-    async (request, reply) => {
-      const parsed = UpdateMemoryRequest.safeParse(request.body);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
+  app.patch<{ Params: { id: string } }>('/personalization/memories/:id', async (request, reply) => {
+    const parsed = UpdateMemoryRequest.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
 
-      const memory = await personalizationService.updateMemory(
-        request.user!.id,
-        request.params.id,
-        parsed.data.content,
-      );
-      return reply.status(200).send({ memory: toMemoryResponse(memory) });
-    },
-  );
+    const memory = await personalizationService.updateMemory(
+      request.user!.id,
+      request.params.id,
+      parsed.data.content,
+    );
+    return reply.status(200).send({ memory: toMemoryResponse(memory) });
+  });
 
   app.delete<{ Params: { id: string } }>(
     '/personalization/memories/:id',

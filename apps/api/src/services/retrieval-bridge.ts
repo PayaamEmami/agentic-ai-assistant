@@ -95,7 +95,10 @@ function tokenize(text: string): string[] {
 }
 
 function normalizeText(text: string): string {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
 
 function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
@@ -189,11 +192,13 @@ function truncateOnWordBoundary(content: string, maxLength: number): string {
 
 export class RetrievalBridge {
   private readonly modelProvider: OpenAIProvider | null;
+  private readonly embeddingModel: string | undefined;
 
-  constructor(modelProvider?: OpenAIProvider) {
+  constructor(modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
     const apiKey = process.env['OPENAI_API_KEY'];
     this.modelProvider =
       modelProvider ?? (apiKey ? new OpenAIProvider(apiKey, process.env['OPENAI_MODEL']) : null);
+    this.embeddingModel = options?.embeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'];
   }
 
   async search(
@@ -213,7 +218,7 @@ export class RetrievalBridge {
     try {
       const embeddingResponse = await this.modelProvider.embed({
         input: [trimmedQuery],
-        model: process.env['OPENAI_EMBEDDING_MODEL'],
+        model: this.embeddingModel,
         signal,
       });
       const queryVector = embeddingResponse.embeddings[0];

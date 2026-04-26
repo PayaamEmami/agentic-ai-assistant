@@ -6,8 +6,6 @@ import {
   ResearchAgent,
   ToolAgent,
   VerifierAgent,
-  type AgentHistoryMessage,
-  type ChatContentPart,
 } from '@aaa/ai';
 import {
   approvalRepository,
@@ -26,6 +24,7 @@ import {
   type AssistantTextDoneEvent,
   type InterruptChatRunResponse,
 } from '@aaa/shared';
+import type { AppConfig } from '../config.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
 import { buildApprovalDescription } from './tool-call-service.js';
 import { AppError } from '../lib/errors.js';
@@ -42,34 +41,21 @@ import {
   toCitationContentBlocks,
 } from './retrieval-helpers.js';
 import { enqueueToolExecutionJob } from './tool-execution-queue.js';
-import { broadcast } from '../ws/connections.js';
+import { ChatRunRegistry } from './chat-run-registry.js';
+import { ChatEventPublisher } from './chat-event-publisher.js';
+import { getLatestUserRequestText, toAgentHistoryMessages } from './chat-history.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
 const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
-const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
 const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'Review the pending approval request below to continue.';
 const MAX_CONVERSATION_TITLE_CHARS = 80;
 const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
 const USER_CANCELLED_REASON = 'user_cancelled' as const;
 
-interface ActiveChatRun {
-  userId: string;
-  controller: AbortController;
-  conversationId?: string;
-}
-
-const activeChatRuns = new Map<string, ActiveChatRun>();
-
-type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
-type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
 type AgentToolCall = { name: string; arguments: Record<string, unknown> };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function isAbortError(error: unknown): boolean {
   if (error instanceof DOMException && error.name === 'AbortError') {
@@ -91,200 +77,6 @@ function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
     throw signal.reason instanceof Error ? signal.reason : new Error('Chat run interrupted');
   }
-}
-
-function extractTextFromContent(content: unknown[]): string {
-  const parts: string[] = [];
-
-  for (const block of content) {
-    if (!isRecord(block)) {
-      continue;
-    }
-
-    const type = typeof block.type === 'string' ? block.type : null;
-    if ((type === 'text' || type === 'transcript') && typeof block.text === 'string') {
-      parts.push(block.text);
-      continue;
-    }
-
-  }
-
-  const toolSummary = summarizeToolContent(content, { terminalOnly: true });
-  if (toolSummary) {
-    parts.push(toolSummary);
-  }
-
-  return parts.join('\n').trim();
-}
-
-function getAttachmentIdsFromContent(content: unknown[]): string[] {
-  const ids: string[] = [];
-
-  for (const block of content) {
-    if (!isRecord(block)) {
-      continue;
-    }
-
-    if (block.type === 'attachment_ref' && typeof block.attachmentId === 'string') {
-      ids.push(block.attachmentId);
-    }
-  }
-
-  return ids;
-}
-
-function truncateAttachmentText(text: string): string {
-  const normalized = text.trim();
-  if (normalized.length <= MAX_INLINE_ATTACHMENT_TEXT_CHARS) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, MAX_INLINE_ATTACHMENT_TEXT_CHARS).trimEnd()}\n\n[Attachment text truncated]`;
-}
-
-function toAttachmentPromptText(attachment: NonNullable<DbAttachment>): string {
-  const header = `Attached file "${attachment.fileName}" (${attachment.mimeType}, attachmentId=${attachment.id})`;
-
-  if (attachment.textContent) {
-    return `${header}\n\nExtracted text:\n${truncateAttachmentText(attachment.textContent)}`;
-  }
-
-  return `${header}\n\nThis file is available to tools, but its contents are not inlined in the prompt.`;
-}
-
-function stringifyValue(value: unknown): string {
-  if (typeof value === 'string') {
-    return value;
-  }
-
-  try {
-    return JSON.stringify(value);
-  } catch {
-    return String(value);
-  }
-}
-
-function summarizeToolContent(
-  content: unknown[],
-  options?: { terminalOnly?: boolean },
-): string {
-  const summaries: string[] = [];
-
-  for (const block of content) {
-    if (!isRecord(block) || block.type !== 'tool_result') {
-      continue;
-    }
-
-    const toolName = typeof block.toolName === 'string' ? block.toolName : 'tool';
-    const status = typeof block.status === 'string' ? block.status : 'completed';
-    if (
-      options?.terminalOnly &&
-      status !== 'completed' &&
-      status !== 'failed' &&
-      status !== 'rejected'
-    ) {
-      continue;
-    }
-    const output = 'output' in block ? stringifyValue(block.output) : null;
-    summaries.push(
-      output ? `Tool ${toolName} ${status}. Output: ${output}` : `Tool ${toolName} ${status}.`,
-    );
-  }
-
-  return summaries.join('\n').trim();
-}
-
-
-async function toAgentHistoryMessages(
-  messages: DbMessage[],
-  userId: string,
-): Promise<AgentHistoryMessage[]> {
-  const attachmentIds = Array.from(
-    new Set(messages.flatMap((message) => getAttachmentIdsFromContent(message.content))),
-  );
-  const attachments =
-    attachmentIds.length > 0
-      ? await attachmentRepository.findByIdsForUser(attachmentIds, userId)
-      : [];
-  const attachmentsById = new Map(
-    attachments.map((attachment) => [attachment.id, attachment] as const),
-  );
-
-  return messages
-    .map<AgentHistoryMessage | null>((message) => {
-      if (message.role !== 'user') {
-        const text =
-          message.role === 'tool'
-            ? summarizeToolContent(message.content)
-            : extractTextFromContent(message.content);
-
-        if (!text) {
-          return null;
-        }
-
-        return {
-          role: message.role === 'tool' ? 'assistant' : message.role,
-          content: text,
-        };
-      }
-
-      const contentParts: ChatContentPart[] = [];
-
-      for (const block of message.content) {
-        if (!isRecord(block)) {
-          continue;
-        }
-
-        const type = typeof block.type === 'string' ? block.type : null;
-        if ((type === 'text' || type === 'transcript') && typeof block.text === 'string') {
-          contentParts.push({ type: 'text', text: block.text });
-          continue;
-        }
-
-        if (type !== 'attachment_ref' || typeof block.attachmentId !== 'string') {
-          continue;
-        }
-
-        const attachment = attachmentsById.get(block.attachmentId);
-        if (!attachment) {
-          contentParts.push({
-            type: 'text',
-            text: `Attached file is unavailable (attachmentId=${block.attachmentId}).`,
-          });
-          continue;
-        }
-
-        if (attachment.kind === 'image') {
-          contentParts.push({
-            type: 'text',
-            text: `Attached image "${attachment.fileName}" (attachmentId=${attachment.id})`,
-          });
-          contentParts.push({
-            type: 'image_url',
-            imageUrl: {
-              url: `data:${attachment.mimeType};base64,${attachment.data.toString('base64')}`,
-              detail: 'auto',
-            },
-          });
-          continue;
-        }
-
-        contentParts.push({
-          type: 'text',
-          text: toAttachmentPromptText(attachment),
-        });
-      }
-
-      if (contentParts.length === 0) {
-        return null;
-      }
-
-      return {
-        role: 'user',
-        content: contentParts,
-      };
-    })
-    .filter((message): message is AgentHistoryMessage => message !== null);
 }
 
 function toAgentToolContexts(tools: AvailableTool[]) {
@@ -326,11 +118,6 @@ function normalizeAssistantResponse(
   return requiresApproval ? TOOL_APPROVAL_RESPONSE : TOOL_EXECUTION_RESPONSE;
 }
 
-function getLatestUserRequestText(messages: DbMessage[]): string {
-  const latestUser = [...messages].reverse().find((message) => message.role === 'user');
-  return latestUser ? extractTextFromContent(latestUser.content) : '';
-}
-
 interface SendMessageOptions {
   conversationId?: string;
   attachmentIds?: string[];
@@ -359,24 +146,44 @@ export class ChatService {
   private readonly modelProvider: OpenAIProvider;
   private readonly agentOrchestrator: AgentOrchestrator;
   private readonly personalizationService: PersonalizationService;
+  private readonly runRegistry: ChatRunRegistry;
+  private readonly eventPublisher: ChatEventPublisher;
 
-  constructor(retrievalBridge?: RetrievalBridge, modelProvider?: OpenAIProvider) {
-    this.retrievalBridge = retrievalBridge ?? new RetrievalBridge();
+  constructor(options?: {
+    config?: AppConfig;
+    retrievalBridge?: RetrievalBridge;
+    modelProvider?: OpenAIProvider;
+    agentOrchestrator?: AgentOrchestrator;
+    personalizationService?: PersonalizationService;
+    runRegistry?: ChatRunRegistry;
+    eventPublisher?: ChatEventPublisher;
+  }) {
+    const config = options?.config;
+    this.retrievalBridge =
+      options?.retrievalBridge ??
+      new RetrievalBridge(undefined, {
+        embeddingModel: config?.openaiEmbeddingModel,
+      });
     this.modelProvider =
-      modelProvider ??
+      options?.modelProvider ??
       new OpenAIProvider(
-        process.env['OPENAI_API_KEY'] ?? '',
-        process.env['OPENAI_MODEL'],
-        process.env['OPENAI_EMBEDDING_MODEL'],
+        config?.openaiApiKey ?? process.env['OPENAI_API_KEY'] ?? '',
+        config?.openaiModel ?? process.env['OPENAI_MODEL'],
+        config?.openaiEmbeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'],
       );
-    this.agentOrchestrator = new AgentOrchestrator([
-      new OrchestratorAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-      new ResearchAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-      new ToolAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-      new CodingAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-      new VerifierAgent(this.modelProvider, process.env['OPENAI_MODEL']),
-    ]);
-    this.personalizationService = new PersonalizationService();
+    const model = config?.openaiModel ?? process.env['OPENAI_MODEL'];
+    this.agentOrchestrator =
+      options?.agentOrchestrator ??
+      new AgentOrchestrator([
+        new OrchestratorAgent(this.modelProvider, model),
+        new ResearchAgent(this.modelProvider, model),
+        new ToolAgent(this.modelProvider, model),
+        new CodingAgent(this.modelProvider, model),
+        new VerifierAgent(this.modelProvider, model),
+      ]);
+    this.personalizationService = options?.personalizationService ?? new PersonalizationService();
+    this.runRegistry = options?.runRegistry ?? new ChatRunRegistry();
+    this.eventPublisher = options?.eventPublisher ?? new ChatEventPublisher();
   }
 
   async sendMessage(
@@ -386,17 +193,8 @@ export class ChatService {
     attachmentIds?: string[],
     clientRunId?: string,
   ) {
-    const activeRun =
-      clientRunId !== undefined
-        ? {
-            userId,
-            controller: new AbortController(),
-            conversationId,
-          }
-        : undefined;
-
-    if (clientRunId && activeRun) {
-      activeChatRuns.set(clientRunId, activeRun);
+    if (clientRunId !== undefined) {
+      this.runRegistry.start(clientRunId, userId, conversationId);
     }
 
     let result: SendMessageResult;
@@ -408,7 +206,7 @@ export class ChatService {
       });
     } finally {
       if (clientRunId) {
-        activeChatRuns.delete(clientRunId);
+        this.runRegistry.finish(clientRunId);
       }
     }
 
@@ -419,7 +217,7 @@ export class ChatService {
   }
 
   async interruptRun(userId: string, runId: string): Promise<InterruptChatRunResponse> {
-    const activeRun = activeChatRuns.get(runId);
+    const activeRun = this.runRegistry.get(runId);
     if (!activeRun || activeRun.userId !== userId) {
       return { ok: false, status: 'not_found' };
     }
@@ -456,7 +254,10 @@ export class ChatService {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
     }
 
-    const recentMessages = await messageRepository.listByConversation(conversation.id, HISTORY_LIMIT);
+    const recentMessages = await messageRepository.listByConversation(
+      conversation.id,
+      HISTORY_LIMIT,
+    );
     const latestAssistant = [...recentMessages]
       .reverse()
       .find((message) => message.role === 'assistant');
@@ -467,9 +268,7 @@ export class ChatService {
     const groupedExecutions = await toolExecutionRepository.listByMessage(execution.messageId);
     if (
       groupedExecutions.length === 0 ||
-      groupedExecutions.some(
-        (item) => item.status !== 'completed' && item.status !== 'failed',
-      )
+      groupedExecutions.some((item) => item.status !== 'completed' && item.status !== 'failed')
     ) {
       return { continued: false, reason: 'tool_group_still_in_progress' };
     }
@@ -526,12 +325,7 @@ export class ChatService {
       );
 
       const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
-        ? await this.retrievalBridge.search(
-            requestContent,
-            userId,
-            MAX_RETRIEVAL_CONTEXT,
-            signal,
-          )
+        ? await this.retrievalBridge.search(requestContent, userId, MAX_RETRIEVAL_CONTEXT, signal)
         : { results: [], citations: [] };
       throwIfAborted(signal);
 
@@ -725,9 +519,9 @@ export class ChatService {
         fullText: assistantResponse,
       };
 
-      broadcast(conversation.id, event);
+      this.eventPublisher.assistantTextDone(event);
       for (const approvalEvent of approvalEvents) {
-        broadcast(conversation.id, approvalEvent);
+        this.eventPublisher.approvalRequested(approvalEvent);
       }
 
       if (verificationIssues.length > 0) {
@@ -792,7 +586,7 @@ export class ChatService {
     getPool();
     const initialConversationTitle = buildConversationTitle(content);
     const activeRun =
-      options.clientRunId !== undefined ? activeChatRuns.get(options.clientRunId) : undefined;
+      options.clientRunId !== undefined ? this.runRegistry.get(options.clientRunId) : undefined;
     const signal = activeRun?.controller.signal;
 
     const conversation =
@@ -805,7 +599,7 @@ export class ChatService {
     }
 
     if (activeRun) {
-      activeRun.conversationId = conversation.id;
+      this.runRegistry.setConversation(options.clientRunId!, conversation.id);
     }
 
     const attachments = options.attachmentIds?.length
@@ -883,7 +677,7 @@ export class ChatService {
       reason: USER_CANCELLED_REASON,
     };
 
-    broadcast(conversationId, event);
+    this.eventPublisher.assistantInterrupted(event);
     logger.info(
       {
         event: 'chat.message_interrupted',
