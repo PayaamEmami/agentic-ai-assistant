@@ -55,7 +55,7 @@ async function main() {
         resolve();
       });
     });
-    await Promise.all(workers.map(w => w.close()));
+    await Promise.all(workers.map((w) => w.close()));
     await closeJobQueues();
     await closePool();
     await shutdownTracing();

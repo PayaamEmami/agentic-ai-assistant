@@ -24,7 +24,7 @@ export class IndexingServiceImpl implements IndexingService {
     const chunks = await this.chunkingService.chunk(document);
     const embeddings = chunks.length
       ? await this.embeddingService.generateEmbeddings(
-          chunks.map(chunk => ({ id: chunk.id, content: chunk.content })),
+          chunks.map((chunk) => ({ id: chunk.id, content: chunk.content })),
         )
       : [];
 

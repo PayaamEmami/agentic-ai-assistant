@@ -12,11 +12,7 @@ export class AppError extends Error {
   }
 }
 
-export function errorHandler(
-  error: FastifyError,
-  request: FastifyRequest,
-  reply: FastifyReply,
-) {
+export function errorHandler(error: FastifyError, request: FastifyRequest, reply: FastifyReply) {
   request.observabilitySpan?.recordException(error);
   const componentLogger = getLogger({
     component: 'http',

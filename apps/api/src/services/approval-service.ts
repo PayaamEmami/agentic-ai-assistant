@@ -17,11 +17,7 @@ export class ApprovalService {
     return approvalRepository.listPendingByUser(userId);
   }
 
-  async decide(
-    approvalId: string,
-    userId: string,
-    status: 'approved' | 'rejected',
-  ) {
+  async decide(approvalId: string, userId: string, status: 'approved' | 'rejected') {
     const approval = await approvalRepository.findById(approvalId);
     if (!approval) {
       throw new AppError(404, 'Approval not found', 'APPROVAL_NOT_FOUND');
@@ -44,15 +40,11 @@ export class ApprovalService {
     if (status === 'approved') {
       await toolExecutionRepository.updateStatus(approval.toolExecutionId, 'pending');
       if (toolExecution.messageId) {
-        await messageRepository.updateToolResultBlock(
-          toolExecution.messageId,
-          toolExecution.id,
-          {
-            status: 'approved',
-            detail: undefined,
-            output: undefined,
-          },
-        );
+        await messageRepository.updateToolResultBlock(toolExecution.messageId, toolExecution.id, {
+          status: 'approved',
+          detail: undefined,
+          output: undefined,
+        });
       }
       await enqueueToolExecutionJob({
         toolExecutionId: toolExecution.id,
@@ -70,15 +62,11 @@ export class ApprovalService {
         rejectionOutput,
       );
       if (toolExecution.messageId) {
-        await messageRepository.updateToolResultBlock(
-          toolExecution.messageId,
-          toolExecution.id,
-          {
-            status: 'rejected',
-            detail: undefined,
-            output: undefined,
-          },
-        );
+        await messageRepository.updateToolResultBlock(toolExecution.messageId, toolExecution.id, {
+          status: 'rejected',
+          detail: undefined,
+          output: undefined,
+        });
       }
 
       const doneEvent: ToolDoneEvent = {

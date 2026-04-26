@@ -1,16 +1,8 @@
 import crypto from 'node:crypto';
 import { buildSystemPrompt, type PromptToolContext } from '@aaa/ai';
-import {
-  type Conversation,
-  conversationRepository,
-  getPool,
-  messageRepository,
-} from '@aaa/db';
+import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
-import type {
-  AssistantInterruptedEvent,
-  AssistantTextDoneEvent,
-} from '@aaa/shared';
+import type { AssistantInterruptedEvent, AssistantTextDoneEvent } from '@aaa/shared';
 import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { broadcast } from '../ws/connections.js';
@@ -336,17 +328,8 @@ export class VoiceService {
       'gpt-realtime-1.5';
     const voice =
       this.config?.openaiRealtimeVoice ?? process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
-    const instructions = buildRealtimeInstructions(
-      personalContext,
-      recentMessages,
-      availableTools,
-    );
-    const sessionConfig = buildRealtimeSessionConfig(
-      model,
-      voice,
-      instructions,
-      availableTools,
-    );
+    const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
+    const sessionConfig = buildRealtimeSessionConfig(model, voice, instructions, availableTools);
     const formData = new FormData();
     formData.set('sdp', sdp);
     formData.set('session', JSON.stringify(sessionConfig));
@@ -416,11 +399,7 @@ export class VoiceService {
     const started = await this.startTurn(userId, trimmedUserTranscript, conversationId);
 
     try {
-      await this.updateAssistantText(
-        userId,
-        started.voiceTurnId,
-        trimmedAssistantTranscript,
-      );
+      await this.updateAssistantText(userId, started.voiceTurnId, trimmedAssistantTranscript);
     } catch (error) {
       getLogger({
         component: 'voice-service',
@@ -497,11 +476,7 @@ export class VoiceService {
     };
   }
 
-  async prepareTurn(
-    userId: string,
-    voiceTurnId: string,
-    overrideUserTranscript?: string,
-  ) {
+  async prepareTurn(userId: string, voiceTurnId: string, overrideUserTranscript?: string) {
     getPool();
 
     const assistantMessage = await messageRepository.findById(voiceTurnId);
@@ -665,11 +640,7 @@ export class VoiceService {
         if (error instanceof AppError) {
           throw error;
         }
-        throw new AppError(
-          400,
-          'Tool arguments must be valid JSON',
-          'VOICE_TOOL_ARGS_INVALID',
-        );
+        throw new AppError(400, 'Tool arguments must be valid JSON', 'VOICE_TOOL_ARGS_INVALID');
       }
     }
 
@@ -787,9 +758,7 @@ export class VoiceService {
     }
 
     let assistantText =
-      typeof finalText === 'string'
-        ? finalText
-        : extractMessageText(assistantMessage.content);
+      typeof finalText === 'string' ? finalText : extractMessageText(assistantMessage.content);
 
     if (typeof finalText === 'string') {
       await messageRepository.replaceAssistantText(voiceTurnId, finalText);

@@ -6,8 +6,7 @@ const INTERNAL_SERVICE_SECRET =
 const API_INSTANCE_ID =
   process.env['API_INSTANCE_ID'] ?? process.env['HOSTNAME'] ?? crypto.randomUUID();
 const API_INTERNAL_BASE_URL =
-  process.env['API_INTERNAL_BASE_URL'] ??
-  `http://127.0.0.1:${process.env['API_PORT'] ?? '3001'}`;
+  process.env['API_INTERNAL_BASE_URL'] ?? `http://127.0.0.1:${process.env['API_PORT'] ?? '3001'}`;
 
 export function getInternalServiceSecret(): string {
   return INTERNAL_SERVICE_SECRET;

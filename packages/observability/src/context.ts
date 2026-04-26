@@ -7,7 +7,9 @@ let defaultLogger: Logger = pino({ enabled: false });
 
 function compactContext(context: LogContext): LogContext {
   return Object.fromEntries(
-    Object.entries(context).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+    Object.entries(context).filter(
+      ([, value]) => value !== undefined && value !== null && value !== '',
+    ),
   ) as LogContext;
 }
 
@@ -39,9 +41,7 @@ export function addLogContext(context: LogContext): Logger {
   const nextContext = compactContext(context);
 
   if (!store) {
-    return Object.keys(nextContext).length > 0
-      ? defaultLogger.child(nextContext)
-      : defaultLogger;
+    return Object.keys(nextContext).length > 0 ? defaultLogger.child(nextContext) : defaultLogger;
   }
 
   store.context = {

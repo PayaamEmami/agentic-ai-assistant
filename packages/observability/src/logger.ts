@@ -105,10 +105,7 @@ function formatPrettyLine(raw: string): string {
     delete rest.userId;
     delete rest.jobId;
 
-    const suffix =
-      Object.keys(rest).length > 0
-        ? ` ${JSON.stringify(sanitizeForLogs(rest))}`
-        : '';
+    const suffix = Object.keys(rest).length > 0 ? ` ${JSON.stringify(sanitizeForLogs(rest))}` : '';
 
     const tagText = tags.length > 0 ? ` ${tags.join(' ')}` : '';
     return `${time} ${levelLabel(parsed.level)}${tagText}${message ? ` ${message}` : ''}${suffix}`;
@@ -198,7 +195,9 @@ class LokiBatchStream extends Writable {
         );
       }
     } catch (error) {
-      process.stderr.write(`Loki log export failed: ${error instanceof Error ? error.message : String(error)}\n`);
+      process.stderr.write(
+        `Loki log export failed: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
     } finally {
       this.flushing = false;
       if (this.buffer.length > 0) {

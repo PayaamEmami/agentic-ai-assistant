@@ -8,7 +8,13 @@ export interface MemoryItem {
   updatedAt: Date;
 }
 
-export type MemoryKind = 'fact' | 'preference' | 'relationship' | 'project' | 'person' | 'instruction';
+export type MemoryKind =
+  | 'fact'
+  | 'preference'
+  | 'relationship'
+  | 'project'
+  | 'person'
+  | 'instruction';
 
 export interface PersonalizationProfile {
   userId: string;

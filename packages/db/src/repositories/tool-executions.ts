@@ -104,14 +104,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        )
        VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${SELECT_COLUMNS}`,
-      [
-        id,
-        conversationId,
-        messageId,
-        toolName,
-        JSON.stringify(input),
-        originMode,
-      ],
+      [id, conversationId, messageId, toolName, JSON.stringify(input), originMode],
     );
     return result.rows[0]!;
   },

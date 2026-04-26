@@ -16,10 +16,7 @@ declare module 'fastify' {
   }
 }
 
-export async function authenticate(
-  request: FastifyRequest,
-  _reply: FastifyReply,
-): Promise<void> {
+export async function authenticate(request: FastifyRequest, _reply: FastifyReply): Promise<void> {
   const token = extractBearerToken(request.headers.authorization);
   const logger = getLogger({ component: 'auth' });
 
@@ -40,9 +37,7 @@ export async function authenticate(
 }
 
 export function extractBearerToken(authHeader: string | undefined): string | null {
-  return authHeader?.startsWith('Bearer ')
-    ? authHeader.slice('Bearer '.length).trim()
-    : null;
+  return authHeader?.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : null;
 }
 
 export async function authenticateToken(token: string): Promise<AuthUser> {

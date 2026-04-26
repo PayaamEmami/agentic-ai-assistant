@@ -12,8 +12,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
   const [isDesktop, setIsDesktop] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
-  const [hasLoadedSidebarPreference, setHasLoadedSidebarPreference] =
-    useState(false);
+  const [hasLoadedSidebarPreference, setHasLoadedSidebarPreference] = useState(false);
 
   useEffect(() => {
     const mediaQuery = window.matchMedia(DESKTOP_MEDIA_QUERY);
@@ -38,10 +37,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
       return;
     }
 
-    window.localStorage.setItem(
-      SIDEBAR_STORAGE_KEY,
-      isSidebarCollapsed ? 'true' : 'false',
-    );
+    window.localStorage.setItem(SIDEBAR_STORAGE_KEY, isSidebarCollapsed ? 'true' : 'false');
   }, [hasLoadedSidebarPreference, isSidebarCollapsed]);
 
   useEffect(() => {
@@ -72,9 +68,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
         mobileOpen={!isDesktop && isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         onToggleDesktopCollapse={
-          isDesktop
-            ? () => setIsSidebarCollapsed((previous) => !previous)
-            : undefined
+          isDesktop ? () => setIsSidebarCollapsed((previous) => !previous) : undefined
         }
       />
       <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">

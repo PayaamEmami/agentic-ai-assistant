@@ -116,7 +116,9 @@ export function serializeError(error: unknown): SerializedError {
       }
 
       const details = Object.fromEntries(
-        Object.entries(error).filter(([key]) => !['name', 'message', 'code', 'statusCode', 'stack', 'cause'].includes(key)),
+        Object.entries(error).filter(
+          ([key]) => !['name', 'message', 'code', 'statusCode', 'stack', 'cause'].includes(key),
+        ),
       );
 
       if (Object.keys(details).length > 0) {

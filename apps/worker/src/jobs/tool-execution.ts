@@ -647,22 +647,20 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   };
   await publishToolEvent(doneEvent);
   if (execution.originMode !== 'voice') {
-    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch(
-      (error) => {
-        logger.warn(
-          {
-            event: 'tool.execution.continuation_failed',
-            outcome: 'failure',
-            toolExecutionId,
-            toolName,
-            conversationId,
-            correlationId,
-            error,
-          },
-          'Failed to continue conversation after tool execution',
-        );
-      },
-    );
+    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
+      logger.warn(
+        {
+          event: 'tool.execution.continuation_failed',
+          outcome: 'failure',
+          toolExecutionId,
+          toolName,
+          conversationId,
+          correlationId,
+          error,
+        },
+        'Failed to continue conversation after tool execution',
+      );
+    });
   } else {
     logger.info(
       {

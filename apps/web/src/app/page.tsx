@@ -60,12 +60,10 @@ export default function Home() {
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-foreground-muted">
             Agentic AI Assistant
           </p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">
-            Welcome
-          </h1>
+          <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">Welcome</h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-foreground-muted">
-            Sign in to your workspace, or create an account to start chatting, use tools, and get answers in
-            real time. Everything here stays private to your account.
+            Sign in to your workspace, or create an account to start chatting, use tools, and get
+            answers in real time. Everything here stays private to your account.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-foreground-muted">
             <span className="rounded-full bg-surface-input px-4 py-2">Private workspace</span>
@@ -80,7 +78,9 @@ export default function Home() {
               type="button"
               onClick={() => setMode('login')}
               className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                mode === 'login' ? 'bg-surface-elevated text-foreground shadow-sm' : 'text-foreground-muted'
+                mode === 'login'
+                  ? 'bg-surface-elevated text-foreground shadow-sm'
+                  : 'text-foreground-muted'
               }`}
             >
               Sign In
@@ -89,7 +89,9 @@ export default function Home() {
               type="button"
               onClick={() => setMode('register')}
               className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                mode === 'register' ? 'bg-surface-elevated text-foreground shadow-sm' : 'text-foreground-muted'
+                mode === 'register'
+                  ? 'bg-surface-elevated text-foreground shadow-sm'
+                  : 'text-foreground-muted'
               }`}
             >
               Create Account
@@ -146,11 +148,7 @@ export default function Home() {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting
-                ? 'Working...'
-                : mode === 'register'
-                  ? 'Create account'
-                  : 'Sign in'}
+              {isSubmitting ? 'Working...' : mode === 'register' ? 'Create account' : 'Sign in'}
             </button>
           </form>
 

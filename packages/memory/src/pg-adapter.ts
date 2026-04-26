@@ -121,7 +121,12 @@ export class PgMemoryAdapter implements MemoryDbAdapter {
         created_at AS "createdAt",
         updated_at AS "updatedAt"
     `;
-    const result = await this.executor.query<MemorySqlRow>(sql, [userId, kind, content, JSON.stringify(metadata)]);
+    const result = await this.executor.query<MemorySqlRow>(sql, [
+      userId,
+      kind,
+      content,
+      JSON.stringify(metadata),
+    ]);
     const row = result.rows[0];
     if (!row) {
       throw new Error('Failed to insert memory');
@@ -251,9 +256,9 @@ export class PgMemoryAdapter implements MemoryDbAdapter {
   }
 
   async deletePreference(userId: string, key: string): Promise<void> {
-    await this.executor.query(
-      'DELETE FROM preferences WHERE user_id = $1 AND key = $2',
-      [userId, key],
-    );
+    await this.executor.query('DELETE FROM preferences WHERE user_id = $1 AND key = $2', [
+      userId,
+      key,
+    ]);
   }
 }

@@ -1,8 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import {
-  AuthCredentialsRequest,
-  RegisterRequest,
-} from '@aaa/shared';
+import { AuthCredentialsRequest, RegisterRequest } from '@aaa/shared';
 import { userRepository } from '@aaa/db';
 import { signAuthToken } from '../lib/jwt.js';
 import { hashPassword, verifyPassword } from '../lib/password.js';
@@ -34,11 +31,7 @@ export async function authRoutes(app: FastifyInstance) {
     }
 
     const passwordHash = await hashPassword(parsed.data.password);
-    const user = await userRepository.create(
-      email,
-      parsed.data.displayName.trim(),
-      passwordHash,
-    );
+    const user = await userRepository.create(email, parsed.data.displayName.trim(), passwordHash);
     const token = signAuthToken(user.id, user.email);
 
     return reply.status(201).send({

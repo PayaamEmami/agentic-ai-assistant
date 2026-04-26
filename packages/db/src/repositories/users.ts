@@ -74,11 +74,7 @@ export const userRepository: UserRepository = {
     return result.rows[0] ?? null;
   },
 
-  async create(
-    email: string,
-    displayName: string,
-    passwordHash?: string | null,
-  ): Promise<User> {
+  async create(email: string, displayName: string, passwordHash?: string | null): Promise<User> {
     const pool = getPool();
     const id = crypto.randomUUID();
     const result = await pool.query<UserRow>(
@@ -93,9 +89,9 @@ export const userRepository: UserRepository = {
 
   async setPasswordHash(id: string, passwordHash: string): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      'UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2',
-      [passwordHash, id],
-    );
+    await pool.query('UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2', [
+      passwordHash,
+      id,
+    ]);
   },
 };

@@ -88,7 +88,12 @@ export async function fetchWithTelemetry(
 
         if (!response.ok) {
           const detail = options.logResponseBodyOnFailure
-            ? sanitizeForLogs(await response.clone().text().catch(() => ''))
+            ? sanitizeForLogs(
+                await response
+                  .clone()
+                  .text()
+                  .catch(() => ''),
+              )
             : undefined;
           logger.warn(
             {

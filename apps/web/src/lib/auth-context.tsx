@@ -9,12 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import {
-  api,
-  clearStoredAuthToken,
-  getStoredAuthToken,
-  setStoredAuthToken,
-} from './api-client';
+import { api, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from './api-client';
 
 interface AuthUser {
   id: string;
@@ -71,25 +66,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setToken(existingToken);
     try {
       const response = await api.auth.me();
-      if (
-        authMutationRef.current !== refreshMutation ||
-        getStoredAuthToken() !== existingToken
-      ) {
+      if (authMutationRef.current !== refreshMutation || getStoredAuthToken() !== existingToken) {
         return;
       }
       setUser(response.user);
     } catch {
-      if (
-        authMutationRef.current === refreshMutation &&
-        getStoredAuthToken() === existingToken
-      ) {
+      if (authMutationRef.current === refreshMutation && getStoredAuthToken() === existingToken) {
         logout();
       }
     } finally {
-      if (
-        authMutationRef.current === refreshMutation &&
-        getStoredAuthToken() === existingToken
-      ) {
+      if (authMutationRef.current === refreshMutation && getStoredAuthToken() === existingToken) {
         setIsReady(true);
       }
     }

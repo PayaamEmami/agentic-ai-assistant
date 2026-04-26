@@ -135,7 +135,11 @@ export async function handleAppSync(job: Job<AppSyncJobData>): Promise<void> {
       lastSyncStatus: result.errors.length > 0 ? 'failed' : 'completed',
       lastError: errorSummary,
     });
-    await appCapabilityConfigRepository.updateStatus(appCapabilityConfigId, 'connected', errorSummary);
+    await appCapabilityConfigRepository.updateStatus(
+      appCapabilityConfigId,
+      'connected',
+      errorSummary,
+    );
     await appSyncRunRepository.complete(syncRun.id, {
       status: result.errors.length > 0 ? 'failed' : 'completed',
       itemsDiscovered: result.items.length,

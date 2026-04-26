@@ -57,7 +57,7 @@ export class SimpleChunkingService implements ChunkingService {
 
     const paragraphs = content
       .split(/\r?\n\r?\n+/)
-      .map(paragraph => paragraph.trim())
+      .map((paragraph) => paragraph.trim())
       .filter(Boolean);
 
     if (paragraphs.length === 0) {

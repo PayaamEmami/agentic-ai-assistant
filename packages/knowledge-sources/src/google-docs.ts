@@ -51,7 +51,7 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
     const files = await this.listGoogleDocs(limit, cursor);
     return {
       items: files.map((file) => this.toKnowledgeSourceItem(file)),
-      nextCursor: files.length === limit ? files.at(-1)?.id ?? null : null,
+      nextCursor: files.length === limit ? (files.at(-1)?.id ?? null) : null,
     };
   }
 
@@ -136,12 +136,9 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       changes?: Array<{ fileId: string; removed?: boolean; file?: GoogleFile }>;
       nextPageToken?: string;
       newStartPageToken?: string;
-    }>(
-      `https://www.googleapis.com/drive/v3/changes?${params.toString()}`,
-      {
-        headers,
-      },
-    );
+    }>(`https://www.googleapis.com/drive/v3/changes?${params.toString()}`, {
+      headers,
+    });
 
     const items: KnowledgeSourceItem[] = [];
     for (const change of response.changes ?? []) {
@@ -200,7 +197,10 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       throw new Error('Google knowledge source is not initialized');
     }
 
-    if (!this.credentials.expiresAt || Date.parse(this.credentials.expiresAt) - Date.now() > 60_000) {
+    if (
+      !this.credentials.expiresAt ||
+      Date.parse(this.credentials.expiresAt) - Date.now() > 60_000
+    ) {
       return this.credentials.accessToken;
     }
 
@@ -247,7 +247,8 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       q: "mimeType='application/vnd.google-apps.document' and trashed=false and 'me' in owners",
       orderBy: 'modifiedTime desc',
       pageSize: String(Math.min(limit, 1000)),
-      fields: 'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId)',
+      fields:
+        'nextPageToken,files(id,name,mimeType,modifiedTime,webViewLink,trashed,ownedByMe,driveId)',
     });
     if (pageToken) {
       params.set('pageToken', pageToken);

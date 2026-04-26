@@ -1,9 +1,4 @@
-import {
-  MemoryServiceImpl,
-  PgMemoryAdapter,
-  type MemoryItem,
-  type MemoryKind,
-} from '@aaa/memory';
+import { MemoryServiceImpl, PgMemoryAdapter, type MemoryItem, type MemoryKind } from '@aaa/memory';
 import { getPool } from '@aaa/db';
 import { AppError } from '../lib/errors.js';
 
@@ -103,9 +98,7 @@ export function buildPersonalContext(state: PersonalizationState): string | unde
 }
 
 export class PersonalizationService {
-  private readonly memoryService = new MemoryServiceImpl(
-    new PgMemoryAdapter(getPool()),
-  );
+  private readonly memoryService = new MemoryServiceImpl(new PgMemoryAdapter(getPool()));
 
   async getPersonalization(userId: string): Promise<PersonalizationState> {
     const [profile, memories] = await Promise.all([
@@ -144,19 +137,11 @@ export class PersonalizationService {
     };
   }
 
-  async createMemory(
-    userId: string,
-    kind: MemoryKind,
-    content: string,
-  ): Promise<MemoryItem> {
+  async createMemory(userId: string, kind: MemoryKind, content: string): Promise<MemoryItem> {
     return this.memoryService.store(userId, kind, content.trim(), { source: 'manual' });
   }
 
-  async updateMemory(
-    userId: string,
-    memoryId: string,
-    content: string,
-  ): Promise<MemoryItem> {
+  async updateMemory(userId: string, memoryId: string, content: string): Promise<MemoryItem> {
     const existing = await this.memoryService.get(userId, memoryId);
     if (!existing) {
       throw new AppError(404, 'Memory not found', 'MEMORY_NOT_FOUND');

@@ -75,9 +75,9 @@ export const approvalRepository: ApprovalRepository = {
 
   async decide(id: string, status: string): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      'UPDATE approvals SET status = $1, decided_at = NOW() WHERE id = $2',
-      [status, id],
-    );
+    await pool.query('UPDATE approvals SET status = $1, decided_at = NOW() WHERE id = $2', [
+      status,
+      id,
+    ]);
   },
 };

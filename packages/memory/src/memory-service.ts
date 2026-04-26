@@ -7,12 +7,22 @@ import type {
 import type { MemoryDbAdapter, MemoryRow } from './db-adapter.js';
 
 export interface MemoryService {
-  store(userId: string, kind: MemoryKind, content: string, metadata?: Record<string, unknown>): Promise<MemoryItem>;
+  store(
+    userId: string,
+    kind: MemoryKind,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<MemoryItem>;
   get(userId: string, id: string): Promise<MemoryItem | null>;
   listAll(userId: string): Promise<MemoryItem[]>;
   recall(userId: string, query: string, limit?: number): Promise<MemoryItem[]>;
   listByKind(userId: string, kind: MemoryKind): Promise<MemoryItem[]>;
-  update(userId: string, id: string, content: string, metadata?: Record<string, unknown>): Promise<MemoryItem>;
+  update(
+    userId: string,
+    id: string,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<MemoryItem>;
   remove(userId: string, id: string): Promise<void>;
   getProfile(userId: string): Promise<PersonalizationProfile>;
   updateProfile(userId: string, input: ProfileUpdateInput): Promise<PersonalizationProfile>;
@@ -61,7 +71,12 @@ function toUniqueValues(values: string[]): string[] {
 export class MemoryServiceImpl implements MemoryService {
   constructor(private readonly adapter: MemoryDbAdapter) {}
 
-  async store(userId: string, kind: MemoryKind, content: string, metadata?: Record<string, unknown>): Promise<MemoryItem> {
+  async store(
+    userId: string,
+    kind: MemoryKind,
+    content: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<MemoryItem> {
     const row = await this.adapter.insertMemory(userId, kind, content, metadata ?? {});
     return toMemoryItem(row);
   }

@@ -121,9 +121,10 @@ export const attachmentRepository: AttachmentRepository = {
 
   async setDocument(id: string, documentId: string, userId: string): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      'UPDATE attachments SET document_id = $1 WHERE id = $2 AND user_id = $3',
-      [documentId, id, userId],
-    );
+    await pool.query('UPDATE attachments SET document_id = $1 WHERE id = $2 AND user_id = $3', [
+      documentId,
+      id,
+      userId,
+    ]);
   },
 };

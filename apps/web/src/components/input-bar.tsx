@@ -132,9 +132,7 @@ export function InputBar() {
         .filter((call) => call.status === 'requires_approval')
         .map((call) => call.toolExecutionId),
     );
-    return pendingApprovals.filter((approval) =>
-      pendingExecutionIds.has(approval.toolExecutionId),
-    );
+    return pendingApprovals.filter((approval) => pendingExecutionIds.has(approval.toolExecutionId));
   }, [liveVoice.pendingToolCalls, pendingApprovals]);
 
   const micDisabledReason = useMemo(() => {
@@ -224,9 +222,7 @@ export function InputBar() {
             Live voice can invoke tools. Sensitive tools will pause for approval here before
             running.
           </p>
-          {liveVoice.error ? (
-            <p className="mt-2 text-xs text-error">{liveVoice.error}</p>
-          ) : null}
+          {liveVoice.error ? <p className="mt-2 text-xs text-error">{liveVoice.error}</p> : null}
         </div>
       </section>
     );

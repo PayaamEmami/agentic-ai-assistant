@@ -14,11 +14,7 @@ interface JwtHeader {
 
 function base64UrlEncode(input: Buffer | string): string {
   const raw = Buffer.isBuffer(input) ? input : Buffer.from(input);
-  return raw
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+  return raw.toString('base64').replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_');
 }
 
 function base64UrlDecode(input: string): string {

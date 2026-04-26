@@ -1,9 +1,5 @@
 import { Pool, type PoolClient } from 'pg';
-import {
-  databaseQueryCounter,
-  databaseQueryDurationMs,
-  withSpan,
-} from '@aaa/observability';
+import { databaseQueryCounter, databaseQueryDurationMs, withSpan } from '@aaa/observability';
 
 const PATCHED = Symbol('aaa.db.query.patched');
 

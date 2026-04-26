@@ -14,9 +14,7 @@
       },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
       "id": 1,
-      "targets": [
-        { "expr": "sum(rate(aaa_api_http_requests_total[5m]))", "refId": "A" }
-      ],
+      "targets": [{ "expr": "sum(rate(aaa_api_http_requests_total[5m]))", "refId": "A" }],
       "options": {
         "legend": { "displayMode": "hidden", "placement": "bottom", "showLegend": false },
         "tooltip": { "mode": "single", "sort": "none" }
@@ -60,7 +58,11 @@
       "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
       "id": 3,
       "targets": [
-        { "expr": "sum(aaa_api_websocket_connections) by (state)", "legendFormat": "{{state}}", "refId": "A" }
+        {
+          "expr": "sum(aaa_api_websocket_connections) by (state)",
+          "legendFormat": "{{state}}",
+          "refId": "A"
+        }
       ],
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -81,7 +83,11 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
       "id": 4,
       "targets": [
-        { "expr": "sum(rate(aaa_worker_jobs_total[5m])) by (queue, outcome)", "legendFormat": "{{queue}} | {{outcome}}", "refId": "A" }
+        {
+          "expr": "sum(rate(aaa_worker_jobs_total[5m])) by (queue, outcome)",
+          "legendFormat": "{{queue}} | {{outcome}}",
+          "refId": "A"
+        }
       ],
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },
@@ -152,7 +158,11 @@
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
       "id": 7,
       "targets": [
-        { "expr": "sum(rate(aaa_openai_estimated_cost_usd_total[5m])) by (operation, model)", "legendFormat": "{{operation}} | {{model}}", "refId": "A" }
+        {
+          "expr": "sum(rate(aaa_openai_estimated_cost_usd_total[5m])) by (operation, model)",
+          "legendFormat": "{{operation}} | {{model}}",
+          "refId": "A"
+        }
       ],
       "options": {
         "legend": { "displayMode": "list", "placement": "bottom", "showLegend": true },

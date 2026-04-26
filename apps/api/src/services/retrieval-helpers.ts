@@ -15,7 +15,8 @@ export function appLabel(kind: string): string {
 
 export function buildRetrievalContextSections(retrieval: RetrievalResponse): string[] {
   return retrieval.results.map((result) => {
-    const appKind = typeof result.metadata['appKind'] === 'string' ? result.metadata['appKind'] : null;
+    const appKind =
+      typeof result.metadata['appKind'] === 'string' ? result.metadata['appKind'] : null;
     const lines = [
       `Title: ${result.documentTitle}`,
       appKind ? `App: ${appLabel(appKind)}` : null,

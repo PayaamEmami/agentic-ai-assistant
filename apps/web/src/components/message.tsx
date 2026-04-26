@@ -81,12 +81,8 @@ function getDisplayToolStatus(
 }
 
 export function Message({ role, content }: MessageProps) {
-  const {
-    pendingApprovals,
-    approvalStatusesByToolExecution,
-    approveAction,
-    rejectAction,
-  } = useChatContext();
+  const { pendingApprovals, approvalStatusesByToolExecution, approveAction, rejectAction } =
+    useChatContext();
   const isUser = role === 'user';
   const isSystem = role === 'system';
   const visibleContent = content.filter((block) => block.type !== 'citation');
@@ -137,9 +133,7 @@ export function Message({ role, content }: MessageProps) {
         : undefined;
       const displayStatus = getDisplayToolStatus(
         block.status,
-        block.toolExecutionId
-          ? approvalStatusesByToolExecution[block.toolExecutionId]
-          : undefined,
+        block.toolExecutionId ? approvalStatusesByToolExecution[block.toolExecutionId] : undefined,
       );
 
       return (
@@ -189,7 +183,9 @@ export function Message({ role, content }: MessageProps) {
             <p className="mt-2 text-xs text-foreground-muted">{block.detail}</p>
           ) : null}
           {typeof block.output === 'undefined' ? null : (
-            <pre className="mt-2 overflow-x-auto text-xs text-foreground">{stringify(block.output)}</pre>
+            <pre className="mt-2 overflow-x-auto text-xs text-foreground">
+              {stringify(block.output)}
+            </pre>
           )}
         </div>
       );

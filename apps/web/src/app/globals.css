@@ -1,4 +1,4 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 @theme {
   --color-surface: #181818;
@@ -29,9 +29,9 @@ body {
 button:not(:disabled),
 a[href],
 summary,
-input[type="checkbox"]:not(:disabled),
-input[type="radio"]:not(:disabled),
+input[type='checkbox']:not(:disabled),
+input[type='radio']:not(:disabled),
 label:has(input:not(:disabled)),
-[role="button"]:not([aria-disabled="true"]) {
+[role='button']:not([aria-disabled='true']) {
   cursor: pointer;
 }

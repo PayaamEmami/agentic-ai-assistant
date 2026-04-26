@@ -14,7 +14,7 @@ function extractKeywords(query: string): string[] {
   const normalized = query
     .toLowerCase()
     .split(/\s+/)
-    .map(token => token.replace(/[^a-z0-9]/g, ''))
+    .map((token) => token.replace(/[^a-z0-9]/g, ''))
     .filter(Boolean);
 
   return Array.from(new Set(normalized));
@@ -27,7 +27,7 @@ export class KeywordReranker implements RerankingService {
       return [...results];
     }
 
-    const reranked = results.map(result => {
+    const reranked = results.map((result) => {
       const content = result.content.toLowerCase();
       let keywordMatches = 0;
 

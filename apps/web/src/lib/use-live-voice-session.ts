@@ -5,13 +5,7 @@ import { API_BASE, ApiError, getStoredAuthToken, api } from './api-client';
 import type { ToolEventListener, ToolEventPayload } from './chat-context';
 import { reportClientError } from './client-logging';
 
-type VoicePhase =
-  | 'idle'
-  | 'connecting'
-  | 'listening'
-  | 'thinking'
-  | 'speaking'
-  | 'error';
+type VoicePhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
 
 interface SessionInit {
   sessionId: string;
@@ -167,11 +161,7 @@ export function useLiveVoiceSession({
     return existing;
   };
 
-  const withRetry = async <T,>(
-    label: string,
-    fn: () => Promise<T>,
-    maxAttempts = 3,
-  ): Promise<T> => {
+  const withRetry = async <T>(label: string, fn: () => Promise<T>, maxAttempts = 3): Promise<T> => {
     let lastError: unknown;
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
@@ -228,9 +218,7 @@ export function useLiveVoiceSession({
         return result.voiceTurnId;
       } catch (startError) {
         setError(
-          startError instanceof Error
-            ? startError.message
-            : 'Failed to start the live voice turn.',
+          startError instanceof Error ? startError.message : 'Failed to start the live voice turn.',
         );
         return null;
       } finally {
@@ -356,9 +344,7 @@ export function useLiveVoiceSession({
       await withRetry('assistant-text', () =>
         api.voice.updateAssistantText(voiceTurnId, assistantTranscript),
       );
-      await withRetry('complete', () =>
-        api.voice.completeTurn(voiceTurnId, assistantTranscript),
-      );
+      await withRetry('complete', () => api.voice.completeTurn(voiceTurnId, assistantTranscript));
       await syncConversation(conversationId);
       resetPendingTurn();
     } catch (persistError) {
@@ -465,10 +451,7 @@ export function useLiveVoiceSession({
         context: { toolName, callId },
       });
       forwardToolResultToRealtime(callId, {
-        error:
-          submitError instanceof Error
-            ? submitError.message
-            : 'Voice tool submission failed.',
+        error: submitError instanceof Error ? submitError.message : 'Voice tool submission failed.',
       });
     }
   };
@@ -486,7 +469,7 @@ export function useLiveVoiceSession({
       const output =
         payload.status === 'failed'
           ? { error: payload.output ?? 'Tool execution failed.' }
-          : payload.output ?? null;
+          : (payload.output ?? null);
       forwardToolResultToRealtime(removed.callId, output);
       return;
     }
@@ -519,18 +502,16 @@ export function useLiveVoiceSession({
     }
 
     const voiceTurnId = activeVoiceTurnIdRef.current ?? undefined;
-    api.voice
-      .interrupt(sessionId, { conversationId, voiceTurnId })
-      .catch((interruptError) => {
-        void reportClientError({
-          event: 'client.voice.interrupt_broadcast_failed',
-          component: 'use-live-voice-session',
-          message: 'Failed to broadcast voice session interrupt',
-          error: interruptError,
-          conversationId,
-          voiceSessionId: sessionId,
-        });
+    api.voice.interrupt(sessionId, { conversationId, voiceTurnId }).catch((interruptError) => {
+      void reportClientError({
+        event: 'client.voice.interrupt_broadcast_failed',
+        component: 'use-live-voice-session',
+        message: 'Failed to broadcast voice session interrupt',
+        error: interruptError,
+        conversationId,
+        voiceSessionId: sessionId,
       });
+    });
   };
 
   const interruptAssistant = () => {
@@ -707,7 +688,12 @@ export function useLiveVoiceSession({
   };
 
   const start = async () => {
-    if (phase === 'connecting' || phase === 'listening' || phase === 'thinking' || phase === 'speaking') {
+    if (
+      phase === 'connecting' ||
+      phase === 'listening' ||
+      phase === 'thinking' ||
+      phase === 'speaking'
+    ) {
       return;
     }
 
@@ -796,9 +782,7 @@ export function useLiveVoiceSession({
         voiceSessionId,
       });
       const message =
-        startError instanceof Error
-          ? startError.message
-          : 'Failed to start live voice mode.';
+        startError instanceof Error ? startError.message : 'Failed to start live voice mode.';
       setError(message);
       setVoicePhase('error');
       setConnectionLabel(message);
@@ -813,7 +797,12 @@ export function useLiveVoiceSession({
   };
 
   const toggle = async () => {
-    if (phase === 'listening' || phase === 'thinking' || phase === 'speaking' || phase === 'connecting') {
+    if (
+      phase === 'listening' ||
+      phase === 'thinking' ||
+      phase === 'speaking' ||
+      phase === 'connecting'
+    ) {
       await stop();
       return;
     }

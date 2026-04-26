@@ -30,7 +30,9 @@ function truncateOnWordBoundary(content: string, maxLength: number): string {
 }
 
 export class CitationServiceImpl implements CitationService {
-  constructor(private readonly metadataResolver: DocumentMetadataResolver = DEFAULT_METADATA_RESOLVER) {}
+  constructor(
+    private readonly metadataResolver: DocumentMetadataResolver = DEFAULT_METADATA_RESOLVER,
+  ) {}
 
   async assembleCitations(results: SearchResult[]): Promise<CitationRef[]> {
     const topResultBySource = new Map<string, SearchResult>();
@@ -43,7 +45,7 @@ export class CitationServiceImpl implements CitationService {
     }
 
     const citations = await Promise.all(
-      Array.from(topResultBySource.values()).map(async result => {
+      Array.from(topResultBySource.values()).map(async (result) => {
         let metadata = { title: '', uri: null as string | null };
         try {
           metadata = await this.metadataResolver.resolve(result.documentId);

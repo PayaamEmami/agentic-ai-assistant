@@ -2,11 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import {
-  api,
-  type PersonalizationMemory,
-  type PersonalizationMemoryKind,
-} from '@/lib/api-client';
+import { api, type PersonalizationMemory, type PersonalizationMemoryKind } from '@/lib/api-client';
 
 const MEMORY_KIND_ORDER: PersonalizationMemoryKind[] = [
   'fact',
@@ -35,8 +31,7 @@ const MEMORY_KIND_SINGULAR_LABELS: Record<PersonalizationMemoryKind, string> = {
 
 function sortMemories(memories: PersonalizationMemory[]) {
   return [...memories].sort((left, right) => {
-    const kindDelta =
-      MEMORY_KIND_ORDER.indexOf(left.kind) - MEMORY_KIND_ORDER.indexOf(right.kind);
+    const kindDelta = MEMORY_KIND_ORDER.indexOf(left.kind) - MEMORY_KIND_ORDER.indexOf(right.kind);
     if (kindDelta !== 0) {
       return kindDelta;
     }
@@ -72,9 +67,7 @@ export default function PersonalizationPage() {
       setMemories(sortMemories(response.memories));
     } catch (requestError) {
       setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Failed to load personalization.',
+        requestError instanceof Error ? requestError.message : 'Failed to load personalization.',
       );
     } finally {
       setIsLoading(false);
@@ -107,11 +100,7 @@ export default function PersonalizationPage() {
       setWritingStyle(response.profile.writingStyle ?? '');
       setTonePreference(response.profile.tonePreference ?? '');
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Failed to save profile.',
-      );
+      setError(requestError instanceof Error ? requestError.message : 'Failed to save profile.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -135,11 +124,7 @@ export default function PersonalizationPage() {
       setNewMemoryContent('');
       setNewMemoryKind('fact');
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Failed to create memory.',
-      );
+      setError(requestError instanceof Error ? requestError.message : 'Failed to create memory.');
     } finally {
       setIsCreatingMemory(false);
     }
@@ -167,19 +152,11 @@ export default function PersonalizationPage() {
     try {
       const response = await api.personalization.updateMemory(memoryId, { content });
       setMemories((previous) =>
-        sortMemories(
-          previous.map((memory) =>
-            memory.id === memoryId ? response.memory : memory,
-          ),
-        ),
+        sortMemories(previous.map((memory) => (memory.id === memoryId ? response.memory : memory))),
       );
       cancelEditingMemory();
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Failed to update memory.',
-      );
+      setError(requestError instanceof Error ? requestError.message : 'Failed to update memory.');
     } finally {
       setPendingMemoryId(null);
     }
@@ -198,18 +175,12 @@ export default function PersonalizationPage() {
 
     try {
       await api.personalization.deleteMemory(memory.id);
-      setMemories((previous) =>
-        previous.filter((item) => item.id !== memory.id),
-      );
+      setMemories((previous) => previous.filter((item) => item.id !== memory.id));
       if (editingMemoryId === memory.id) {
         cancelEditingMemory();
       }
     } catch (requestError) {
-      setError(
-        requestError instanceof Error
-          ? requestError.message
-          : 'Failed to delete memory.',
-      );
+      setError(requestError instanceof Error ? requestError.message : 'Failed to delete memory.');
     } finally {
       setPendingMemoryId(null);
     }
@@ -251,20 +222,16 @@ export default function PersonalizationPage() {
               <section className="rounded-3xl border border-border bg-surface p-6">
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">
-                      Profile
-                    </h2>
+                    <h2 className="text-lg font-semibold text-foreground">Profile</h2>
                     <p className="mt-2 text-sm text-foreground-muted">
-                      These settings shape the assistant&apos;s default writing
-                      style and tone whenever it chats with you.
+                      These settings shape the assistant&apos;s default writing style and tone
+                      whenever it chats with you.
                     </p>
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-2">
                     <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Writing style
-                      </span>
+                      <span className="text-sm font-medium text-foreground">Writing style</span>
                       <textarea
                         value={writingStyle}
                         onChange={(event) => setWritingStyle(event.target.value)}
@@ -276,9 +243,7 @@ export default function PersonalizationPage() {
                     </label>
 
                     <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Tone preference
-                      </span>
+                      <span className="text-sm font-medium text-foreground">Tone preference</span>
                       <textarea
                         value={tonePreference}
                         onChange={(event) => setTonePreference(event.target.value)}
@@ -308,26 +273,20 @@ export default function PersonalizationPage() {
               <section className="rounded-3xl border border-border bg-surface p-6">
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">
-                      Add memory
-                    </h2>
+                    <h2 className="text-lg font-semibold text-foreground">Add memory</h2>
                     <p className="mt-2 text-sm text-foreground-muted">
-                      Save details the assistant should keep in mind. Each memory
-                      has a fixed category in this first version.
+                      Save details the assistant should keep in mind. Each memory has a fixed
+                      category in this first version.
                     </p>
                   </div>
 
                   <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
                     <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Category
-                      </span>
+                      <span className="text-sm font-medium text-foreground">Category</span>
                       <select
                         value={newMemoryKind}
                         onChange={(event) =>
-                          setNewMemoryKind(
-                            event.target.value as PersonalizationMemoryKind,
-                          )
+                          setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
                         }
                         className="rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
                       >
@@ -340,14 +299,10 @@ export default function PersonalizationPage() {
                     </label>
 
                     <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">
-                        Content
-                      </span>
+                      <span className="text-sm font-medium text-foreground">Content</span>
                       <textarea
                         value={newMemoryContent}
-                        onChange={(event) =>
-                          setNewMemoryContent(event.target.value)
-                        }
+                        onChange={(event) => setNewMemoryContent(event.target.value)}
                         rows={4}
                         maxLength={2000}
                         placeholder="I prefer concrete examples over abstract explanations."
@@ -371,12 +326,10 @@ export default function PersonalizationPage() {
               <section className="rounded-3xl border border-border bg-surface p-6">
                 <div className="flex flex-col gap-6">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">
-                      Saved memories
-                    </h2>
+                    <h2 className="text-lg font-semibold text-foreground">Saved memories</h2>
                     <p className="mt-2 text-sm text-foreground-muted">
-                      Memories are grouped by category. You can edit the text or
-                      remove entries here.
+                      Memories are grouped by category. You can edit the text or remove entries
+                      here.
                     </p>
                   </div>
 
@@ -387,9 +340,7 @@ export default function PersonalizationPage() {
                         className="rounded-2xl border border-border bg-surface-elevated p-4"
                       >
                         <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-semibold text-foreground">
-                            {group.label}
-                          </h3>
+                          <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
                           <span className="rounded-full bg-surface-input px-2.5 py-1 text-xs text-foreground-muted">
                             {group.items.length}
                           </span>
@@ -415,9 +366,7 @@ export default function PersonalizationPage() {
                                       <textarea
                                         value={editingMemoryContent}
                                         onChange={(event) =>
-                                          setEditingMemoryContent(
-                                            event.target.value,
-                                          )
+                                          setEditingMemoryContent(event.target.value)
                                         }
                                         rows={4}
                                         maxLength={2000}
@@ -433,13 +382,8 @@ export default function PersonalizationPage() {
                                           Cancel
                                         </button>
                                         <button
-                                          onClick={() =>
-                                            void handleSaveMemory(memory.id)
-                                          }
-                                          disabled={
-                                            isPending ||
-                                            !editingMemoryContent.trim()
-                                          }
+                                          onClick={() => void handleSaveMemory(memory.id)}
+                                          disabled={isPending || !editingMemoryContent.trim()}
                                           className="rounded-2xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                                         >
                                           {isPending ? 'Saving...' : 'Save'}
@@ -453,23 +397,18 @@ export default function PersonalizationPage() {
                                       </p>
                                       <div className="flex items-center justify-between gap-3">
                                         <p className="text-xs text-foreground-inactive">
-                                          Updated{' '}
-                                          {new Date(memory.updatedAt).toLocaleString()}
+                                          Updated {new Date(memory.updatedAt).toLocaleString()}
                                         </p>
                                         <div className="flex items-center gap-2">
                                           <button
-                                            onClick={() =>
-                                              beginEditingMemory(memory)
-                                            }
+                                            onClick={() => beginEditingMemory(memory)}
                                             disabled={isPending}
                                             className="rounded-2xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
                                           >
                                             Edit
                                           </button>
                                           <button
-                                            onClick={() =>
-                                              void handleDeleteMemory(memory)
-                                            }
+                                            onClick={() => void handleDeleteMemory(memory)}
                                             disabled={isPending}
                                             className="rounded-2xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
                                           >
@@ -499,7 +438,17 @@ export default function PersonalizationPage() {
 
 function CloseIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
     </svg>

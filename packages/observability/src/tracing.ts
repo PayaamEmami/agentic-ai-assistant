@@ -35,7 +35,7 @@ export async function initializeTracing(options: ServiceRuntimeOptions): Promise
   provider = new NodeTracerProvider({
     resource: buildResource(options),
     spanProcessors:
-      options.otlpEndpoint ?? process.env['OTEL_EXPORTER_OTLP_ENDPOINT']
+      (options.otlpEndpoint ?? process.env['OTEL_EXPORTER_OTLP_ENDPOINT'])
         ? [
             new BatchSpanProcessor(
               new OTLPTraceExporter({

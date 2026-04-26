@@ -31,7 +31,6 @@ export async function verifyPassword(
   const expectedKey = toBuffer(expectedHash);
 
   return (
-    derivedKey.length === expectedKey.length &&
-    crypto.timingSafeEqual(derivedKey, expectedKey)
+    derivedKey.length === expectedKey.length && crypto.timingSafeEqual(derivedKey, expectedKey)
   );
 }

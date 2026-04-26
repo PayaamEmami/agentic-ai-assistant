@@ -21,82 +21,98 @@ export function createWorkers(redisUrl: string): Worker[] {
   const connection = parseRedisUrl(redisUrl);
 
   const workers = [
-    new Worker('ingestion', (job) =>
-      withLogContext(
-        {
-          queue: job.queueName,
-          jobId: job.id ?? undefined,
-          correlationId: job.data.correlationId,
-          component: 'ingestion-worker',
-        },
-        () =>
-          withSpan(
-            'worker.job.ingestion',
-            {
-              'aaa.queue.name': job.queueName,
-              'aaa.job.id': job.id ?? 'unknown',
-            },
-            () => handleIngestion(job),
-          ),
-      ), { connection }),
-    new Worker('embedding', (job) =>
-      withLogContext(
-        {
-          queue: job.queueName,
-          jobId: job.id ?? undefined,
-          correlationId: job.data.correlationId,
-          component: 'embedding-worker',
-        },
-        () =>
-          withSpan(
-            'worker.job.embedding',
-            {
-              'aaa.queue.name': job.queueName,
-              'aaa.job.id': job.id ?? 'unknown',
-            },
-            () => handleEmbedding(job),
-          ),
-      ), { connection }),
-    new Worker('app-sync', (job) =>
-      withLogContext(
-        {
-          queue: job.queueName,
-          jobId: job.id ?? undefined,
-          correlationId: job.data.correlationId,
-          appKind: job.data.appKind,
-          appCapability: job.data.capability,
-          component: 'app-sync-worker',
-        },
-        () =>
-          withSpan(
-            'worker.job.app_sync',
-            {
-              'aaa.queue.name': job.queueName,
-              'aaa.job.id': job.id ?? 'unknown',
-            },
-            () => handleAppSync(job),
-          ),
-      ), { connection }),
-    new Worker('tool-execution', (job) =>
-      withLogContext(
-        {
-          queue: job.queueName,
-          jobId: job.id ?? undefined,
-          correlationId: job.data.correlationId,
-          conversationId: job.data.conversationId,
-          toolExecutionId: job.data.toolExecutionId,
-          component: 'tool-execution-worker',
-        },
-        () =>
-          withSpan(
-            'worker.job.tool_execution',
-            {
-              'aaa.queue.name': job.queueName,
-              'aaa.job.id': job.id ?? 'unknown',
-            },
-            () => handleToolExecution(job),
-          ),
-      ), { connection }),
+    new Worker(
+      'ingestion',
+      (job) =>
+        withLogContext(
+          {
+            queue: job.queueName,
+            jobId: job.id ?? undefined,
+            correlationId: job.data.correlationId,
+            component: 'ingestion-worker',
+          },
+          () =>
+            withSpan(
+              'worker.job.ingestion',
+              {
+                'aaa.queue.name': job.queueName,
+                'aaa.job.id': job.id ?? 'unknown',
+              },
+              () => handleIngestion(job),
+            ),
+        ),
+      { connection },
+    ),
+    new Worker(
+      'embedding',
+      (job) =>
+        withLogContext(
+          {
+            queue: job.queueName,
+            jobId: job.id ?? undefined,
+            correlationId: job.data.correlationId,
+            component: 'embedding-worker',
+          },
+          () =>
+            withSpan(
+              'worker.job.embedding',
+              {
+                'aaa.queue.name': job.queueName,
+                'aaa.job.id': job.id ?? 'unknown',
+              },
+              () => handleEmbedding(job),
+            ),
+        ),
+      { connection },
+    ),
+    new Worker(
+      'app-sync',
+      (job) =>
+        withLogContext(
+          {
+            queue: job.queueName,
+            jobId: job.id ?? undefined,
+            correlationId: job.data.correlationId,
+            appKind: job.data.appKind,
+            appCapability: job.data.capability,
+            component: 'app-sync-worker',
+          },
+          () =>
+            withSpan(
+              'worker.job.app_sync',
+              {
+                'aaa.queue.name': job.queueName,
+                'aaa.job.id': job.id ?? 'unknown',
+              },
+              () => handleAppSync(job),
+            ),
+        ),
+      { connection },
+    ),
+    new Worker(
+      'tool-execution',
+      (job) =>
+        withLogContext(
+          {
+            queue: job.queueName,
+            jobId: job.id ?? undefined,
+            correlationId: job.data.correlationId,
+            conversationId: job.data.conversationId,
+            toolExecutionId: job.data.toolExecutionId,
+            component: 'tool-execution-worker',
+          },
+          () =>
+            withSpan(
+              'worker.job.tool_execution',
+              {
+                'aaa.queue.name': job.queueName,
+                'aaa.job.id': job.id ?? 'unknown',
+              },
+              () => handleToolExecution(job),
+            ),
+        ),
+      { connection },
+    ),
   ];
 
   for (const worker of workers) {

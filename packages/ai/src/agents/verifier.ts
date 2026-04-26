@@ -113,12 +113,8 @@ function isLikelyInternalVerifierResponse(response: string): boolean {
   }
 
   if (
-    /^(the\s+)?(prior|previous)\s+(agent\s+)?(message|output|response|result)\b/.test(
-      normalized,
-    ) ||
-    /^the\s+assistant'?s\s+(prior|previous)\s+(message|output|response|result)\b/.test(
-      normalized,
-    )
+    /^(the\s+)?(prior|previous)\s+(agent\s+)?(message|output|response|result)\b/.test(normalized) ||
+    /^the\s+assistant'?s\s+(prior|previous)\s+(message|output|response|result)\b/.test(normalized)
   ) {
     return true;
   }

@@ -1,9 +1,6 @@
 import type { Job } from 'bullmq';
 import { OpenAIProvider } from '@aaa/ai';
-import {
-  chunkRepository,
-  embeddingRepository,
-} from '@aaa/db';
+import { chunkRepository, embeddingRepository } from '@aaa/db';
 import { logger } from '../lib/logger.js';
 
 export interface EmbeddingJobData {

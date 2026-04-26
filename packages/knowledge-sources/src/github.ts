@@ -207,13 +207,7 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
         const defaultBranch = asString(candidate.defaultBranch);
         const isPrivate = typeof candidate.private === 'boolean' ? candidate.private : false;
 
-        if (
-          id === undefined ||
-          !name ||
-          !fullName ||
-          !owner ||
-          !defaultBranch
-        ) {
+        if (id === undefined || !name || !fullName || !owner || !defaultBranch) {
           return null;
         }
 
@@ -321,12 +315,11 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
       q: `${trimmed} ${repoClauses}`,
       per_page: String(Math.min(limit, 100)),
     });
-    const response = await requestJson<{ items: Array<{ name: string; path: string; sha: string; repository: GitHubRepoApiResponse }> }>(
-      `https://api.github.com/search/code?${params.toString()}`,
-      {
-        headers: this.buildHeaders(),
-      },
-    );
+    const response = await requestJson<{
+      items: Array<{ name: string; path: string; sha: string; repository: GitHubRepoApiResponse }>;
+    }>(`https://api.github.com/search/code?${params.toString()}`, {
+      headers: this.buildHeaders(),
+    });
 
     return response.items.map((item) => ({
       externalId: `${item.repository.full_name}:${item.path}`,
@@ -364,7 +357,9 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
           continue;
         }
 
-        const currentEntries = this.getIndexableEntries(await this.loadRepositoryTree(repo, branchSha));
+        const currentEntries = this.getIndexableEntries(
+          await this.loadRepositoryTree(repo, branchSha),
+        );
         if (previousRepoState?.sha) {
           try {
             const previousEntries = this.getIndexableEntries(

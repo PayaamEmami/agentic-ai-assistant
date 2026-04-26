@@ -13,7 +13,12 @@ export { SimpleChunkingService } from './chunking.js';
 
 export type { EmbeddingService } from './embedding.js';
 
-export type { IndexingService, StoreChunks, StoreEmbeddings, RemoveByDocument } from './indexing.js';
+export type {
+  IndexingService,
+  StoreChunks,
+  StoreEmbeddings,
+  RemoveByDocument,
+} from './indexing.js';
 export { IndexingServiceImpl } from './indexing.js';
 
 export type { SearchService, VectorSearchDependencies } from './search.js';

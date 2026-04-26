@@ -98,43 +98,37 @@ export async function voiceRoutes(app: FastifyInstance, options: VoiceRouteOptio
     },
   );
 
-  app.post<{ Params: { id: string } }>(
-    '/voice/turns/:id/prepare',
-    async (request, reply) => {
-      const parsed = VoiceTurnPrepareRequest.safeParse(request.body ?? {});
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
+  app.post<{ Params: { id: string } }>('/voice/turns/:id/prepare', async (request, reply) => {
+    const parsed = VoiceTurnPrepareRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
 
-      const result = await voiceService.prepareTurn(
-        request.user!.id,
-        request.params.id,
-        parsed.data.userTranscript,
-      );
-      return reply.status(200).send(result);
-    },
-  );
+    const result = await voiceService.prepareTurn(
+      request.user!.id,
+      request.params.id,
+      parsed.data.userTranscript,
+    );
+    return reply.status(200).send(result);
+  });
 
-  app.post<{ Params: { id: string } }>(
-    '/voice/turns/:id/complete',
-    async (request, reply) => {
-      const parsed = VoiceTurnCompleteRequest.safeParse(request.body ?? {});
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
+  app.post<{ Params: { id: string } }>('/voice/turns/:id/complete', async (request, reply) => {
+    const parsed = VoiceTurnCompleteRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+      });
+    }
 
-      const result = await voiceService.completeTurn(
-        request.user!.id,
-        request.params.id,
-        parsed.data.text,
-      );
-      return reply.status(200).send(result);
-    },
-  );
+    const result = await voiceService.completeTurn(
+      request.user!.id,
+      request.params.id,
+      parsed.data.text,
+    );
+    return reply.status(200).send(result);
+  });
 
   app.post('/voice/turns', async (request, reply) => {
     const parsed = VoiceTurnRequest.safeParse(request.body);
@@ -154,29 +148,26 @@ export async function voiceRoutes(app: FastifyInstance, options: VoiceRouteOptio
     return reply.status(200).send(result);
   });
 
-  app.post<{ Params: { id: string } }>(
-    '/voice/sessions/:id/interrupt',
-    async (request, reply) => {
-      const parsed = VoiceSessionInterruptRequest.safeParse(request.body ?? {});
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
-
-      const result = await voiceService.interruptSession(
-        request.user!.id,
-        request.params.id,
-        parsed.data.conversationId,
-        parsed.data.voiceTurnId,
-      );
-
-      return reply.status(200).send({
-        ok: true as const,
-        conversationId: result.conversationId,
+  app.post<{ Params: { id: string } }>('/voice/sessions/:id/interrupt', async (request, reply) => {
+    const parsed = VoiceSessionInterruptRequest.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
       });
-    },
-  );
+    }
+
+    const result = await voiceService.interruptSession(
+      request.user!.id,
+      request.params.id,
+      parsed.data.conversationId,
+      parsed.data.voiceTurnId,
+    );
+
+    return reply.status(200).send({
+      ok: true as const,
+      conversationId: result.conversationId,
+    });
+  });
 
   app.post('/voice/tool-calls', async (request, reply) => {
     const parsed = VoiceToolCallRequest.safeParse(request.body);

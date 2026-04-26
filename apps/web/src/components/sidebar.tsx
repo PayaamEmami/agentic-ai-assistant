@@ -51,8 +51,7 @@ export function Sidebar({
   const [draftTitle, setDraftTitle] = useState('');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [isConversationListCollapsed, setIsConversationListCollapsed] =
-    useState(false);
+  const [isConversationListCollapsed, setIsConversationListCollapsed] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
   const isAppsPage = pathname === '/chat/apps';
@@ -67,10 +66,7 @@ export function Sidebar({
     }
 
     const handlePointerDown = (event: MouseEvent) => {
-      if (
-        accountMenuRef.current &&
-        !accountMenuRef.current.contains(event.target as Node)
-      ) {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
         setIsAccountMenuOpen(false);
       }
     };
@@ -150,40 +146,26 @@ export function Sidebar({
     <aside
       className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:translate-x-0 ${
         isAccountMenuOpen ? 'overflow-visible md:z-50' : 'overflow-hidden md:z-20'
-      } ${
-        collapsed ? 'md:w-20' : 'md:w-72'
-      } ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      } ${collapsed ? 'md:w-20' : 'md:w-72'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >
       <div className={`border-b border-border ${collapsed ? 'p-2' : 'p-4'}`}>
         <div
-          className={`flex items-center gap-2 ${
-            collapsed ? 'justify-center' : 'justify-between'
-          }`}
+          className={`flex items-center gap-2 ${collapsed ? 'justify-center' : 'justify-between'}`}
         >
           {collapsed ? null : (
             <button
               type="button"
-              onClick={() =>
-                setIsConversationListCollapsed((previous) => !previous)
-              }
+              onClick={() => setIsConversationListCollapsed((previous) => !previous)}
               className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-foreground transition hover:bg-surface-hover"
               aria-label={
-                isConversationListCollapsed
-                  ? 'Expand conversations'
-                  : 'Collapse conversations'
+                isConversationListCollapsed ? 'Expand conversations' : 'Collapse conversations'
               }
               title={
-                isConversationListCollapsed
-                  ? 'Expand conversations'
-                  : 'Collapse conversations'
+                isConversationListCollapsed ? 'Expand conversations' : 'Collapse conversations'
               }
             >
               <span>Conversations</span>
-              {isConversationListCollapsed ? (
-                <ChevronLeftIcon />
-              ) : (
-                <ChevronDownIcon />
-              )}
+              {isConversationListCollapsed ? <ChevronLeftIcon /> : <ChevronDownIcon />}
             </button>
           )}
           <div className="flex items-center gap-2">
@@ -202,8 +184,8 @@ export function Sidebar({
               type="button"
               onClick={
                 collapsed
-                  ? onToggleDesktopCollapse ?? onCloseMobile
-                  : onToggleDesktopCollapse ?? onCloseMobile
+                  ? (onToggleDesktopCollapse ?? onCloseMobile)
+                  : (onToggleDesktopCollapse ?? onCloseMobile)
               }
               className={`inline-flex items-center justify-center rounded-2xl border border-border-subtle text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground ${
                 collapsed ? 'h-11 w-11' : 'h-10 w-10'
@@ -226,9 +208,7 @@ export function Sidebar({
           </p>
         ) : conversations.length === 0 ? (
           collapsed ? null : (
-            <p className="p-2 text-sm text-foreground-muted">
-              No conversations yet
-            </p>
+            <p className="p-2 text-sm text-foreground-muted">No conversations yet</p>
           )
         ) : (
           conversations.map((conversation) => {
@@ -402,9 +382,7 @@ export function Sidebar({
                 <span className="block truncate text-sm font-medium text-foreground">
                   {user?.displayName ?? 'Signed in'}
                 </span>
-                <span className="block truncate text-xs text-foreground-muted">
-                  {user?.email}
-                </span>
+                <span className="block truncate text-xs text-foreground-muted">{user?.email}</span>
               </span>
               <ChevronUpDownIcon open={isAccountMenuOpen} />
             </>
@@ -417,7 +395,17 @@ export function Sidebar({
 
 function PlusIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <line x1="12" y1="5" x2="12" y2="19" />
       <line x1="5" y1="12" x2="19" y2="12" />
     </svg>
@@ -426,7 +414,17 @@ function PlusIcon() {
 
 function PersonalizationIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 5H8a2 2 0 0 0-2 2v10" />
       <path d="M12 5h4a2 2 0 0 1 2 2v10" />
       <path d="M8 17h8" />
@@ -438,7 +436,17 @@ function PersonalizationIcon() {
 
 function EditIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 20h9" />
       <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
     </svg>
@@ -447,7 +455,17 @@ function EditIcon() {
 
 function TrashIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M3 6h18" />
       <path d="M8 6V4h8v2" />
       <path d="M19 6l-1 14H6L5 6" />
@@ -459,7 +477,17 @@ function TrashIcon() {
 
 function AppsIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M12 22v-5" />
       <path d="M9 8V2" />
       <path d="M15 8V2" />
@@ -471,7 +499,17 @@ function AppsIcon() {
 
 function SignOutIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
@@ -481,7 +519,18 @@ function SignOutIcon() {
 
 function ChevronUpDownIcon({ open }: { open: boolean }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`}>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`}
+    >
       <path d="m6 9 6-6 6 6" />
       <path d="m18 15-6 6-6-6" />
     </svg>
@@ -490,7 +539,17 @@ function ChevronUpDownIcon({ open }: { open: boolean }) {
 
 function ChevronLeftIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="m15 18-6-6 6-6" />
     </svg>
   );
@@ -498,7 +557,17 @@ function ChevronLeftIcon() {
 
 function ChevronRightIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="m9 18 6-6-6-6" />
     </svg>
   );
@@ -506,7 +575,17 @@ function ChevronRightIcon() {
 
 function ChevronDownIcon() {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="m6 9 6 6 6-6" />
     </svg>
   );

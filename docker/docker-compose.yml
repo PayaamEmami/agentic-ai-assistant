@@ -8,14 +8,14 @@ services:
       POSTGRES_USER: aaa
       POSTGRES_PASSWORD: aaa_dev_password
     ports:
-      - "${LOCAL_POSTGRES_PORT:-5432}:5432"
+      - '${LOCAL_POSTGRES_PORT:-5432}:5432'
     volumes:
       - pgdata:/var/lib/postgresql/data
 
   redis:
     image: redis:7-alpine
     ports:
-      - "${LOCAL_REDIS_PORT:-6379}:6379"
+      - '${LOCAL_REDIS_PORT:-6379}:6379'
     volumes:
       - redisdata:/data
 
@@ -24,17 +24,17 @@ services:
       context: ..
       dockerfile: docker/api.Dockerfile
     ports:
-      - "3001:3001"
+      - '3001:3001'
     environment:
       NODE_ENV: development
       LOG_LEVEL: debug
       API_HOST: 0.0.0.0
-      API_PORT: "3001"
+      API_PORT: '3001'
       DATABASE_URL: postgresql://aaa:aaa_dev_password@postgres:5432/aaa
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAMESPACE: aaa
-      LOG_FILE_ENABLED: "false"
+      LOG_FILE_ENABLED: 'false'
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
       S3_BUCKET: aaa-uploads
       S3_REGION: us-west-1
@@ -53,9 +53,9 @@ services:
       REDIS_URL: redis://redis:6379
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAMESPACE: aaa
-      LOG_FILE_ENABLED: "false"
+      LOG_FILE_ENABLED: 'false'
       WORKER_OBSERVABILITY_HOST: 0.0.0.0
-      WORKER_OBSERVABILITY_PORT: "9464"
+      WORKER_OBSERVABILITY_PORT: '9464'
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
     depends_on:
       - postgres
@@ -66,7 +66,7 @@ services:
       context: ..
       dockerfile: docker/web.Dockerfile
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       NEXT_PUBLIC_API_URL: http://api:3001
     depends_on:
@@ -77,31 +77,31 @@ services:
       context: ./observability/prometheus
       dockerfile: Dockerfile
     ports:
-      - "9090:9090"
+      - '9090:9090'
 
   loki:
     build:
       context: ./observability/loki
       dockerfile: Dockerfile
     ports:
-      - "3100:3100"
-    command: ["-config.file=/etc/loki/config.yml"]
+      - '3100:3100'
+    command: ['-config.file=/etc/loki/config.yml']
 
   tempo:
     build:
       context: ./observability/tempo
       dockerfile: Dockerfile
     ports:
-      - "3200:3200"
-    command: ["-config.file=/etc/tempo/config.yml"]
+      - '3200:3200'
+    command: ['-config.file=/etc/tempo/config.yml']
 
   otel-collector:
     build:
       context: ./observability/otel-collector
       dockerfile: Dockerfile
-    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    command: ['--config=/etc/otelcol-contrib/config.yaml']
     ports:
-      - "${LOCAL_OTEL_HTTP_PORT:-4318}:4318"
+      - '${LOCAL_OTEL_HTTP_PORT:-4318}:4318'
     depends_on:
       - tempo
 
@@ -110,7 +110,7 @@ services:
       context: ./observability/grafana
       dockerfile: Dockerfile
     ports:
-      - "3005:3000"
+      - '3005:3000'
     depends_on:
       - prometheus
       - loki

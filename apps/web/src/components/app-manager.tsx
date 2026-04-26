@@ -331,7 +331,9 @@ export function AppManager() {
                               Searchable: {capability.searchableSourceCount}/
                               {capability.totalSourceCount}
                             </p>
-                            <p>Credentials: {capability.hasCredentials ? 'Available' : 'Missing'}</p>
+                            <p>
+                              Credentials: {capability.hasCredentials ? 'Available' : 'Missing'}
+                            </p>
                           </div>
                           {capability.lastError ? (
                             <p className="mt-3 rounded-xl bg-error/10 px-3 py-2 text-xs text-error">
@@ -462,7 +464,6 @@ export function AppManager() {
               </section>
             );
           })}
-
         </div>
       )}
     </div>

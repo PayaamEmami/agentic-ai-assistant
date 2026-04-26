@@ -15,9 +15,9 @@ spec:
       labels:
         app: aaa-api
       annotations:
-        prometheus.io/scrape: "true"
-        prometheus.io/path: "/metrics"
-        prometheus.io/port: "3001"
+        prometheus.io/scrape: 'true'
+        prometheus.io/path: '/metrics'
+        prometheus.io/port: '3001'
     spec:
       containers:
         - name: api
@@ -34,7 +34,7 @@ spec:
                 fieldRef:
                   fieldPath: status.podIP
             - name: API_INTERNAL_BASE_URL
-              value: "http://$(POD_IP):3001"
+              value: 'http://$(POD_IP):3001'
           envFrom:
             - secretRef:
                 name: aaa-secrets
@@ -42,11 +42,11 @@ spec:
                 name: aaa-config
           resources:
             requests:
-              memory: "256Mi"
-              cpu: "250m"
+              memory: '256Mi'
+              cpu: '250m'
             limits:
-              memory: "512Mi"
-              cpu: "500m"
+              memory: '512Mi'
+              cpu: '500m'
           readinessProbe:
             httpGet:
               path: /health/ready

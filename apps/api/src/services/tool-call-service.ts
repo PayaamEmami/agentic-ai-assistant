@@ -35,9 +35,7 @@ export function buildApprovalDescription(
   switch (tool.name) {
     case 'external.execute': {
       const operation = getStringField(input, 'operation');
-      return operation
-        ? `Allow external action: ${operation}`
-        : 'Allow this external action';
+      return operation ? `Allow external action: ${operation}` : 'Allow this external action';
     }
     case 'github.create_pull_request':
       return `Allow creating a pull request${repoSuffix}`;
@@ -83,9 +81,7 @@ export function buildApprovalDescription(
       return 'Allow moving this Google Drive file to trash';
     case 'google_docs.create_document': {
       const title = getStringField(input, 'title');
-      return title
-        ? `Allow creating the Google Doc "${title}"`
-        : 'Allow creating a Google Doc';
+      return title ? `Allow creating the Google Doc "${title}"` : 'Allow creating a Google Doc';
     }
     case 'google_docs.batch_update_document':
       return 'Allow updating this Google Doc';
