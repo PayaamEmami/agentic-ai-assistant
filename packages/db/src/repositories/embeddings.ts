@@ -84,6 +84,9 @@ export const embeddingRepository: EmbeddingRepository = {
     const result = await pool.query<EmbeddingQueryRow>(
       `INSERT INTO embeddings (id, chunk_id, vector, model)
        VALUES ($1, $2, $3::vector, $4)
+       ON CONFLICT (chunk_id, model) DO UPDATE
+       SET vector = EXCLUDED.vector,
+           created_at = NOW()
        RETURNING id, chunk_id AS "chunkId", vector::text AS "vector", model, created_at AS "createdAt"`,
       [id, chunkId, serializeVector(vector), model],
     );
@@ -105,7 +108,8 @@ export const embeddingRepository: EmbeddingRepository = {
     filters?: EmbeddingSearchFilters,
   ): Promise<Embedding[]> {
     const pool = getPool();
-    const appKinds = filters?.appKinds?.map((kind) => kind.trim()).filter((kind) => kind.length > 0) ?? [];
+    const appKinds =
+      filters?.appKinds?.map((kind) => kind.trim()).filter((kind) => kind.length > 0) ?? [];
     const hasAppFilter = appKinds.length > 0;
 
     let query: string;

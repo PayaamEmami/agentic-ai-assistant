@@ -49,7 +49,11 @@ export interface SourceRepository {
   ): Promise<Source>;
   update(id: string, title: string, uri: string | null): Promise<void>;
   listByUser(userId: string, limit?: number, offset?: number): Promise<Source[]>;
-  listIndexedByUserAndApp(userId: string, appKind: string, limit?: number): Promise<IndexedSourceSummary[]>;
+  listIndexedByUserAndApp(
+    userId: string,
+    appKind: string,
+    limit?: number,
+  ): Promise<IndexedSourceSummary[]>;
   getAppSourceStats(userId: string, appKind: string): Promise<AppSourceStats>;
   deleteByUserAndApp(userId: string, appKind: string): Promise<number>;
 }
@@ -68,7 +72,11 @@ export const sourceRepository: SourceRepository = {
     return result.rows[0] ?? null;
   },
 
-  async findByExternalId(userId: string, appKind: string, externalId: string): Promise<Source | null> {
+  async findByExternalId(
+    userId: string,
+    appKind: string,
+    externalId: string,
+  ): Promise<Source | null> {
     const pool = getPool();
     const result = await pool.query<SourceRow>(
       `SELECT id, user_id AS "userId", kind, app_kind AS "appKind",
@@ -113,21 +121,22 @@ export const sourceRepository: SourceRepository = {
     uri: string | null,
   ): Promise<Source> {
     const pool = getPool();
-    const existing = await sourceRepository.findByExternalId(userId, appKind, externalId);
-    if (existing) {
-      const result = await pool.query<SourceRow>(
-        `UPDATE sources
-         SET kind = $2, title = $3, uri = $4
-         WHERE id = $1
-         RETURNING id, user_id AS "userId", kind, app_kind AS "appKind",
-                   external_id AS "externalId", title, uri,
-                   created_at AS "createdAt"`,
-        [existing.id, kind, title, uri],
-      );
-      return result.rows[0]!;
-    }
-
-    return sourceRepository.create(userId, kind, appKind, externalId, title, uri);
+    const id = crypto.randomUUID();
+    const result = await pool.query<SourceRow>(
+      `INSERT INTO sources (id, user_id, kind, app_kind, external_id, title, uri)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id, app_kind, external_id)
+       WHERE app_kind IS NOT NULL AND external_id IS NOT NULL
+       DO UPDATE
+       SET kind = EXCLUDED.kind,
+           title = EXCLUDED.title,
+           uri = EXCLUDED.uri
+       RETURNING id, user_id AS "userId", kind, app_kind AS "appKind",
+                 external_id AS "externalId", title, uri,
+                 created_at AS "createdAt"`,
+      [id, userId, kind, appKind, externalId, title, uri],
+    );
+    return result.rows[0]!;
   },
 
   async update(id: string, title: string, uri: string | null): Promise<void> {

@@ -46,7 +46,7 @@ export const messageRepository: MessageRepository = {
     const result = await pool.query<Message>(
       `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
        FROM messages WHERE conversation_id = $1
-       ORDER BY created_at ASC LIMIT $2 OFFSET $3`,
+       ORDER BY created_at ASC, id ASC LIMIT $2 OFFSET $3`,
       [conversationId, limit, offset],
     );
     return result.rows;

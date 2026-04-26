@@ -26,7 +26,11 @@ export interface ToolExecutionCreateOptions {
 
 export interface ToolExecutionRepository {
   findById(id: string): Promise<ToolExecution | null>;
-  listByConversation(conversationId: string, limit?: number, offset?: number): Promise<ToolExecution[]>;
+  listByConversation(
+    conversationId: string,
+    limit?: number,
+    offset?: number,
+  ): Promise<ToolExecution[]>;
   listByMessage(messageId: string): Promise<ToolExecution[]>;
   create(
     conversationId: string,
@@ -71,7 +75,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
       `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE conversation_id = $1
-       ORDER BY started_at ASC
+       ORDER BY started_at ASC, id ASC
        LIMIT $2 OFFSET $3`,
       [conversationId, limit, offset],
     );
@@ -84,7 +88,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
       `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE message_id = $1
-       ORDER BY started_at ASC`,
+       ORDER BY started_at ASC, id ASC`,
       [messageId],
     );
     return result.rows;
@@ -173,7 +177,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
       `SELECT ${SELECT_COLUMNS}
        FROM tool_executions
        WHERE conversation_id = $1 AND status = 'requires_approval'
-       ORDER BY started_at ASC
+       ORDER BY started_at ASC, id ASC
        LIMIT 1`,
       [conversationId],
     );

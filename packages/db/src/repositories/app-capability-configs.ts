@@ -44,7 +44,11 @@ export interface AppCapabilityConfigRepository {
     appKind: string,
     encryptedCredentials: string,
   ): Promise<void>;
-  updateStatus(id: string, status: AppCapabilityConfig['status'], lastError?: string | null): Promise<void>;
+  updateStatus(
+    id: string,
+    status: AppCapabilityConfig['status'],
+    lastError?: string | null,
+  ): Promise<void>;
   updateSyncState(
     id: string,
     state: {
@@ -146,52 +150,18 @@ export const appCapabilityConfigRepository: AppCapabilityConfigRepository = {
     settings: Record<string, unknown>,
   ): Promise<AppCapabilityConfig> {
     const pool = getPool();
-    const existing = await appCapabilityConfigRepository.findByUserAppAndCapability(
-      userId,
-      appKind,
-      capability,
-    );
-
-    if (existing) {
-      const result = await pool.query<AppCapabilityConfigRow>(
-        `UPDATE app_capability_configs
-         SET status = $4,
-             encrypted_credentials = $5,
-             settings = $6,
-             last_error = NULL,
-             updated_at = NOW()
-         WHERE id = $1
-         RETURNING id,
-                   user_id AS "userId",
-                   app_kind AS "appKind",
-                   capability,
-                   status,
-                   encrypted_credentials AS "encryptedCredentials",
-                   settings,
-                   last_sync_cursor AS "lastSyncCursor",
-                   last_sync_at AS "lastSyncAt",
-                   last_sync_status AS "lastSyncStatus",
-                   last_error AS "lastError",
-                   created_at AS "createdAt",
-                   updated_at AS "updatedAt"`,
-        [
-          existing.id,
-          userId,
-          appKind,
-          status,
-          encryptedCredentials,
-          JSON.stringify(settings),
-        ],
-      );
-      return result.rows[0]!;
-    }
-
     const id = crypto.randomUUID();
     const result = await pool.query<AppCapabilityConfigRow>(
       `INSERT INTO app_capability_configs (
          id, user_id, app_kind, capability, status, encrypted_credentials, settings
        )
        VALUES ($1, $2, $3, $4, $5, $6, $7)
+       ON CONFLICT (user_id, app_kind, capability) DO UPDATE
+       SET status = EXCLUDED.status,
+           encrypted_credentials = EXCLUDED.encrypted_credentials,
+           settings = EXCLUDED.settings,
+           last_error = NULL,
+           updated_at = NOW()
        RETURNING id,
                  user_id AS "userId",
                  app_kind AS "appKind",
@@ -262,22 +232,41 @@ export const appCapabilityConfigRepository: AppCapabilityConfigRepository = {
       lastError?: string | null;
     },
   ): Promise<void> {
+    const assignments: string[] = [];
+    const values: unknown[] = [];
+
+    if ('lastSyncCursor' in state) {
+      values.push(state.lastSyncCursor ?? null);
+      assignments.push(`last_sync_cursor = $${values.length}`);
+    }
+
+    if ('lastSyncAt' in state) {
+      values.push(state.lastSyncAt ?? null);
+      assignments.push(`last_sync_at = $${values.length}`);
+    }
+
+    if ('lastSyncStatus' in state) {
+      values.push(state.lastSyncStatus ?? null);
+      assignments.push(`last_sync_status = $${values.length}`);
+    }
+
+    if ('lastError' in state) {
+      values.push(state.lastError ?? null);
+      assignments.push(`last_error = $${values.length}`);
+    }
+
+    if (assignments.length === 0) {
+      return;
+    }
+
     const pool = getPool();
+    values.push(id);
     await pool.query(
       `UPDATE app_capability_configs
-       SET last_sync_cursor = COALESCE($1, last_sync_cursor),
-           last_sync_at = COALESCE($2, last_sync_at),
-           last_sync_status = COALESCE($3, last_sync_status),
-           last_error = $4,
+       SET ${assignments.join(',\n           ')},
            updated_at = NOW()
-       WHERE id = $5`,
-      [
-        state.lastSyncCursor ?? null,
-        state.lastSyncAt ?? null,
-        state.lastSyncStatus ?? null,
-        state.lastError ?? null,
-        id,
-      ],
+       WHERE id = $${values.length}`,
+      values,
     );
   },
 

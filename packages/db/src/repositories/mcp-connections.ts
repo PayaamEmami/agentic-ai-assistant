@@ -82,7 +82,10 @@ export const mcpProfileRepository: McpProfileRepository = {
     return result.rows[0] ? mapRow(result.rows[0]) : null;
   },
 
-  async findDefaultByUserAndKind(userId: string, integrationKind: string): Promise<McpProfile | null> {
+  async findDefaultByUserAndKind(
+    userId: string,
+    integrationKind: string,
+  ): Promise<McpProfile | null> {
     const pool = getPool();
     const result = await pool.query<McpProfileRow>(
       `SELECT id, user_id AS "userId", integration_kind AS "integrationKind",
@@ -191,20 +194,55 @@ export const mcpProfileRepository: McpProfileRepository = {
 
   async setDefault(id: string, userId: string): Promise<McpProfile | null> {
     const pool = getPool();
-    const target = await mcpProfileRepository.findByIdForUser(id, userId);
-    if (!target) {
-      return null;
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      const targetResult = await client.query<McpProfileRow>(
+        `SELECT id, user_id AS "userId", integration_kind AS "integrationKind",
+                profile_label AS "profileLabel", status,
+                encrypted_credentials AS "encryptedCredentials", settings,
+                last_error AS "lastError", is_default AS "isDefault",
+                created_at AS "createdAt", updated_at AS "updatedAt"
+         FROM mcp_profiles
+         WHERE id = $1 AND user_id = $2
+         FOR UPDATE`,
+        [id, userId],
+      );
+      const target = targetResult.rows[0];
+      if (!target) {
+        await client.query('ROLLBACK');
+        return null;
+      }
+
+      await client.query(
+        `UPDATE mcp_profiles
+         SET is_default = FALSE,
+             updated_at = NOW()
+         WHERE user_id = $1 AND integration_kind = $2`,
+        [userId, target.integrationKind],
+      );
+
+      const updated = await client.query<McpProfileRow>(
+        `UPDATE mcp_profiles
+         SET is_default = TRUE,
+             updated_at = NOW()
+         WHERE id = $1
+         RETURNING id, user_id AS "userId", integration_kind AS "integrationKind",
+                   profile_label AS "profileLabel", status,
+                   encrypted_credentials AS "encryptedCredentials", settings,
+                   last_error AS "lastError", is_default AS "isDefault",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [id],
+      );
+      await client.query('COMMIT');
+      return updated.rows[0] ? mapRow(updated.rows[0]) : null;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
     }
-
-    await pool.query(
-      `UPDATE mcp_profiles
-       SET is_default = FALSE,
-           updated_at = NOW()
-       WHERE user_id = $1 AND integration_kind = $2`,
-      [userId, target.integrationKind],
-    );
-
-    return mcpProfileRepository.update(id, { isDefault: true });
   },
 
   async delete(id: string, userId: string): Promise<boolean> {

@@ -65,28 +65,7 @@ export const conversationRepository: ConversationRepository = {
 
   async delete(id: string): Promise<boolean> {
     const pool = getPool();
-    const client = await pool.connect();
-
-    try {
-      await client.query('BEGIN');
-      await client.query('DELETE FROM approvals WHERE conversation_id = $1', [id]);
-      await client.query('DELETE FROM tool_executions WHERE conversation_id = $1', [id]);
-      await client.query(
-        `DELETE FROM attachments
-         WHERE message_id IN (
-           SELECT id FROM messages WHERE conversation_id = $1
-         )`,
-        [id],
-      );
-      await client.query('DELETE FROM messages WHERE conversation_id = $1', [id]);
-      const result = await client.query('DELETE FROM conversations WHERE id = $1', [id]);
-      await client.query('COMMIT');
-      return (result.rowCount ?? 0) > 0;
-    } catch (error) {
-      await client.query('ROLLBACK');
-      throw error;
-    } finally {
-      client.release();
-    }
+    const result = await pool.query('DELETE FROM conversations WHERE id = $1', [id]);
+    return (result.rowCount ?? 0) > 0;
   },
 };

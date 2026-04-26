@@ -108,37 +108,30 @@ export const documentRepository: DocumentRepository = {
     mimeType: string,
   ): Promise<Document> {
     const pool = getPool();
-    const existing = await pool.query<DocumentRow>(
-      `SELECT id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
-              created_at AS "createdAt", updated_at AS "updatedAt"
-       FROM documents
-       WHERE source_id = $1
-       LIMIT 1`,
-      [sourceId],
+    const id = crypto.randomUUID();
+    const result = await pool.query<DocumentRow>(
+      `INSERT INTO documents (id, user_id, source_id, title, content, mime_type)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (source_id)
+       WHERE source_id IS NOT NULL
+       DO UPDATE
+       SET title = EXCLUDED.title,
+           content = EXCLUDED.content,
+           mime_type = EXCLUDED.mime_type,
+           updated_at = NOW()
+       RETURNING id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
+                 created_at AS "createdAt", updated_at AS "updatedAt"`,
+      [id, userId, sourceId, title, content, mimeType],
     );
-
-    const row = existing.rows[0];
-    if (row) {
-      const result = await pool.query<DocumentRow>(
-        `UPDATE documents
-         SET title = $2, content = $3, mime_type = $4, updated_at = NOW()
-         WHERE id = $1
-         RETURNING id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
-                   created_at AS "createdAt", updated_at AS "updatedAt"`,
-        [row.id, title, content, mimeType],
-      );
-      return result.rows[0]!;
-    }
-
-    return documentRepository.create(userId, sourceId, title, content, mimeType);
+    return result.rows[0]!;
   },
 
   async updateContent(id: string, content: string | null): Promise<void> {
     const pool = getPool();
-    await pool.query(
-      'UPDATE documents SET content = $1, updated_at = NOW() WHERE id = $2',
-      [content, id],
-    );
+    await pool.query('UPDATE documents SET content = $1, updated_at = NOW() WHERE id = $2', [
+      content,
+      id,
+    ]);
   },
 
   async updateDocument(
