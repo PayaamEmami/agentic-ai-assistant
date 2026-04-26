@@ -6,8 +6,6 @@ import type {
   AppSyncRunDto,
   ConversationListItem,
   GitHubRepositoryDto,
-  McpCatalogEntryDto,
-  McpProfileSummaryDto,
   MemoryItemDto,
   PersonalizationProfileDto,
 } from '@aaa/shared';
@@ -151,8 +149,6 @@ interface AuthPayload {
 export type AppSyncRunSummary = AppSyncRunDto;
 export type AppSourceSummary = AppSourceDto;
 export type GitHubRepositorySummary = GitHubRepositoryDto;
-export type McpCatalogEntrySummary = McpCatalogEntryDto;
-export type McpProfileSummary = McpProfileSummaryDto;
 export type AppCapabilitySummary = AppCapabilitySummaryDto;
 export type AppSummary = AppSummaryDto;
 
@@ -324,35 +320,6 @@ export const api = {
       return request<{ ok: boolean }>('/api/apps/github/repositories', {
         method: 'PUT',
         body: JSON.stringify({ repositoryIds }),
-      });
-    },
-  },
-  mcp: {
-    catalog() {
-      return request<{ integrations: McpCatalogEntrySummary[] }>('/api/mcp/catalog');
-    },
-    listProfiles() {
-      return request<{ profiles: McpProfileSummary[] }>('/api/mcp/profiles');
-    },
-    createProfile(input: {
-      integrationKind: string;
-      profileLabel: string;
-      authMode?: string;
-      secretProfile?: Record<string, unknown>;
-    }) {
-      return request<{ profile: McpProfileSummary }>('/api/mcp/profiles', {
-        method: 'POST',
-        body: JSON.stringify(input),
-      });
-    },
-    setDefaultProfile(id: string) {
-      return request<{ ok: true; profile: McpProfileSummary }>(`/api/mcp/profiles/${id}/default`, {
-        method: 'POST',
-      });
-    },
-    deleteProfile(id: string) {
-      return request<{ ok: true }>(`/api/mcp/profiles/${id}`, {
-        method: 'DELETE',
       });
     },
   },

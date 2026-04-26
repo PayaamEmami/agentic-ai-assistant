@@ -9,10 +9,7 @@ interface ToolExecutionRow {
   input: unknown;
   output: unknown | null;
   status: string;
-  origin: string;
   originMode: string;
-  mcpProfileId: string | null;
-  integrationKind: string | null;
   approvalId: string | null;
   startedAt: Date;
   completedAt: Date | null;
@@ -37,9 +34,6 @@ export interface ToolExecutionRepository {
     messageId: string | null,
     toolName: string,
     input: unknown,
-    origin: string,
-    mcpProfileId?: string | null,
-    integrationKind?: string | null,
     options?: ToolExecutionCreateOptions,
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
@@ -49,8 +43,8 @@ export interface ToolExecutionRepository {
 }
 
 const SELECT_COLUMNS = `id, conversation_id AS "conversationId", message_id AS "messageId", tool_name AS "toolName",
-              input, output, status, origin, origin_mode AS "originMode", mcp_profile_id AS "mcpProfileId",
-              integration_kind AS "integrationKind", approval_id AS "approvalId", started_at AS "startedAt",
+              input, output, status, origin_mode AS "originMode",
+              approval_id AS "approvalId", started_at AS "startedAt",
               completed_at AS "completedAt"`;
 
 export const toolExecutionRepository: ToolExecutionRepository = {
@@ -99,9 +93,6 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     messageId: string | null,
     toolName: string,
     input: unknown,
-    origin: string,
-    mcpProfileId: string | null = null,
-    integrationKind: string | null = null,
     options: ToolExecutionCreateOptions = {},
   ): Promise<ToolExecution> {
     const pool = getPool();
@@ -109,9 +100,9 @@ export const toolExecutionRepository: ToolExecutionRepository = {
     const originMode = options.originMode ?? 'text';
     const result = await pool.query<ToolExecutionRow>(
       `INSERT INTO tool_executions (
-         id, conversation_id, message_id, tool_name, input, origin, origin_mode, mcp_profile_id, integration_kind
+         id, conversation_id, message_id, tool_name, input, origin_mode
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+       VALUES ($1, $2, $3, $4, $5, $6)
        RETURNING ${SELECT_COLUMNS}`,
       [
         id,
@@ -119,10 +110,7 @@ export const toolExecutionRepository: ToolExecutionRepository = {
         messageId,
         toolName,
         JSON.stringify(input),
-        origin,
         originMode,
-        mcpProfileId,
-        integrationKind,
       ],
     );
     return result.rows[0]!;

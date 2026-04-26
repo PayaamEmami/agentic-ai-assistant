@@ -22,7 +22,6 @@ export interface LogContext {
   route?: string;
   method?: string;
   voiceSessionId?: string;
-  mcpServerId?: string;
   wsConnectionId?: string;
   clientSessionId?: string;
 }

@@ -15,7 +15,6 @@
     "@aaa/config": "workspace:*",
     "@aaa/knowledge-sources": "workspace:*",
     "@aaa/db": "workspace:*",
-    "@aaa/mcp": "workspace:*",
     "@aaa/memory": "workspace:*",
     "@aaa/observability": "workspace:*",
     "@aaa/retrieval": "workspace:*",

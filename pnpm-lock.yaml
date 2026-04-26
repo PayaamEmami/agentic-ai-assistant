@@ -41,9 +41,6 @@ importers:
       '@aaa/knowledge-sources':
         specifier: workspace:*
         version: link:../../packages/knowledge-sources
-      '@aaa/mcp':
-        specifier: workspace:*
-        version: link:../../packages/mcp
       '@aaa/memory':
         specifier: workspace:*
         version: link:../../packages/memory
@@ -229,19 +226,6 @@ importers:
         version: 5.9.3
 
   packages/knowledge-sources:
-    dependencies:
-      '@aaa/observability':
-        specifier: workspace:*
-        version: link:../observability
-    devDependencies:
-      '@types/node':
-        specifier: ^20.0.0
-        version: 20.19.37
-      typescript:
-        specifier: ^5.5.0
-        version: 5.9.3
-
-  packages/mcp:
     dependencies:
       '@aaa/observability':
         specifier: workspace:*

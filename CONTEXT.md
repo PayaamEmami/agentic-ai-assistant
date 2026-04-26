@@ -11,7 +11,6 @@ Agentic AI Assistant is a pnpm monorepo for a personal AI assistant with:
 - Background workers for async processing
 - Retrieval / RAG over connected data sources
 - Native tool execution with approvals
-- Per-user MCP integrations managed by the app
 - Multi-agent orchestration on top of OpenAI models
 
 Primary stack:
@@ -38,7 +37,6 @@ Shared packages:
 - `packages/shared`: shared types, DTOs, schemas, enums
 - `packages/ai`: prompts, model gateway, orchestration logic
 - `packages/tool-providers`: native tool providers used by tool execution
-- `packages/mcp`: per-user MCP runtime shell for future integrations
 - `packages/retrieval`: chunking, embeddings, indexing, search
 - `packages/knowledge-sources`: retrieval-oriented external source integrations and credential helpers
 - `packages/memory`: personalization and memory logic
@@ -130,7 +128,7 @@ See `.env.example` for the full template.
 
 ## Logging Notes
 
-The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, the per-user MCP path, and OpenAI boundaries.
+The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, and OpenAI boundaries.
 
 Local logging defaults:
 
@@ -162,7 +160,7 @@ When deciding where a change belongs:
 - Async jobs and queue consumers: start in `apps/worker`
 - Shared contracts between apps: check `packages/shared`
 - DB schema or persistence changes: check `packages/db`
-- Model/tool orchestration behavior: check `packages/ai`; involve `packages/mcp` for per-user MCP discovery or execution
+- Model/tool orchestration behavior: check `packages/ai`
 - Native tool provider behavior: check `packages/tool-providers`
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
@@ -176,7 +174,6 @@ When deciding where a change belongs:
 - If a database shape changes, make sure the migration, repositories, and any dependent API/worker code stay aligned.
 - If a feature touches retrieval, apps, or tools, check for downstream effects in orchestration code.
 - Treat provider apps as having separate knowledge and tool capabilities internally. Even when they target the same external provider, keep those capabilities loosely coupled and avoid making one depend on the other.
-- Do not conflate native tools with MCP. Native tools are still primary, while MCP is now a per-user integration path with explicit connection state.
 - Prefer minimal, targeted changes over broad refactors unless the task clearly calls for one.
 - Run at least relevant validation (`pnpm lint`, `pnpm typecheck`, or a focused package command) after edits when feasible.
 
@@ -189,7 +186,6 @@ At a high level, the assistant currently supports:
 - RAG over connected sources
 - Native tool execution with approval flow
 - Provider apps with separate knowledge and tool capabilities under one connection
-- Per-user MCP support via `packages/mcp`; no built-in MCP integrations are currently enabled
 - A small multi-agent pattern with orchestrator, research, tool, and verifier roles
 
 ## Maintenance

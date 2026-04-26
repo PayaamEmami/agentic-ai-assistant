@@ -7,7 +7,6 @@
       "@aaa/config": ["packages/config/src/index.ts"],
       "@aaa/knowledge-sources": ["packages/knowledge-sources/src/index.ts"],
       "@aaa/db": ["packages/db/src/index.ts"],
-      "@aaa/mcp": ["packages/mcp/src/index.ts"],
       "@aaa/memory": ["packages/memory/src/index.ts"],
       "@aaa/observability": ["packages/observability/src/index.ts"],
       "@aaa/retrieval": ["packages/retrieval/src/index.ts"],

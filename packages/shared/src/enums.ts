@@ -51,8 +51,6 @@ export const AppCapability = {
 } as const;
 export type AppCapability = (typeof AppCapability)[keyof typeof AppCapability];
 
-export type McpIntegrationKind = string;
-
 export const MemoryKind = {
   Fact: 'fact',
   Preference: 'preference',

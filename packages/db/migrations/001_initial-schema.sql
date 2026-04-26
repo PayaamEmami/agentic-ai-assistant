@@ -101,25 +101,6 @@ CREATE TABLE app_sync_runs (
     )
 );
 
-CREATE TABLE mcp_profiles (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  integration_kind TEXT NOT NULL,
-  profile_label TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'pending',
-  encrypted_credentials TEXT NOT NULL,
-  settings JSONB NOT NULL DEFAULT '{}',
-  last_error TEXT,
-  is_default BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  UNIQUE(user_id, integration_kind, profile_label),
-  CONSTRAINT mcp_profiles_status_valid CHECK (status IN ('pending', 'connected', 'failed')),
-  CONSTRAINT mcp_profiles_integration_kind_not_blank CHECK (length(btrim(integration_kind)) > 0),
-  CONSTRAINT mcp_profiles_profile_label_not_blank CHECK (length(btrim(profile_label)) > 0),
-  CONSTRAINT mcp_profiles_settings_object CHECK (jsonb_typeof(settings) = 'object')
-);
-
 CREATE TABLE documents (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -184,17 +165,13 @@ CREATE TABLE tool_executions (
   input JSONB NOT NULL,
   output JSONB,
   status TEXT NOT NULL DEFAULT 'pending',
-  origin TEXT NOT NULL DEFAULT 'native',
   origin_mode TEXT NOT NULL DEFAULT 'text',
-  mcp_profile_id UUID REFERENCES mcp_profiles(id) ON DELETE SET NULL,
-  integration_kind TEXT,
   approval_id UUID,
   started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   completed_at TIMESTAMPTZ,
   CONSTRAINT tool_executions_tool_name_not_blank CHECK (length(btrim(tool_name)) > 0),
   CONSTRAINT tool_executions_status_valid
     CHECK (status IN ('pending', 'running', 'completed', 'failed', 'requires_approval')),
-  CONSTRAINT tool_executions_origin_valid CHECK (origin IN ('native', 'mcp')),
   CONSTRAINT tool_executions_origin_mode_valid CHECK (origin_mode IN ('text', 'voice')),
   CONSTRAINT tool_executions_completion_consistent
     CHECK (
@@ -278,8 +255,3 @@ CREATE INDEX idx_app_capability_configs_user ON app_capability_configs(user_id);
 CREATE INDEX idx_app_capability_configs_status ON app_capability_configs(status);
 CREATE INDEX idx_app_sync_runs_user_kind_started
   ON app_sync_runs(user_id, app_kind, capability, started_at DESC);
-CREATE INDEX idx_mcp_profiles_user ON mcp_profiles(user_id);
-CREATE INDEX idx_mcp_profiles_user_status ON mcp_profiles(user_id, status, integration_kind);
-CREATE UNIQUE INDEX idx_mcp_profiles_default
-  ON mcp_profiles(user_id, integration_kind)
-  WHERE is_default = TRUE;

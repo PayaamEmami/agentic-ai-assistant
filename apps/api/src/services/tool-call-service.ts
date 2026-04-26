@@ -123,9 +123,6 @@ export async function createToolCall(
     messageId ?? null,
     tool.name,
     input,
-    tool.origin,
-    tool.mcpProfileId ?? null,
-    tool.integrationKind ?? null,
     { originMode },
   );
 

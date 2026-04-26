@@ -1,5 +1,4 @@
 import { closePool, getPool } from '@aaa/db';
-import { closeMcpRuntime } from '@aaa/mcp';
 import { shutdownTracing } from '@aaa/observability';
 import { buildServer } from './server.js';
 import { loadConfig } from './config.js';
@@ -37,7 +36,6 @@ async function main() {
       await server.close();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
-      await closeMcpRuntime();
       await stopToolEventRelay();
       await closePool();
       await shutdownTracing();
@@ -96,7 +94,6 @@ async function main() {
     );
     await closeToolExecutionQueue();
     await closeAppSyncQueue();
-    await closeMcpRuntime();
     await stopToolEventRelay();
     await closePool();
     await shutdownTracing();

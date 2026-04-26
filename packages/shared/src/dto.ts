@@ -238,9 +238,6 @@ export type AppKindDto = z.infer<typeof AppKindDto>;
 export const AppCapabilityDto = z.enum(['knowledge', 'tools']);
 export type AppCapabilityDto = z.infer<typeof AppCapabilityDto>;
 
-export const McpIntegrationKindDto = z.string().trim().min(1).max(120);
-export type McpIntegrationKindDto = z.infer<typeof McpIntegrationKindDto>;
-
 export const MemoryKindDto = z.enum([
   'fact',
   'preference',
@@ -326,61 +323,6 @@ export const AppDisconnectResponse = z.object({
   ok: z.literal(true),
 });
 export type AppDisconnectResponse = z.infer<typeof AppDisconnectResponse>;
-
-export const McpProfileStatusDto = z.enum(['pending', 'connected', 'failed']);
-export type McpProfileStatusDto = z.infer<typeof McpProfileStatusDto>;
-
-export const McpCatalogEntryDto = z.object({
-  kind: McpIntegrationKindDto,
-  displayName: z.string(),
-  description: z.string(),
-  supportsMultipleProfiles: z.boolean(),
-  requiresDefaultProfile: z.boolean(),
-  authModes: z.array(z.string()),
-});
-export type McpCatalogEntryDto = z.infer<typeof McpCatalogEntryDto>;
-
-export const McpCatalogResponse = z.object({
-  integrations: z.array(McpCatalogEntryDto),
-});
-export type McpCatalogResponse = z.infer<typeof McpCatalogResponse>;
-
-export const McpProfileSummaryDto = z.object({
-  id: z.string().uuid(),
-  integrationKind: McpIntegrationKindDto,
-  profileLabel: z.string(),
-  status: McpProfileStatusDto,
-  hasCredentials: z.boolean(),
-  lastError: z.string().nullable(),
-  isDefault: z.boolean(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
-});
-export type McpProfileSummaryDto = z.infer<typeof McpProfileSummaryDto>;
-
-export const McpProfileListResponse = z.object({
-  profiles: z.array(McpProfileSummaryDto),
-});
-export type McpProfileListResponse = z.infer<typeof McpProfileListResponse>;
-
-export const McpProfileCreateRequest = z.object({
-  integrationKind: McpIntegrationKindDto,
-  profileLabel: z.string().trim().min(1).max(120),
-  authMode: z.string().trim().min(1).max(120).optional(),
-  secretProfile: z.record(z.unknown()).optional(),
-});
-export type McpProfileCreateRequest = z.infer<typeof McpProfileCreateRequest>;
-
-export const McpProfileCreateResponse = z.object({
-  profile: McpProfileSummaryDto,
-});
-export type McpProfileCreateResponse = z.infer<typeof McpProfileCreateResponse>;
-
-export const McpProfileDefaultResponse = z.object({
-  ok: z.literal(true),
-  profile: McpProfileSummaryDto,
-});
-export type McpProfileDefaultResponse = z.infer<typeof McpProfileDefaultResponse>;
 
 export const GitHubRepositoryDto = z.object({
   id: z.number().int(),

@@ -328,7 +328,7 @@ export class VoiceService {
     );
     const [personalContext, availableTools] = await Promise.all([
       this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
-      loadAvailableTools(userId, '').catch(() => [] as AvailableTool[]),
+      loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
     const model =
       this.config?.openaiRealtimeModel ??
@@ -567,7 +567,7 @@ export class VoiceService {
 
     const [personalContext, availableTools] = await Promise.all([
       this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
-      loadAvailableTools(userId, requestContent).catch(() => [] as AvailableTool[]),
+      loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
 
     const retrievalSections = buildRetrievalContextSections(retrieval);
@@ -673,7 +673,7 @@ export class VoiceService {
       }
     }
 
-    const availableTools = await loadAvailableTools(userId, '').catch(() => [] as AvailableTool[]);
+    const availableTools = await loadAvailableTools(userId).catch(() => [] as AvailableTool[]);
     const tool = availableTools.find((candidate) => candidate.name === params.toolName);
     if (!tool) {
       throw new AppError(400, `Unknown tool: ${params.toolName}`, 'VOICE_TOOL_UNKNOWN');

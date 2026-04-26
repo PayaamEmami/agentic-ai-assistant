@@ -24,7 +24,6 @@ import { approvalRoutes } from './routes/approvals.js';
 import { personalizationRoutes } from './routes/personalization.js';
 import { voiceRoutes } from './routes/voice.js';
 import { appRoutes } from './routes/apps.js';
-import { mcpRoutes } from './routes/mcp.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
 import { wsHandler } from './ws/handler.js';
@@ -160,7 +159,6 @@ export async function buildServer(
     appService: services.appService,
     webBaseUrl: config.webBaseUrl,
   });
-  await app.register(mcpRoutes, { prefix: '/api', mcpService: services.mcpService });
   await app.register(clientLogRoutes, { prefix: '/api' });
   await app.register(clientTelemetryRoutes, { prefix: '/api' });
   await app.register(wsHandler, { prefix: '/ws' });

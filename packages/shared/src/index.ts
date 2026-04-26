@@ -17,7 +17,6 @@ export type {
   SourceKind as SourceKindType,
   AppKind as AppKindType,
   AppCapability as AppCapabilityType,
-  McpIntegrationKind as McpIntegrationKindType,
   MemoryKind as MemoryKindType,
   AgentRole as AgentRoleType,
 } from './enums.js';
@@ -45,7 +44,6 @@ export type {
   Memory,
   Preference,
   AppCapabilityConfig,
-  McpProfile,
   AgentTask,
 } from './domain.js';
 
@@ -87,7 +85,6 @@ export {
   HealthResponse,
   AppKindDto,
   AppCapabilityDto,
-  McpIntegrationKindDto,
   MemoryKindDto,
   AppStatusDto,
   AppSyncStatusDto,
@@ -99,14 +96,6 @@ export {
   AppConnectResponse,
   AppSyncResponse,
   AppDisconnectResponse,
-  McpProfileStatusDto,
-  McpCatalogEntryDto,
-  McpCatalogResponse,
-  McpProfileSummaryDto,
-  McpProfileListResponse,
-  McpProfileCreateRequest,
-  McpProfileCreateResponse,
-  McpProfileDefaultResponse,
   GitHubRepositoryDto,
   GitHubRepositoriesResponse,
   GitHubRepoSelectionRequest,

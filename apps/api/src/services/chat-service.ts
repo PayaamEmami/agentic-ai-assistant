@@ -12,7 +12,6 @@ import {
   attachmentRepository,
   appCapabilityConfigRepository,
   conversationRepository,
-  mcpProfileRepository,
   getPool,
   messageRepository,
   toolExecutionRepository,
@@ -341,13 +340,9 @@ export class ChatService {
             .map((app) => appLabel(app.appKind)),
         ),
       );
-      const activeMcpProfiles = (await mcpProfileRepository.listConnectedByUser(userId)).map(
-        (profile) => `MCP profile (${profile.integrationKind}): ${profile.profileLabel}`,
-      );
-      activeApps.push(...activeMcpProfiles);
       throwIfAborted(signal);
 
-      const availableTools = await loadAvailableTools(userId, requestContent);
+      const availableTools = await loadAvailableTools(userId);
       throwIfAborted(signal);
 
       let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
@@ -420,9 +415,6 @@ export class ChatService {
           null,
           toolCall.name,
           toolInput,
-          tool.origin,
-          tool.mcpProfileId ?? null,
-          tool.integrationKind ?? null,
           { originMode: 'text' },
         );
         toolExecutionIds.push(toolExecution.id);

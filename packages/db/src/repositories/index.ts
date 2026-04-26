@@ -42,6 +42,3 @@ export type {
 
 export { appSyncRunRepository } from './app-sync-runs.js';
 export type { AppSyncRun, AppSyncRunRepository } from './app-sync-runs.js';
-
-export { mcpProfileRepository } from './mcp-connections.js';
-export type { McpProfile, McpProfileRepository } from './mcp-connections.js';

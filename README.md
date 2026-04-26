@@ -1,6 +1,6 @@
 # Agentic AI Assistant
 
-A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, per-user MCP integrations, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
+A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 | Cache/Queue    | Redis 7, BullMQ                                |
 | Storage        | AWS S3                                         |
 | AI             | OpenAI API                                     |
-| Tools          | Native tool handlers, provider tools, MCP shell |
+| Tools          | Native tool handlers, provider tools           |
 | Infrastructure | AWS, Terraform, Docker, Kubernetes             |
 | Monorepo       | pnpm workspaces                                |
 
@@ -24,7 +24,7 @@ The assistant uses a small multi-agent architecture:
 
 - **Orchestrator** — Routes requests, decides which agents to delegate to
 - **Research Agent** — Handles RAG queries, searches personal data sources
-- **Tool Agent** — Executes tools (native and per-user MCP), handles external operations
+- **Tool Agent** — Executes tools, handles external operations
 - **Verifier Agent** — Validates outputs, checks approval requirements
 
 ### Apps
@@ -48,7 +48,6 @@ The assistant exposes a unified tool surface that can include both:
 
 - **Native tools** — Built-in functions with direct handlers; this is the primary tool path today
 - **Provider tools** — GitHub and Google tools backed by connected provider apps
-- **MCP tools** — A first-party per-user integration shell reserved for future tool integrations
 
 Tools requiring user confirmation go through an approval flow before execution.
 
@@ -117,7 +116,6 @@ kubectl apply -f infra/kubernetes/
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
 │   ├── ai/                   # Model gateway, prompts, agent orchestration
 │   ├── tool-providers/       # Native tool providers used by tool execution
-│   ├── mcp/                  # Per-user MCP runtime shell for future integrations
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
 │   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
 │   ├── memory/               # Preferences, personalization, memory

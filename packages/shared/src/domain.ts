@@ -6,7 +6,6 @@ import type {
   SourceKind,
   AppKind,
   AppCapability,
-  McpIntegrationKind,
   MemoryKind,
   AgentRole,
 } from './enums.js';
@@ -122,11 +121,6 @@ export interface ToolDescriptor {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
-  origin: 'native' | 'mcp';
-  mcpServerId?: string;
-  mcpProfileId?: string;
-  integrationKind?: McpIntegrationKind;
-  profileLabel?: string;
   requiresApproval: boolean;
 }
 
@@ -138,9 +132,6 @@ export interface ToolExecution {
   input: unknown;
   output: unknown | null;
   status: ToolExecutionStatus;
-  origin: 'native' | 'mcp';
-  mcpProfileId: string | null;
-  integrationKind: McpIntegrationKind | null;
   approvalId: string | null;
   startedAt: Date;
   completedAt: Date | null;
@@ -215,20 +206,6 @@ export interface AppCapabilityConfig {
   lastSyncAt: Date | null;
   lastSyncStatus: 'pending' | 'running' | 'completed' | 'failed' | null;
   lastError: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface McpProfile {
-  id: string;
-  userId: string;
-  integrationKind: McpIntegrationKind;
-  profileLabel: string;
-  status: 'pending' | 'connected' | 'failed';
-  encryptedCredentials: string;
-  settings: Record<string, unknown>;
-  lastError: string | null;
-  isDefault: boolean;
   createdAt: Date;
   updatedAt: Date;
 }

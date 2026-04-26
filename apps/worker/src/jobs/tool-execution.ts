@@ -470,10 +470,6 @@ async function executeTool(
     return { success: false, result: null, error: 'Tool execution not found' };
   }
 
-  if (execution.origin === 'mcp') {
-    return { success: false, result: null, error: 'No MCP integrations are available' };
-  }
-
   return executeNativeTool(
     userId,
     conversationId,
