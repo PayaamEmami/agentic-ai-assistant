@@ -15,8 +15,21 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function isRegistrationDisabled(): boolean {
+  const flag = process.env.DISABLE_REGISTRATION?.trim().toLowerCase();
+  return flag === 'true' || flag === '1' || flag === 'yes';
+}
+
 export async function authRoutes(app: FastifyInstance) {
   app.post('/auth/register', async (request, reply) => {
+    if (isRegistrationDisabled()) {
+      throw new AppError(
+        403,
+        'Account creation is disabled',
+        'AUTH_REGISTRATION_DISABLED',
+      );
+    }
+
     const parsed = RegisterRequest.safeParse(request.body);
     if (!parsed.success) {
       return reply.status(400).send({

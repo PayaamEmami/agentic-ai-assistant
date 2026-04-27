@@ -154,6 +154,8 @@ passthrough_keys = [
     "GOOGLE_APP_REDIRECT_URI_BASE",
     "OTEL_SERVICE_NAMESPACE",
     "OTEL_RESOURCE_ATTRIBUTES",
+    "DISABLE_REGISTRATION",
+    "NEXT_PUBLIC_DISABLE_REGISTRATION",
 ]
 for key in passthrough_keys:
     value = values.get(key)
