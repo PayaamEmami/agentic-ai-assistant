@@ -50,7 +50,14 @@ export KEY_NAME=your-existing-ec2-keypair
 bash infra/aws-ec2/provision.sh
 ```
 
-The script prints the EC2 public DNS name, default app URL, and S3 bucket. A custom domain is optional; by default the app is served over HTTP on the EC2 public DNS name.
+The script prints the EC2 public DNS name, default app URL, and S3 bucket. By default the app is served over HTTP on the EC2 public DNS name. For a publicly-trusted HTTPS URL you have two supported options described in [Public HTTPS](#public-https) below: a custom domain (Caddy + Let's Encrypt) or a CloudFront distribution in front of EC2.
+
+For a stable URL, allocate an Elastic IP and associate it to the instance so the public DNS does not change on stop/start:
+
+```bash
+alloc_id="$(aws ec2 allocate-address --region us-west-1 --domain vpc --query AllocationId --output text)"
+aws ec2 associate-address --region us-west-1 --instance-id <instance-id> --allocation-id "$alloc_id"
+```
 
 ## Configure Secrets
 
@@ -80,7 +87,7 @@ export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
 bash scripts/deploy-aws.sh
 ```
 
-By default the public app URL is `http://<ec2-public-dns>`. To use a custom domain later, set:
+By default the public app URL is `http://<ec2-public-dns>` served by Caddy on port 80. See [Public HTTPS](#public-https) for the two supported ways to get a publicly-trusted HTTPS URL. To use a custom domain with a publicly-trusted Let's Encrypt certificate, set:
 
 ```bash
 export PUBLIC_BASE_URL=https://assistant.example.com
@@ -102,6 +109,21 @@ Verify:
 ```bash
 curl -fsS http://<ec2-public-dns>/health
 ```
+
+## Public HTTPS
+
+The EC2 public hostname (`*.compute.amazonaws.com`) cannot get a publicly-trusted TLS certificate, so HTTPS at that hostname is not an option without a workaround. Two supported workarounds:
+
+1. **Custom domain + Caddy + Let's Encrypt.** Bring a domain you own, point an A record at the instance's Elastic IP, and set `PUBLIC_BASE_URL` and `CADDY_SITE_ADDRESS` accordingly when running `scripts/deploy-aws.sh`. Caddy will fetch a publicly-trusted certificate automatically.
+
+2. **CloudFront in front of EC2.** Create a CloudFront distribution with the EC2 public DNS as a custom HTTP origin. CloudFront serves the public on `https://<id>.cloudfront.net` with an Amazon-issued, publicly-trusted certificate. Caddy on EC2 stays HTTP-only on port 80, and CloudFront proxies to it over the AWS backbone. CloudFront supports WebSockets, so the chat and voice paths still work. After creating the distribution, redeploy with the CloudFront URL:
+
+   ```bash
+   export PUBLIC_BASE_URL=https://<id>.cloudfront.net
+   bash scripts/deploy-aws.sh
+   ```
+
+   Use the `CachingDisabled` and `AllViewer` AWS-managed policies on the default cache behavior so headers, cookies, and query strings are forwarded to the origin and nothing is cached. Allowed HTTP methods must include `GET`, `HEAD`, `OPTIONS`, `PUT`, `POST`, `PATCH`, `DELETE`. Optionally, restrict the EC2 security group on port 80 to AWS's `com.amazonaws.global.cloudfront.origin-facing` managed prefix list so traffic can only reach the origin through CloudFront.
 
 Also check the web app, WebSocket-backed chat or voice behavior, worker-driven jobs, and any S3-backed upload flows you use.
 
