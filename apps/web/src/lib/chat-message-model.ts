@@ -9,6 +9,7 @@ import type {
   TranscriptContent,
 } from '@aaa/shared';
 import type { ConversationSummaryResponse } from './api-client';
+import { createClientId } from './uuid';
 
 export type ChatRole = MessageRoleType;
 export type TextContentBlock = TextContent;
@@ -289,7 +290,7 @@ export function createOptimisticUserMessage(
   }));
 
   return {
-    id: `local-user-${crypto.randomUUID()}`,
+    id: `local-user-${createClientId()}`,
     role: 'user',
     content: [
       {
@@ -321,7 +322,7 @@ export function createOptimisticVoiceMessage(
   text: string,
 ): ChatMessage {
   return {
-    id: `local-voice-${role}-${crypto.randomUUID()}`,
+    id: `local-voice-${role}-${createClientId()}`,
     role,
     content: [
       {

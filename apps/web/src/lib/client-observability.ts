@@ -1,5 +1,7 @@
 'use client';
 
+import { createClientId } from './uuid';
+
 const SESSION_STORAGE_KEY = 'aaa_client_session_id';
 
 function canUseSessionStorage(): boolean {
@@ -16,11 +18,11 @@ export function getClientSessionId(): string {
     return existing;
   }
 
-  const value = crypto.randomUUID();
+  const value = createClientId();
   window.sessionStorage.setItem(SESSION_STORAGE_KEY, value);
   return value;
 }
 
 export function createCorrelationId(prefix = 'web'): string {
-  return `${prefix}-${crypto.randomUUID()}`;
+  return `${prefix}-${createClientId()}`;
 }

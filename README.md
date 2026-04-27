@@ -1,6 +1,6 @@
 # Agentic AI Assistant
 
-A web-based personal AI assistant with chat, voice, multimodal input, RAG over personal data sources, native tool execution, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
+A web-based AI assistant with chat, voice, multimodal input, RAG over connected data sources, native tool execution, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
 
 ## Tech Stack
 
@@ -23,7 +23,7 @@ A web-based personal AI assistant with chat, voice, multimodal input, RAG over p
 The assistant uses a small multi-agent architecture:
 
 - **Orchestrator** — Routes requests, decides which agents to delegate to
-- **Research Agent** — Handles RAG queries, searches personal data sources
+- **Research Agent** — Handles RAG queries and searches connected data sources
 - **Tool Agent** — Executes tools, handles external operations
 - **Verifier Agent** — Validates outputs, checks approval requirements
 
@@ -67,6 +67,17 @@ Current live voice behavior:
 - Native tools, provider tools, approvals, and retrieval stay available in text chat
 
 ## Infrastructure
+
+### AWS EC2 (`infra/aws-ec2/`)
+
+Single-user AWS deployment using AWS CLI, one EC2 instance, Docker Compose, an EBS data volume, and a private S3 bucket:
+
+```bash
+pnpm aws:provision
+pnpm aws:deploy
+```
+
+See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for setup, secrets, logging, backups, rollback, and restore steps.
 
 ### Terraform (`infra/terraform/`)
 

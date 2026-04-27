@@ -5,7 +5,7 @@ import { AuthProvider } from '@/lib/auth-context';
 
 export const metadata: Metadata = {
   title: 'Agentic AI Assistant',
-  description: 'Personal AI assistant with multi-modal support',
+  description: 'AI assistant with multi-modal support',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

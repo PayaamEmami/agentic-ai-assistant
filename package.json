@@ -7,6 +7,11 @@
   "scripts": {
     "dev": "pnpm --parallel --filter @aaa/api --filter @aaa/web --filter @aaa/worker run dev",
     "dev:local": "bash ./scripts/dev-local.sh",
+    "aws:provision": "bash ./infra/aws-ec2/provision.sh",
+    "aws:deploy": "bash ./scripts/deploy-aws.sh",
+    "aws:backup": "bash ./scripts/backup-aws-db.sh",
+    "aws:backup:timer": "bash ./scripts/install-aws-backup-timer.sh",
+    "aws:restore": "bash ./scripts/restore-aws-db.sh",
     "build": "pnpm -r run build",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

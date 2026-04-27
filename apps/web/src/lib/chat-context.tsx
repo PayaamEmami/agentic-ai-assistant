@@ -29,6 +29,7 @@ import {
   type ConversationSummary,
   type UploadedAttachment,
 } from './chat-message-model';
+import { createClientId } from './uuid';
 
 export type {
   ChatMessage,
@@ -256,7 +257,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsSendingMessage(true);
       setIsInterruptingMessage(false);
 
-      const clientRunId = crypto.randomUUID();
+      const clientRunId = createClientId();
       activeRunIdRef.current = clientRunId;
       activeRunConversationIdRef.current = currentConversationId;
 
@@ -317,7 +318,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setMessages((previous) => [
           ...previous,
           {
-            id: `local-error-${crypto.randomUUID()}`,
+            id: `local-error-${createClientId()}`,
             role: 'assistant',
             content: [{ type: 'text', text: `Error: ${message}` }],
             createdAt: new Date().toISOString(),

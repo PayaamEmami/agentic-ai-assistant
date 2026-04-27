@@ -4,7 +4,7 @@ This file is a quick orientation guide for AI coding agents working in this repo
 
 ## Project Summary
 
-Agentic AI Assistant is a pnpm monorepo for a personal AI assistant with:
+Agentic AI Assistant is a pnpm monorepo for an AI assistant with:
 
 - Web chat and voice UX
 - Fastify API and WebSocket backend

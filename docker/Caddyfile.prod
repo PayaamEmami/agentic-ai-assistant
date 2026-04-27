@@ -1,0 +1,19 @@
+{$CADDY_SITE_ADDRESS::80} {
+	encode gzip zstd
+
+	handle /api* {
+		reverse_proxy api:3001
+	}
+
+	handle /health* {
+		reverse_proxy api:3001
+	}
+
+	handle /ws* {
+		reverse_proxy api:3001
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}

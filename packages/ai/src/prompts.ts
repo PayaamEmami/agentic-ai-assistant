@@ -28,7 +28,7 @@ export interface SystemPromptContext {
 
 export function buildSystemPrompt(context: SystemPromptContext): string {
   const sections: string[] = [
-    'You are a personal AI assistant for a single user. Be accurate, practical, and concise while staying aligned to the user intent.',
+    'You are an AI assistant for a single user. Be accurate, practical, and concise while staying aligned to the user intent.',
   ];
 
   if (context.personalContext) {

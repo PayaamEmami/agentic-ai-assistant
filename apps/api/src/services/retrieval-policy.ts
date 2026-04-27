@@ -8,7 +8,7 @@ export interface RetrievalDecision {
   reason:
     | 'empty_message'
     | 'app_or_source_hint'
-    | 'personal_document_hint'
+    | 'document_hint'
     | 'explicit_document_query'
     | 'citation_follow_up'
     | 'small_talk'
@@ -91,7 +91,7 @@ export function decideRetrieval(
   ) {
     return {
       shouldRetrieve: true,
-      reason: 'personal_document_hint',
+      reason: 'document_hint',
       hasRecentCitationContext: recentCitationContext,
     };
   }
