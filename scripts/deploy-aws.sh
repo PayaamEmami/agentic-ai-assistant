@@ -2,8 +2,7 @@
 set -euo pipefail
 
 AWS_REGION="${AWS_REGION:-us-west-1}"
-AWS_PROFILE="${AWS_PROFILE-default}"
-if [[ -z "${AWS_PROFILE}" ]]; then
+if [[ -z "${AWS_PROFILE-}" ]]; then
   unset AWS_PROFILE
 fi
 AAA_RESOURCE_PREFIX="${AAA_RESOURCE_PREFIX:-aaa}"
