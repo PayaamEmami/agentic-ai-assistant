@@ -230,12 +230,43 @@ command_id="$(aws_cli ssm send-command \
   --output text)"
 
 echo "Started deployment ${command_id} on ${instance_id}. Waiting for SSM command to finish..."
-aws_cli ssm wait command-executed --command-id "${command_id}" --instance-id "${instance_id}"
+
+DEPLOY_TIMEOUT_SECONDS="${DEPLOY_TIMEOUT_SECONDS:-1800}"
+DEPLOY_POLL_INTERVAL_SECONDS="${DEPLOY_POLL_INTERVAL_SECONDS:-15}"
+deadline=$(( $(date +%s) + DEPLOY_TIMEOUT_SECONDS ))
+status="Pending"
+
+while :; do
+  status="$(aws_cli ssm get-command-invocation \
+    --command-id "${command_id}" \
+    --instance-id "${instance_id}" \
+    --query 'Status' \
+    --output text 2>/dev/null || echo 'Pending')"
+
+  case "${status}" in
+    Success|Cancelled|TimedOut|Failed)
+      break
+      ;;
+  esac
+
+  if (( $(date +%s) >= deadline )); then
+    echo "Deployment did not finish within ${DEPLOY_TIMEOUT_SECONDS}s (last status: ${status})." >&2
+    break
+  fi
+
+  echo "  status=${status}, sleeping ${DEPLOY_POLL_INTERVAL_SECONDS}s..."
+  sleep "${DEPLOY_POLL_INTERVAL_SECONDS}"
+done
 
 aws_cli ssm get-command-invocation \
   --command-id "${command_id}" \
   --instance-id "${instance_id}" \
   --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
   --output text
+
+if [[ "${status}" != "Success" ]]; then
+  echo "Deployment finished with status ${status}." >&2
+  exit 1
+fi
 
 echo "App URL: ${public_base_url}"
