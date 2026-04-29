@@ -3,6 +3,9 @@ set -euo pipefail
 
 AWS_REGION="${AWS_REGION:-us-west-1}"
 AWS_PROFILE="${AWS_PROFILE-default}"
+if [[ -z "${AWS_PROFILE}" ]]; then
+  unset AWS_PROFILE
+fi
 AAA_RESOURCE_PREFIX="${AAA_RESOURCE_PREFIX:-aaa}"
 ENVIRONMENT="${ENVIRONMENT:-prod}"
 DEPLOY_BUCKET="${DEPLOY_BUCKET:-${S3_BUCKET:-}}"
@@ -15,7 +18,7 @@ if [[ -z "${DEPLOY_BUCKET}" ]]; then
 fi
 
 aws_cli() {
-  if [[ -n "${AWS_PROFILE}" ]]; then
+  if [[ -n "${AWS_PROFILE-}" ]]; then
     aws --profile "${AWS_PROFILE}" --region "${AWS_REGION}" "$@"
   else
     aws --region "${AWS_REGION}" "$@"
