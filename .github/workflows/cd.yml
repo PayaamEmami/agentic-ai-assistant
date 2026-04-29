@@ -65,7 +65,7 @@ jobs:
       - name: Deploy
         env:
           AWS_PROFILE: ''
-        run: ./scripts/deploy-aws.sh
+        run: bash ./scripts/deploy-aws.sh
 
       - name: Invalidate CloudFront cache
         env:
