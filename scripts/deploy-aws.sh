@@ -2,7 +2,7 @@
 set -euo pipefail
 
 AWS_REGION="${AWS_REGION:-us-west-1}"
-AWS_PROFILE="${AWS_PROFILE:-default}"
+AWS_PROFILE="${AWS_PROFILE-default}"
 AAA_RESOURCE_PREFIX="${AAA_RESOURCE_PREFIX:-aaa}"
 ENVIRONMENT="${ENVIRONMENT:-prod}"
 DEPLOY_BUCKET="${DEPLOY_BUCKET:-${S3_BUCKET:-}}"
@@ -15,7 +15,11 @@ if [[ -z "${DEPLOY_BUCKET}" ]]; then
 fi
 
 aws_cli() {
-  aws --profile "${AWS_PROFILE}" --region "${AWS_REGION}" "$@"
+  if [[ -n "${AWS_PROFILE}" ]]; then
+    aws --profile "${AWS_PROFILE}" --region "${AWS_REGION}" "$@"
+  else
+    aws --region "${AWS_REGION}" "$@"
+  fi
 }
 
 aws_file_uri() {
@@ -181,8 +185,8 @@ tar \
   --exclude='tmp' \
   -czf "${bundle_path}" .
 
-aws --profile "${AWS_PROFILE}" s3 cp "${bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${bundle_name}"
-aws --profile "${AWS_PROFILE}" s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${env_bundle_name}"
+aws_cli s3 cp "${bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${bundle_name}"
+aws_cli s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${env_bundle_name}"
 
 python - "$ssm_params" "$DEPLOY_BUCKET" "$bundle_name" "$env_bundle_name" <<'PY'
 import base64

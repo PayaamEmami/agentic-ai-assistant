@@ -46,10 +46,10 @@ Shared packages:
 
 Operational/infrastructure folders:
 
-- `docker/`: local Dockerfiles and `docker-compose.yml`
-- `infra/terraform`: AWS infrastructure
-- `infra/kubernetes`: deployment manifests
-- `scripts/dev-local.sh`: local startup helper
+- `docker/`: Dockerfiles, local `docker-compose.yml`, and the production `docker-compose.prod.yml` (Caddy + postgres + redis + api + web + worker)
+- `infra/aws-ec2/`: provisioning script and cloud-init user-data for the single production EC2 host
+- `scripts/`: local startup helper (`dev-local.sh`), AWS deploy/backup helpers (`deploy-aws.sh`, `backup-aws-db.sh`, `restore-aws-db.sh`, `install-aws-backup-timer.sh`)
+- `.github/workflows/`: CI (`ci.yml`) and CD (`cd.yml`) pipelines
 
 ## How Local Dev Works
 
@@ -181,6 +181,23 @@ When deciding where a change belongs:
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
+
+## Production Deploy
+
+Production runs as a single AWS EC2 instance (Name tag `aaa-prod-app`) running everything via `docker/docker-compose.prod.yml`. CloudFront sits in front of the EC2 public DNS for HTTPS termination and caching. Postgres and Redis run as containers on the box; uploads go to S3.
+
+Deploy flow on merge to `main` (`.github/workflows/cd.yml`):
+
+1. Reuse `ci.yml` gates (format, lint, typecheck, test)
+2. Assume an IAM role via GitHub OIDC (no long-lived AWS keys)
+3. Materialize `.env` from GitHub Secrets, then run `scripts/deploy-aws.sh`, which:
+   - Tars the repo and uploads it to the S3 deploy bucket
+   - Sends an SSM Run Command to the EC2 instance to swap the `current` symlink, build images, run DB migrations, and `docker compose up -d --force-recreate`
+4. Invalidate the CloudFront distribution so the new web bundle is served immediately
+
+Manual deploys (`pnpm aws:deploy`) use the same script and are interchangeable with CD.
+
+Required GitHub configuration is documented in `README.md` under "Continuous deployment". Account-specific values (bucket name, instance name, role ARN, CloudFront distribution ID, region, public URL) live only in GitHub Variables/Secrets — never committed to this repo.
 
 ## Maintenance
 

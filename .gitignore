@@ -31,13 +31,6 @@ logs/
 # Coverage
 coverage/
 
-# Terraform
-infra/terraform/.terraform/
-infra/terraform/*.tfstate
-infra/terraform/*.tfstate.backup
-infra/terraform/*.tfvars
-!infra/terraform/*.tfvars.example
-
 # Docker
 docker/.env
 

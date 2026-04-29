@@ -1,0 +1,76 @@
+name: CD
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: deploy-prod
+  cancel-in-progress: false
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      DEPLOY_BUCKET: ${{ secrets.DEPLOY_BUCKET }}
+      INSTANCE_NAME: ${{ secrets.INSTANCE_NAME }}
+      PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
+      CADDY_SITE_ADDRESS: ':80'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Materialize .env from secrets
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          INTERNAL_SERVICE_SECRET: ${{ secrets.INTERNAL_SERVICE_SECRET }}
+          APP_CREDENTIALS_SECRET: ${{ secrets.APP_CREDENTIALS_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          OAUTH_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+          OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}
+          OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}
+        run: |
+          umask 077
+          {
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'INTERNAL_SERVICE_SECRET=%s\n' "$INTERNAL_SERVICE_SECRET"
+            printf 'APP_CREDENTIALS_SECRET=%s\n' "$APP_CREDENTIALS_SECRET"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'GITHUB_CLIENT_ID=%s\n' "$OAUTH_GITHUB_CLIENT_ID"
+            printf 'GITHUB_CLIENT_SECRET=%s\n' "$OAUTH_GITHUB_CLIENT_SECRET"
+            printf 'GOOGLE_CLIENT_ID=%s\n' "$OAUTH_GOOGLE_CLIENT_ID"
+            printf 'GOOGLE_CLIENT_SECRET=%s\n' "$OAUTH_GOOGLE_CLIENT_SECRET"
+            printf 'S3_BUCKET=%s\n' "$DEPLOY_BUCKET"
+            printf 'S3_REGION=%s\n' "$AWS_REGION"
+          } > .env
+
+      - name: Deploy
+        env:
+          AWS_PROFILE: ''
+        run: ./scripts/deploy-aws.sh
+
+      - name: Invalidate CloudFront cache
+        env:
+          DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DISTRIBUTION_ID" \
+            --paths '/*'

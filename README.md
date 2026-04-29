@@ -13,7 +13,7 @@ A web-based AI assistant with chat, voice, multimodal input, RAG over connected 
 | Storage        | AWS S3                                         |
 | AI             | OpenAI API                                     |
 | Tools          | Native tool handlers, provider tools           |
-| Infrastructure | AWS, Terraform, Docker, Kubernetes             |
+| Infrastructure | AWS EC2, Docker Compose, CloudFront            |
 | Monorepo       | pnpm workspaces                                |
 
 ## Architecture Overview
@@ -68,53 +68,40 @@ Current live voice behavior:
 
 ## Infrastructure
 
-### AWS EC2 (`infra/aws-ec2/`)
+Production runs on a single AWS EC2 instance (in the `aaa-prod-app` Name tag) with everything containerised via [`docker/docker-compose.prod.yml`](docker/docker-compose.prod.yml):
 
-Single-user AWS deployment using AWS CLI, one EC2 instance, Docker Compose, an EBS data volume, and a private S3 bucket:
+- **Caddy** — reverse proxy on port 80
+- **Postgres** (with `pgvector`) and **Redis** — stateful services with their data on a dedicated EBS volume
+- **api**, **web**, **worker** — application containers built from the Dockerfiles in [`docker/`](docker/)
+- **CloudFront** sits in front of the EC2 public DNS as the origin and terminates TLS
+- **S3** holds user uploads and the deploy artifacts produced by the deploy script
+
+### One-time provisioning (`infra/aws-ec2/`)
 
 ```bash
 pnpm aws:provision
+```
+
+See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for what this creates (EC2 + EIP + EBS + S3 bucket), required environment variables, logging, backups, rollback, and restore steps.
+
+### Manual deploys
+
+```bash
 pnpm aws:deploy
 ```
 
-See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for setup, secrets, logging, backups, rollback, and restore steps.
+This packages the repo, uploads it to the S3 deploy bucket, and uses SSM Run Command to build images, run DB migrations, and restart containers on the EC2 instance.
 
-### Terraform (`infra/terraform/`)
+### Continuous deployment
 
-AWS infrastructure definitions using modular Terraform:
+Pushes to `main` automatically deploy via [`.github/workflows/cd.yml`](.github/workflows/cd.yml):
 
-- **networking** — VPC with public/private subnets across two AZs
-- **database** — RDS PostgreSQL 16 with encryption
-- **cache** — ElastiCache Redis 7
-- **storage** — S3 bucket with versioning and encryption
+1. Reuse the [`ci.yml`](.github/workflows/ci.yml) gates (format, lint, typecheck, test)
+2. Assume an IAM role in AWS via GitHub OIDC (no long-lived AWS keys in GitHub)
+3. Run the same `scripts/deploy-aws.sh` flow as a manual deploy
+4. Invalidate the CloudFront cache so the new web bundle is served immediately
 
-To plan infrastructure:
-
-```bash
-cd infra/terraform
-cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your values
-terraform init
-terraform plan
-```
-
-### Kubernetes (`infra/kubernetes/`)
-
-Deployment manifests for:
-
-- API (2 replicas, health probes)
-- Web frontend (2 replicas)
-- Worker (1 replica)
-- ConfigMap for non-sensitive configuration
-- Secrets template (use sealed-secrets or external-secrets-operator in production)
-- Nginx ingress routing
-
-Apply to a cluster:
-
-```bash
-kubectl apply -f infra/kubernetes/namespace.yaml
-kubectl apply -f infra/kubernetes/
-```
+Deploys are serialised by a `concurrency: deploy-prod` group so two pushes can't race.
 
 ## Repository Structure
 
@@ -134,9 +121,9 @@ kubectl apply -f infra/kubernetes/
 │   ├── config/               # Environment parsing, constants
 │   └── observability/        # Logging, tracing, metrics, sanitization
 ├── infra/
-│   ├── terraform/            # AWS infrastructure (VPC, RDS, ElastiCache, S3)
-│   └── kubernetes/           # K8s manifests (deployments, services, ingress)
-├── docker/                   # Dockerfiles and docker-compose for local dev
+│   └── aws-ec2/              # EC2 provisioning script and cloud-init user-data
+├── docker/                   # Dockerfiles and docker-compose for local dev and prod
+├── .github/workflows/        # CI and CD GitHub Actions pipelines
 ├── .env.example              # Environment variable template
 ├── pnpm-workspace.yaml       # pnpm workspace definition
 └── tsconfig.base.json        # Shared TypeScript configuration
