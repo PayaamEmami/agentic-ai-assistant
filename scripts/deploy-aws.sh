@@ -223,6 +223,15 @@ cd {app_dir}/current
 aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
 docker compose --env-file {env_file} -f docker-compose.prod.yml pull
 docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
+# Stop containers that were started from a previous release directory. Docker
+# Compose tracks ownership via working-dir labels, so an `up --force-recreate`
+# from a new directory silently leaves old containers running if they carry a
+# different working-dir label. We explicitly `down` every other release first.
+for prev_dir in {app_dir}/releases/*/; do
+  [ "${{prev_dir%/}}" = "{release_dir}" ] && continue
+  [ -f "${{prev_dir}}docker-compose.prod.yml" ] && [ -f "${{prev_dir}}.env.production" ] || continue
+  docker compose --env-file "${{prev_dir}}.env.production" -f "${{prev_dir}}docker-compose.prod.yml" down --remove-orphans 2>/dev/null || true
+done
 docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
 docker image prune -f
 aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
