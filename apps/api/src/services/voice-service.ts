@@ -347,11 +347,15 @@ export class VoiceService {
         component: 'voice-service',
         provider: 'openai',
         eventPrefix: 'voice.sdp_exchange',
-        logResponseBodyOnFailure: false,
+        logResponseBodyOnFailure: true,
       },
     );
 
     if (!response.ok) {
+      const responseBody = await response
+        .clone()
+        .text()
+        .catch(() => '');
       getLogger({
         component: 'voice-service',
         voiceSessionId: sessionId,
@@ -362,6 +366,14 @@ export class VoiceService {
           event: 'voice.sdp_exchange.failed',
           outcome: 'failure',
           status: response.status,
+          responseBody: responseBody.slice(0, 2048),
+          sessionConfigSummary: {
+            model,
+            voice,
+            instructionsLength: instructions.length,
+            toolCount: availableTools.length,
+            toolNames: availableTools.slice(0, 20).map((tool) => tool.name),
+          },
         },
         'Failed to proxy realtime SDP exchange',
       );
