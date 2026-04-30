@@ -25,7 +25,7 @@ jobs:
         service: [api, worker, web]
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
       IMAGE_TAG: ${{ github.sha }}
     steps:
       - name: Checkout
@@ -72,9 +72,16 @@ jobs:
       INSTANCE_NAME: ${{ secrets.INSTANCE_NAME }}
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
       CADDY_SITE_ADDRESS: ':80'
-      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
       IMAGE_TAG: ${{ github.sha }}
     steps:
+      - name: Verify ECR_REGISTRY is set
+        run: |
+          if [[ -z "${ECR_REGISTRY}" ]]; then
+            echo "::error::Repository Secret ECR_REGISTRY is not set." >&2
+            exit 1
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
 
