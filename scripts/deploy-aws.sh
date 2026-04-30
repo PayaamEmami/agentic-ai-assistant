@@ -185,7 +185,6 @@ passthrough_keys = [
     "OTEL_SERVICE_NAMESPACE",
     "OTEL_RESOURCE_ATTRIBUTES",
     "DISABLE_REGISTRATION",
-    "NEXT_PUBLIC_DISABLE_REGISTRATION",
 ]
 for key in passthrough_keys:
     value = values.get(key)
@@ -225,7 +224,7 @@ cd {app_dir}/current
 aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
 docker compose --env-file {env_file} -f docker-compose.prod.yml pull
 docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
-docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
 docker image prune -f
 aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
 ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf

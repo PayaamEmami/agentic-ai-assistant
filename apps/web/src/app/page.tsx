@@ -4,12 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuthContext } from '@/lib/auth-context';
+import { API_BASE } from '@/lib/api-client';
 
 type Mode = 'login' | 'register';
-
-const REGISTRATION_ENABLED =
-  process.env.NEXT_PUBLIC_DISABLE_REGISTRATION !== 'true' &&
-  process.env.NEXT_PUBLIC_DISABLE_REGISTRATION !== '1';
 
 export default function Home() {
   const router = useRouter();
@@ -20,8 +17,27 @@ export default function Home() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
-  const activeMode: Mode = REGISTRATION_ENABLED ? mode : 'login';
+  const activeMode: Mode = registrationEnabled ? mode : 'login';
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetch(`${API_BASE}/api/config`)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((data) => {
+        if (cancelled || !data || typeof data.registrationEnabled !== 'boolean') {
+          return;
+        }
+        setRegistrationEnabled(data.registrationEnabled);
+      })
+      .catch(() => {
+        // Fall back to allowing registration; server still enforces 403 if disabled.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
@@ -68,7 +84,7 @@ export default function Home() {
           </p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">Welcome</h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-foreground-muted">
-            {REGISTRATION_ENABLED
+            {registrationEnabled
               ? 'Sign in to your workspace, or create an account to start chatting, use tools, and get answers in real time. Everything here stays private to your account.'
               : 'Sign in to your workspace to start chatting, use tools, and get answers in real time. Everything here stays private to your account.'}
           </p>
@@ -80,7 +96,7 @@ export default function Home() {
         </section>
 
         <section className="rounded-3xl border border-border bg-surface-elevated p-8 shadow-sm">
-          {REGISTRATION_ENABLED ? (
+          {registrationEnabled ? (
             <div className="flex rounded-full bg-surface-input p-1 text-sm">
               <button
                 type="button"
