@@ -23,7 +23,8 @@ interface AuthContextValue {
   isReady: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, displayName: string) => Promise<void>;
+  // Account creation is intentionally disabled.
+  // register: (email: string, password: string, displayName: string) => Promise<void>;
   devLogin: (email?: string, displayName?: string) => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
@@ -89,13 +90,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
-  const register = useCallback(
-    async (email: string, password: string, displayName: string) => {
-      const response = await api.auth.register(email, password, displayName);
-      applyAuth(response.token, response.user);
-    },
-    [applyAuth],
-  );
+  // Account creation is intentionally disabled.
+  // const register = useCallback(
+  //   async (email: string, password: string, displayName: string) => {
+  //     const response = await api.auth.register(email, password, displayName);
+  //     applyAuth(response.token, response.user);
+  //   },
+  //   [applyAuth],
+  // );
 
   const devLogin = useCallback(
     async (email = 'dev@localhost', displayName = 'Dev User') => {
@@ -116,12 +118,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isReady,
       isAuthenticated: user !== null && token !== null,
       login,
-      register,
       devLogin,
       logout,
       refresh,
     }),
-    [devLogin, isReady, login, logout, refresh, register, token, user],
+    [devLogin, isReady, login, logout, refresh, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

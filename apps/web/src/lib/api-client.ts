@@ -178,12 +178,13 @@ export function buildWebSocketUrl(
 
 export const api = {
   auth: {
-    register(email: string, password: string, displayName: string) {
-      return requestPublic<AuthPayload>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({ email, password, displayName }),
-      });
-    },
+    // Account creation is intentionally disabled.
+    // register(email: string, password: string, displayName: string) {
+    //   return requestPublic<AuthPayload>('/api/auth/register', {
+    //     method: 'POST',
+    //     body: JSON.stringify({ email, password, displayName }),
+    //   });
+    // },
     login(email: string, password: string) {
       return requestPublic<AuthPayload>('/api/auth/login', {
         method: 'POST',

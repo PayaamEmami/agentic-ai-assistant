@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { AuthCredentialsRequest, RegisterRequest } from '@aaa/shared';
+import { AuthCredentialsRequest } from '@aaa/shared';
 import { userRepository } from '@aaa/db';
 import { signAuthToken } from '../lib/jwt.js';
-import { hashPassword, verifyPassword } from '../lib/password.js';
+import { verifyPassword } from '../lib/password.js';
 import { AppError } from '../lib/errors.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -15,49 +15,36 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
-function isRegistrationDisabled(): boolean {
-  const flag = process.env.DISABLE_REGISTRATION?.trim().toLowerCase();
-  return flag === 'true' || flag === '1' || flag === 'yes';
-}
-
 export async function authRoutes(app: FastifyInstance) {
-  app.get('/config', async (_request, reply) => {
-    return reply.status(200).send({
-      registrationEnabled: !isRegistrationDisabled(),
-    });
-  });
-
-  app.post('/auth/register', async (request, reply) => {
-    if (isRegistrationDisabled()) {
-      throw new AppError(403, 'Account creation is disabled', 'AUTH_REGISTRATION_DISABLED');
-    }
-
-    const parsed = RegisterRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-      });
-    }
-
-    const email = normalizeEmail(parsed.data.email);
-    const existing = await userRepository.findAuthByEmail(email);
-    if (existing) {
-      throw new AppError(409, 'An account already exists for this email', 'AUTH_EMAIL_EXISTS');
-    }
-
-    const passwordHash = await hashPassword(parsed.data.password);
-    const user = await userRepository.create(email, parsed.data.displayName.trim(), passwordHash);
-    const token = signAuthToken(user.id, user.email);
-
-    return reply.status(201).send({
-      token,
-      user: {
-        id: user.id,
-        email: user.email,
-        displayName: user.displayName,
-      },
-    });
-  });
+  // Account creation is intentionally disabled. To re-enable, restore the
+  // `RegisterRequest` import above and uncomment the handler below.
+  // app.post('/auth/register', async (request, reply) => {
+  //   const parsed = RegisterRequest.safeParse(request.body);
+  //   if (!parsed.success) {
+  //     return reply.status(400).send({
+  //       error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+  //     });
+  //   }
+  //
+  //   const email = normalizeEmail(parsed.data.email);
+  //   const existing = await userRepository.findAuthByEmail(email);
+  //   if (existing) {
+  //     throw new AppError(409, 'An account already exists for this email', 'AUTH_EMAIL_EXISTS');
+  //   }
+  //
+  //   const passwordHash = await hashPassword(parsed.data.password);
+  //   const user = await userRepository.create(email, parsed.data.displayName.trim(), passwordHash);
+  //   const token = signAuthToken(user.id, user.email);
+  //
+  //   return reply.status(201).send({
+  //     token,
+  //     user: {
+  //       id: user.id,
+  //       email: user.email,
+  //       displayName: user.displayName,
+  //     },
+  //   });
+  // });
 
   app.post('/auth/login', async (request, reply) => {
     const parsed = AuthCredentialsRequest.safeParse(request.body);

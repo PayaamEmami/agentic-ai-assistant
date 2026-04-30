@@ -4,40 +4,24 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuthContext } from '@/lib/auth-context';
-import { API_BASE } from '@/lib/api-client';
 
-type Mode = 'login' | 'register';
+// Account creation is intentionally disabled in this build. The "Create
+// Account" tab, the display-name input, and the register submit branch are
+// commented out below. To re-enable, restore the Mode union, the register
+// destructure, and the commented JSX/handler branches.
+// type Mode = 'login' | 'register';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isReady, login, register, devLogin } = useAuthContext();
-  const [mode, setMode] = useState<Mode>('login');
-  const [displayName, setDisplayName] = useState('');
+  const { isAuthenticated, isReady, login, devLogin } = useAuthContext();
+  // const [mode, setMode] = useState<Mode>('login');
+  // const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [registrationEnabled, setRegistrationEnabled] = useState(true);
 
-  const activeMode: Mode = registrationEnabled ? mode : 'login';
-
-  useEffect(() => {
-    let cancelled = false;
-    void fetch(`${API_BASE}/api/config`)
-      .then((response) => (response.ok ? response.json() : null))
-      .then((data) => {
-        if (cancelled || !data || typeof data.registrationEnabled !== 'boolean') {
-          return;
-        }
-        setRegistrationEnabled(data.registrationEnabled);
-      })
-      .catch(() => {
-        // Fall back to allowing registration; server still enforces 403 if disabled.
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // const activeMode: Mode = 'login';
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
@@ -51,11 +35,12 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      if (activeMode === 'register') {
-        await register(email, password, displayName);
-      } else {
-        await login(email, password);
-      }
+      // if (activeMode === 'register') {
+      //   await register(email, password, displayName);
+      // } else {
+      //   await login(email, password);
+      // }
+      await login(email, password);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Authentication failed');
     } finally {
@@ -84,9 +69,8 @@ export default function Home() {
           </p>
           <h1 className="mt-4 text-4xl font-semibold tracking-tight text-foreground">Welcome</h1>
           <p className="mt-4 max-w-xl text-base leading-7 text-foreground-muted">
-            {registrationEnabled
-              ? 'Sign in to your workspace, or create an account to start chatting, use tools, and get answers in real time. Everything here stays private to your account.'
-              : 'Sign in to your workspace to start chatting, use tools, and get answers in real time. Everything here stays private to your account.'}
+            Sign in to your workspace to start chatting, use tools, and get answers in real time.
+            Everything here stays private to your account.
           </p>
           <div className="mt-8 flex flex-wrap gap-3 text-sm text-foreground-muted">
             <span className="rounded-full bg-surface-input px-4 py-2">Private workspace</span>
@@ -96,38 +80,38 @@ export default function Home() {
         </section>
 
         <section className="rounded-3xl border border-border bg-surface-elevated p-8 shadow-sm">
-          {registrationEnabled ? (
-            <div className="flex rounded-full bg-surface-input p-1 text-sm">
-              <button
-                type="button"
-                onClick={() => setMode('login')}
-                className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                  mode === 'login'
-                    ? 'bg-surface-elevated text-foreground shadow-sm'
-                    : 'text-foreground-muted'
-                }`}
-              >
-                Sign In
-              </button>
-              <button
-                type="button"
-                onClick={() => setMode('register')}
-                className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                  mode === 'register'
-                    ? 'bg-surface-elevated text-foreground shadow-sm'
-                    : 'text-foreground-muted'
-                }`}
-              >
-                Create Account
-              </button>
-            </div>
-          ) : (
-            <p className="text-sm font-medium uppercase tracking-[0.2em] text-foreground-muted">
-              Sign in
-            </p>
-          )}
+          {/*
+          <div className="flex rounded-full bg-surface-input p-1 text-sm">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className={`flex-1 rounded-full px-4 py-2 transition-colors ${
+                mode === 'login'
+                  ? 'bg-surface-elevated text-foreground shadow-sm'
+                  : 'text-foreground-muted'
+              }`}
+            >
+              Sign In
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('register')}
+              className={`flex-1 rounded-full px-4 py-2 transition-colors ${
+                mode === 'register'
+                  ? 'bg-surface-elevated text-foreground shadow-sm'
+                  : 'text-foreground-muted'
+              }`}
+            >
+              Create Account
+            </button>
+          </div>
+          */}
+          <p className="text-sm font-medium uppercase tracking-[0.2em] text-foreground-muted">
+            Sign in
+          </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
+            {/*
             {activeMode === 'register' ? (
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-foreground">Display name</span>
@@ -140,6 +124,7 @@ export default function Home() {
                 />
               </label>
             ) : null}
+            */}
 
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-foreground">Email</span>
@@ -177,11 +162,7 @@ export default function Home() {
               disabled={isSubmitting}
               className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {isSubmitting
-                ? 'Working...'
-                : activeMode === 'register'
-                  ? 'Create account'
-                  : 'Sign in'}
+              {isSubmitting ? 'Working...' : 'Sign in'}
             </button>
           </form>
 
