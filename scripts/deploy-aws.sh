@@ -10,9 +10,25 @@ ENVIRONMENT="${ENVIRONMENT:-prod}"
 DEPLOY_BUCKET="${DEPLOY_BUCKET:-${S3_BUCKET:-}}"
 ENV_SOURCE="${ENV_SOURCE:-.env}"
 INSTANCE_NAME="${INSTANCE_NAME:-${AAA_RESOURCE_PREFIX}-${ENVIRONMENT}-app}"
+ECR_REGISTRY="${ECR_REGISTRY:-}"
+IMAGE_TAG="${IMAGE_TAG:-}"
 
 if [[ -z "${DEPLOY_BUCKET}" ]]; then
   echo "Set DEPLOY_BUCKET or S3_BUCKET to the deployment bucket created by infra/aws-ec2/provision.sh." >&2
+  exit 1
+fi
+
+if [[ -z "${ECR_REGISTRY}" ]]; then
+  echo "Set ECR_REGISTRY (e.g. <account>.dkr.ecr.${AWS_REGION}.amazonaws.com). Run infra/aws-ec2/ecr-setup.sh first." >&2
+  exit 1
+fi
+
+if [[ -z "${IMAGE_TAG}" ]]; then
+  IMAGE_TAG="$(git rev-parse HEAD 2>/dev/null || true)"
+fi
+
+if [[ -z "${IMAGE_TAG}" ]]; then
+  echo "Set IMAGE_TAG to the image tag that was pushed by the build pipeline (defaults to current git SHA)." >&2
   exit 1
 fi
 
@@ -62,24 +78,30 @@ caddy_site_address="${CADDY_SITE_ADDRESS:-:80}"
 
 revision="$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
 deployment_id="${revision}-$(date -u +%Y%m%d%H%M%S)"
-bundle_name="aaa-${deployment_id}.tar.gz"
-bundle_path="$(mktemp -t "${bundle_name}.XXXXXX")"
-env_bundle_name="aaa-env-${deployment_id}.env"
-env_bundle_path="$(mktemp -t "${env_bundle_name}.XXXXXX")"
+env_bundle_path="$(mktemp -t aaa-env-${deployment_id}.XXXXXX)"
 ssm_params="$(mktemp -t aaa-ssm-params.XXXXXX.json)"
 
 cleanup() {
-  rm -f "${bundle_path}" "${env_bundle_path}" "${ssm_params}"
+  rm -f "${env_bundle_path}" "${ssm_params}"
 }
 trap cleanup EXIT
 
-python - "$ENV_SOURCE" "$env_bundle_path" "$AWS_REGION" "$DEPLOY_BUCKET" "$public_base_url" "$caddy_site_address" <<'PY'
+python - "$ENV_SOURCE" "$env_bundle_path" "$AWS_REGION" "$DEPLOY_BUCKET" "$public_base_url" "$caddy_site_address" "$ECR_REGISTRY" "$IMAGE_TAG" <<'PY'
 import re
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
 
-source, output, aws_region, deploy_bucket, public_base_url, caddy_site_address = sys.argv[1:]
+(
+    source,
+    output,
+    aws_region,
+    deploy_bucket,
+    public_base_url,
+    caddy_site_address,
+    ecr_registry,
+    image_tag,
+) = sys.argv[1:]
 source_path = Path(source)
 raw = source_path.read_text(encoding="utf-8")
 
@@ -121,6 +143,8 @@ if missing:
 
 deployment_values = {
     "AWS_REGION": aws_region,
+    "ECR_REGISTRY": ecr_registry,
+    "IMAGE_TAG": image_tag,
     "S3_BUCKET": deploy_bucket,
     "S3_REGION": values.get("S3_REGION") or aws_region,
     "NODE_ENV": "production",
@@ -174,46 +198,37 @@ with Path(output).open("w", encoding="utf-8") as fh:
         fh.write(f"{key}={value}\n")
 PY
 
-tar \
-  --exclude='.git' \
-  --exclude='node_modules' \
-  --exclude='.pnpm-store' \
-  --exclude='.next' \
-  --exclude='dist' \
-  --exclude='.env' \
-  --exclude='.env.*' \
-  --exclude='.logs' \
-  --exclude='coverage' \
-  --exclude='tmp' \
-  -czf "${bundle_path}" .
+s3_prefix="deployments/${deployment_id}"
 
-aws_cli s3 cp "${bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${bundle_name}"
-aws_cli s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/deployments/${env_bundle_name}"
+aws_cli s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/${s3_prefix}/.env.production"
+aws_cli s3 cp docker/docker-compose.prod.yml "s3://${DEPLOY_BUCKET}/${s3_prefix}/docker-compose.prod.yml"
+aws_cli s3 cp docker/Caddyfile.prod "s3://${DEPLOY_BUCKET}/${s3_prefix}/Caddyfile.prod"
 
-python - "$ssm_params" "$DEPLOY_BUCKET" "$bundle_name" "$env_bundle_name" <<'PY'
+python - "$ssm_params" "$DEPLOY_BUCKET" "$s3_prefix" "$AWS_REGION" "$ECR_REGISTRY" "$deployment_id" <<'PY'
 import base64
 import json
 import sys
 
-path, bucket, bundle, env_bundle = sys.argv[1:]
+path, bucket, s3_prefix, region, ecr_registry, deployment_id = sys.argv[1:]
 app_dir = "/opt/aaa/app"
-env_file = "/opt/aaa/app/.env.production"
+release_dir = f"{app_dir}/releases/{deployment_id}"
+env_file = f"{release_dir}/.env.production"
 remote_script = f"""
 set -euo pipefail
-mkdir -p {app_dir}/releases {app_dir}/shared
-aws s3 cp s3://{bucket}/deployments/{bundle} /tmp/{bundle}
-aws s3 cp s3://{bucket}/deployments/{env_bundle} {env_file}
+mkdir -p {release_dir}
+aws s3 cp s3://{bucket}/{s3_prefix}/.env.production {env_file}
+aws s3 cp s3://{bucket}/{s3_prefix}/docker-compose.prod.yml {release_dir}/docker-compose.prod.yml
+aws s3 cp s3://{bucket}/{s3_prefix}/Caddyfile.prod {release_dir}/Caddyfile.prod
 chmod 0600 {env_file}
-aws s3 rm s3://{bucket}/deployments/{env_bundle}
-rm -rf {app_dir}/releases/{bundle}
-mkdir -p {app_dir}/releases/{bundle}
-tar -xzf /tmp/{bundle} -C {app_dir}/releases/{bundle}
-ln -sfn {app_dir}/releases/{bundle} {app_dir}/current
+ln -sfn {release_dir} {app_dir}/current
 cd {app_dir}/current
-docker compose --env-file {env_file} -f docker/docker-compose.prod.yml build
-docker compose --env-file {env_file} -f docker/docker-compose.prod.yml --profile tools run --rm migrate
-docker compose --env-file {env_file} -f docker/docker-compose.prod.yml up -d --remove-orphans --force-recreate
+aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
+docker compose --env-file {env_file} -f docker-compose.prod.yml pull
+docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
+docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans
 docker image prune -f
+aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
+ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
 """
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
 
@@ -229,19 +244,36 @@ command_id="$(aws_cli ssm send-command \
   --query 'Command.CommandId' \
   --output text)"
 
+if [[ -z "${command_id}" || "${command_id}" == "None" ]]; then
+  echo "ssm send-command did not return a CommandId. Aborting." >&2
+  exit 1
+fi
+
 echo "Started deployment ${command_id} on ${instance_id}. Waiting for SSM command to finish..."
 
-DEPLOY_TIMEOUT_SECONDS="${DEPLOY_TIMEOUT_SECONDS:-1800}"
-DEPLOY_POLL_INTERVAL_SECONDS="${DEPLOY_POLL_INTERVAL_SECONDS:-15}"
+DEPLOY_TIMEOUT_SECONDS="${DEPLOY_TIMEOUT_SECONDS:-600}"
+DEPLOY_POLL_INTERVAL_SECONDS="${DEPLOY_POLL_INTERVAL_SECONDS:-10}"
 deadline=$(( $(date +%s) + DEPLOY_TIMEOUT_SECONDS ))
 status="Pending"
+last_status="Pending"
 
 while :; do
-  status="$(aws_cli ssm get-command-invocation \
+  invocation_rc=0
+  invocation_json="$(aws_cli ssm get-command-invocation \
     --command-id "${command_id}" \
     --instance-id "${instance_id}" \
-    --query 'Status' \
-    --output text 2>/dev/null || echo 'Pending')"
+    --output json 2>&1)" || invocation_rc=$?
+
+  if [[ "${invocation_rc}" -ne 0 ]]; then
+    if grep -q 'InvocationDoesNotExist' <<<"${invocation_json}"; then
+      status="Pending"
+    else
+      echo "ssm get-command-invocation failed: ${invocation_json}" >&2
+      exit 1
+    fi
+  else
+    status="$(python -c 'import json,sys; print(json.loads(sys.stdin.read()).get("Status",""))' <<<"${invocation_json}")"
+  fi
 
   case "${status}" in
     Success|Cancelled|TimedOut|Failed)
@@ -249,19 +281,23 @@ while :; do
       ;;
   esac
 
+  if [[ "${status}" != "${last_status}" ]]; then
+    echo "  status=${status}"
+    last_status="${status}"
+  fi
+
   if (( $(date +%s) >= deadline )); then
     echo "Deployment did not finish within ${DEPLOY_TIMEOUT_SECONDS}s (last status: ${status})." >&2
     break
   fi
 
-  echo "  status=${status}, sleeping ${DEPLOY_POLL_INTERVAL_SECONDS}s..."
   sleep "${DEPLOY_POLL_INTERVAL_SECONDS}"
 done
 
 aws_cli ssm get-command-invocation \
   --command-id "${command_id}" \
   --instance-id "${instance_id}" \
-  --query '{Status:Status,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
+  --query '{Status:Status,RequestedDateTime:RequestedDateTime,ExecutionStartDateTime:ExecutionStartDateTime,ExecutionEndDateTime:ExecutionEndDateTime,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
   --output text
 
 if [[ "${status}" != "Success" ]]; then

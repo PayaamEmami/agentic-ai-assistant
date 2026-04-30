@@ -90,7 +90,7 @@ See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for what this creates (
 pnpm aws:deploy
 ```
 
-This packages the repo, uploads it to the S3 deploy bucket, and uses SSM Run Command to build images, run DB migrations, and restart containers on the EC2 instance.
+This builds and pushes the three production images to ECR (locally — manual deploys assume Docker is installed and authenticated to your registry), uploads only the rendered `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to the S3 deploy bucket, and uses SSM Run Command to pull the images, run DB migrations, and restart containers on the EC2 instance. In practice, manual deploys are rarely needed — pushing to `main` runs the same flow on GitHub Actions.
 
 ### Continuous deployment
 
@@ -98,8 +98,9 @@ Pushes to `main` automatically deploy via [`.github/workflows/cd.yml`](.github/w
 
 1. Reuse the [`ci.yml`](.github/workflows/ci.yml) gates (format, lint, typecheck, test)
 2. Assume an IAM role in AWS via GitHub OIDC (no long-lived AWS keys in GitHub)
-3. Run the same `scripts/deploy-aws.sh` flow as a manual deploy
-4. Invalidate the CloudFront cache so the new web bundle is served immediately
+3. Build the `aaa-api`, `aaa-worker`, and `aaa-web` ARM64 images in parallel on `ubuntu-24.04-arm` runners with buildx + GitHub Actions layer cache, and push them to ECR tagged with the commit SHA
+4. Run `scripts/deploy-aws.sh`, which uploads the deployment manifest (`.env.production`, compose file, Caddyfile) to S3 and triggers an SSM Run Command on the EC2 instance to `docker pull`, run migrations, and `docker compose up -d`
+5. Invalidate the CloudFront cache so the new web bundle is served immediately
 
 Deploys are serialised by a `concurrency: deploy-prod` group so two pushes can't race.
 

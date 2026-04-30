@@ -78,16 +78,28 @@ openssl rand -hex 32
 
 Keep `.env` and `/opt/aaa/app/.env.production` out of git. This deployment path stores secrets on the instance; moving them to SSM Parameter Store or Secrets Manager is a later upgrade, not required for v1.
 
+## Container Registry (ECR)
+
+The three application images (`aaa-api`, `aaa-worker`, `aaa-web`) are built in GitHub Actions and stored in ECR. The EC2 instance only pulls them. Create the ECR repositories once:
+
+```bash
+bash infra/aws-ec2/ecr-setup.sh
+```
+
+This is idempotent. It creates three repositories with a lifecycle policy that keeps the last 10 tagged images and expires untagged images after 1 day. It prints the registry URI which you must set as the `ECR_REGISTRY` environment variable locally and as a GitHub repository Variable for CD.
+
 ## Deploy
 
-The deploy script uploads a source bundle to S3 and runs the deployment through AWS Systems Manager, so SSH is not required.
+The deploy script uploads only the rendered `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to S3 and runs the deployment through AWS Systems Manager, so SSH is not required.
 
 ```bash
 export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
+export ECR_REGISTRY=<account-id>.dkr.ecr.us-west-1.amazonaws.com
+export IMAGE_TAG="$(git rev-parse HEAD)"
 bash scripts/deploy-aws.sh
 ```
 
-By default the public app URL is `http://<ec2-public-dns>` served by Caddy on port 80. See [Public HTTPS](#public-https) for the two supported ways to get a publicly-trusted HTTPS URL. To use a custom domain with a publicly-trusted Let's Encrypt certificate, set:
+For manual deploys you must also push the three images yourself before running the script, since EC2 only pulls. The simplest way is to run the same `docker buildx build --push` commands the CD workflow runs, or to trigger CD by pushing to `main`. By default the public app URL is `http://<ec2-public-dns>` served by Caddy on port 80. See [Public HTTPS](#public-https) for the two supported ways to get a publicly-trusted HTTPS URL. To use a custom domain with a publicly-trusted Let's Encrypt certificate, set:
 
 ```bash
 export PUBLIC_BASE_URL=https://assistant.example.com
@@ -97,12 +109,13 @@ bash scripts/deploy-aws.sh
 
 Remote deploy steps:
 
-1. Download the source bundle to `/opt/aaa/app/releases`.
+1. Download the deployment manifest (`.env.production`, compose file, Caddyfile) to `/opt/aaa/app/releases/<deployment-id>`.
 2. Update `/opt/aaa/app/current`.
-3. Build production Docker images from [docker/docker-compose.prod.yml](../../docker/docker-compose.prod.yml).
-4. Run database migrations with the `migrate` Compose profile.
-5. Start `proxy`, `web`, `api`, `worker`, `postgres`, and `redis`.
-6. Prune old Docker images.
+3. Authenticate to ECR with `aws ecr get-login-password`.
+4. `docker compose pull` the images tagged with the current commit SHA.
+5. Run database migrations with the `migrate` Compose profile.
+6. Start `proxy`, `web`, `api`, `worker`, `postgres`, and `redis` with `docker compose up -d`.
+7. Prune dangling images and trim old releases (keep the 5 most recent).
 
 Verify:
 

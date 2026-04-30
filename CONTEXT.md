@@ -184,20 +184,21 @@ When deciding where a change belongs:
 
 ## Production Deploy
 
-Production runs as a single AWS EC2 instance (Name tag `aaa-prod-app`) running everything via `docker/docker-compose.prod.yml`. CloudFront sits in front of the EC2 public DNS for HTTPS termination and caching. Postgres and Redis run as containers on the box; uploads go to S3.
+Production runs as a single AWS EC2 instance (Name tag `aaa-prod-app`) running everything via `docker/docker-compose.prod.yml`. CloudFront sits in front of the EC2 public DNS for HTTPS termination and caching. Postgres and Redis run as containers on the box; uploads go to S3. The three application images (`aaa-api`, `aaa-worker`, `aaa-web`) are built in CI and stored in ECR — the EC2 instance only pulls them, never builds.
 
 Deploy flow on merge to `main` (`.github/workflows/cd.yml`):
 
 1. Reuse `ci.yml` gates (format, lint, typecheck, test)
 2. Assume an IAM role via GitHub OIDC (no long-lived AWS keys)
-3. Materialize `.env` from GitHub Secrets, then run `scripts/deploy-aws.sh`, which:
-   - Tars the repo and uploads it to the S3 deploy bucket
-   - Sends an SSM Run Command to the EC2 instance to swap the `current` symlink, build images, run DB migrations, and `docker compose up -d --force-recreate`
-4. Invalidate the CloudFront distribution so the new web bundle is served immediately
+3. Build the three production images in parallel on `ubuntu-24.04-arm` runners with buildx + GHA layer cache, and push them to ECR tagged with `${github.sha}` and `latest`
+4. Materialize `.env.production` from GitHub Secrets, then run `scripts/deploy-aws.sh`, which:
+   - Uploads only `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to the S3 deploy bucket under `deployments/<deployment_id>/`
+   - Sends an SSM Run Command to the EC2 instance to swap the `current` symlink, `aws ecr get-login-password | docker login`, `docker compose pull`, run DB migrations, and `docker compose up -d`
+5. Invalidate the CloudFront distribution so the new web bundle is served immediately
 
-Manual deploys (`pnpm aws:deploy`) use the same script and are interchangeable with CD.
+Manual deploys (`pnpm aws:deploy`) use the same script and are interchangeable with CD, but require pushing the images to ECR yourself first. In practice, almost all deploys go through CD.
 
-Required GitHub configuration is documented in `README.md` under "Continuous deployment". Account-specific values (bucket name, instance name, role ARN, CloudFront distribution ID, region, public URL) live only in GitHub Variables/Secrets — never committed to this repo.
+Required GitHub configuration is documented in `README.md` under "Continuous deployment". Account-specific values (bucket name, instance name, role ARN, CloudFront distribution ID, region, public URL, ECR registry URI) live only in GitHub Variables/Secrets — never committed to this repo.
 
 ## Maintenance
 

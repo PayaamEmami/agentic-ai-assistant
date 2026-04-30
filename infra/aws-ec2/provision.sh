@@ -141,6 +141,23 @@ aws --profile "${AWS_PROFILE}" iam put-role-policy \
     }]
   }"
 
+aws --profile "${AWS_PROFILE}" iam put-role-policy \
+  --role-name "${ROLE_NAME}" \
+  --policy-name "${NAME_PREFIX}-ecr-pull" \
+  --policy-document '{
+    "Version": "2012-10-17",
+    "Statement": [{
+      "Effect": "Allow",
+      "Action": [
+        "ecr:GetAuthorizationToken",
+        "ecr:BatchGetImage",
+        "ecr:GetDownloadUrlForLayer",
+        "ecr:BatchCheckLayerAvailability"
+      ],
+      "Resource": "*"
+    }]
+  }'
+
 if [[ -z "${AMI_ID}" ]]; then
   AMI_ID="$(aws_cli ssm get-parameter \
     --name /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64 \

@@ -13,8 +13,55 @@ jobs:
   test:
     uses: ./.github/workflows/ci.yml
 
-  deploy:
+  build-images:
     needs: test
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      id-token: write
+      contents: read
+    strategy:
+      fail-fast: true
+      matrix:
+        service: [api, worker, web]
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      IMAGE_TAG: ${{ github.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push ${{ matrix.service }} image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/${{ matrix.service }}.Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: |
+            ${{ env.ECR_REGISTRY }}/aaa-${{ matrix.service }}:${{ env.IMAGE_TAG }}
+            ${{ env.ECR_REGISTRY }}/aaa-${{ matrix.service }}:latest
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+          build-args: |
+            NEXT_PUBLIC_API_URL=${{ secrets.PUBLIC_BASE_URL }}
+            WEB_BASE_URL=${{ secrets.PUBLIC_BASE_URL }}
+            NEXT_PUBLIC_DISABLE_REGISTRATION=${{ vars.NEXT_PUBLIC_DISABLE_REGISTRATION || 'false' }}
+
+  deploy:
+    needs: [test, build-images]
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -25,6 +72,8 @@ jobs:
       INSTANCE_NAME: ${{ secrets.INSTANCE_NAME }}
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
       CADDY_SITE_ADDRESS: ':80'
+      ECR_REGISTRY: ${{ vars.ECR_REGISTRY }}
+      IMAGE_TAG: ${{ github.sha }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
