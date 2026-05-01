@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuthContext } from '@/lib/auth-context';
@@ -72,11 +71,6 @@ export default function Home() {
             Sign in to your workspace to start chatting, use tools, and get answers in real time.
             Everything here stays private to your account.
           </p>
-          <div className="mt-8 flex flex-wrap gap-3 text-sm text-foreground-muted">
-            <span className="rounded-full bg-surface-input px-4 py-2">Private workspace</span>
-            <span className="rounded-full bg-surface-input px-4 py-2">{'Chat & tools'}</span>
-            <span className="rounded-full bg-surface-input px-4 py-2">Live responses</span>
-          </div>
         </section>
 
         <section className="rounded-3xl border border-border bg-surface-elevated p-8 shadow-sm">
@@ -145,7 +139,7 @@ export default function Home() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 className="w-full rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-foreground placeholder:text-foreground-inactive outline-none transition focus:border-accent"
-                placeholder="At least 8 characters"
+                placeholder="••••••••"
                 minLength={8}
                 required
               />
@@ -176,13 +170,6 @@ export default function Home() {
               Use development login
             </button>
           ) : null}
-
-          <p className="mt-6 text-sm text-foreground-muted">
-            Already authenticated?{' '}
-            <Link href="/chat" className="font-medium text-link underline underline-offset-4">
-              Open chat
-            </Link>
-          </p>
         </section>
       </div>
     </main>
