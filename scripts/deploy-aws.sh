@@ -202,17 +202,19 @@ aws_cli s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/${s3_prefix}/.env.prod
 aws_cli s3 cp docker/docker-compose.prod.yml "s3://${DEPLOY_BUCKET}/${s3_prefix}/docker-compose.prod.yml"
 aws_cli s3 cp docker/Caddyfile.prod "s3://${DEPLOY_BUCKET}/${s3_prefix}/Caddyfile.prod"
 
-python - "$ssm_params" "$DEPLOY_BUCKET" "$s3_prefix" "$AWS_REGION" "$ECR_REGISTRY" "$deployment_id" <<'PY'
+python - "$ssm_params" "$DEPLOY_BUCKET" "$s3_prefix" "$AWS_REGION" "$ECR_REGISTRY" "$deployment_id" "$IMAGE_TAG" <<'PY'
 import base64
 import json
 import sys
 
-path, bucket, s3_prefix, region, ecr_registry, deployment_id = sys.argv[1:]
+path, bucket, s3_prefix, region, ecr_registry, deployment_id, image_tag = sys.argv[1:]
 app_dir = "/opt/aaa/app"
 release_dir = f"{app_dir}/releases/{deployment_id}"
 env_file = f"{release_dir}/.env.production"
 remote_script = f"""
 set -euo pipefail
+echo "=== pre-deploy disk ==="
+df -h /
 mkdir -p {release_dir}
 aws s3 cp s3://{bucket}/{s3_prefix}/.env.production {env_file}
 aws s3 cp s3://{bucket}/{s3_prefix}/docker-compose.prod.yml {release_dir}/docker-compose.prod.yml
@@ -220,8 +222,13 @@ aws s3 cp s3://{bucket}/{s3_prefix}/Caddyfile.prod {release_dir}/Caddyfile.prod
 chmod 0600 {env_file}
 ln -sfn {release_dir} {app_dir}/current
 cd {app_dir}/current
+# Prune aggressively BEFORE pull so the new images have room to land. `prune -f`
+# (dangling only) left ~1GB tagged images per deploy piling up until the disk
+# filled. This removes every image unused by a running container older than 24h.
+docker image prune -af --filter "until=24h" >/dev/null 2>&1 || true
+docker builder prune -f --filter "until=168h" >/dev/null 2>&1 || true
 aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
-docker compose --env-file {env_file} -f docker-compose.prod.yml pull
+docker compose --env-file {env_file} -f docker-compose.prod.yml pull --quiet
 docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
 # Stop containers that were started from a previous release directory. Docker
 # Compose tracks ownership via working-dir labels, so an `up --force-recreate`
@@ -233,9 +240,18 @@ for prev_dir in {app_dir}/releases/*/; do
   docker compose --env-file "${{prev_dir}}.env.production" -f "${{prev_dir}}docker-compose.prod.yml" down --remove-orphans 2>/dev/null || true
 done
 docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
-docker image prune -f
+# Remove now-unused aaa-* images (old SHAs) — `prune` only catches dangling.
+for repo in aaa-api aaa-web aaa-worker; do
+  docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' \
+    | grep "/$repo:" | grep -v ":{image_tag}$" \
+    | xargs -r docker rmi 2>/dev/null || true
+done
+docker image prune -af --filter "until=24h" >/dev/null 2>&1 || true
 aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
-ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +6 | xargs -r rm -rf
+ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
+echo "=== post-deploy diagnostics ==="
+df -h /
+docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'
 """
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
 
