@@ -99,9 +99,13 @@ function buildConversationTitle(content: string): string | undefined {
   return `${normalized.slice(0, 77).trimEnd()}...`;
 }
 
-function toPromptToolContexts(tools: AvailableTool[]): PromptToolContext[] {
+export function toRealtimeToolName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'tool';
+}
+
+function toRealtimePromptToolContexts(tools: AvailableTool[]): PromptToolContext[] {
   return tools.map((tool) => ({
-    name: tool.name,
+    name: toRealtimeToolName(tool.name),
     description: tool.description,
     requiresApproval: tool.requiresApproval,
   }));
@@ -110,7 +114,7 @@ function toPromptToolContexts(tools: AvailableTool[]): PromptToolContext[] {
 function toRealtimeToolDefinitions(tools: AvailableTool[]): Array<Record<string, unknown>> {
   return tools.map((tool) => ({
     type: 'function',
-    name: tool.name,
+    name: toRealtimeToolName(tool.name),
     description: tool.description,
     parameters: tool.parameters,
   }));
@@ -126,7 +130,7 @@ function buildRealtimeInstructions(
   const hasRetrieval = retrievalContextSections.length > 0;
   const basePrompt = buildSystemPrompt({
     personalContext: personalContext ?? undefined,
-    availableTools: hasTools ? toPromptToolContexts(availableTools) : undefined,
+    availableTools: hasTools ? toRealtimePromptToolContexts(availableTools) : undefined,
     includeToolGuidance: hasTools,
     includeRetrievalGuidance: hasRetrieval,
   });
@@ -657,7 +661,10 @@ export class VoiceService {
     }
 
     const availableTools = await loadAvailableTools(userId).catch(() => [] as AvailableTool[]);
-    const tool = availableTools.find((candidate) => candidate.name === params.toolName);
+    const tool = availableTools.find(
+      (candidate) =>
+        candidate.name === params.toolName || toRealtimeToolName(candidate.name) === params.toolName,
+    );
     if (!tool) {
       throw new AppError(400, `Unknown tool: ${params.toolName}`, 'VOICE_TOOL_UNKNOWN');
     }
