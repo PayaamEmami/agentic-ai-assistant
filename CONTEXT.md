@@ -202,7 +202,7 @@ Required GitHub configuration is documented in `README.md` under "Continuous dep
 
 ## AWS CLI Access
 
-The AWS CLI is available in the local environment and can be used directly to interact with AWS resources (S3, SSM, ECR, EC2, CloudFront, etc.). Credentials are configured via the default profile; no extra setup is needed.
+The AWS CLI is available in the local environment and can be used directly to interact with AWS resources. Credentials are configured via the default profile; no extra setup is needed.
 
 ## Maintenance
 

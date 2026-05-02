@@ -213,6 +213,40 @@ release_dir = f"{app_dir}/releases/{deployment_id}"
 env_file = f"{release_dir}/.env.production"
 remote_script = f"""
 set -euo pipefail
+verify_container_image() {{
+  local container_name="$1"
+  local expected_image="$2"
+  local actual_image
+  actual_image="$(docker inspect --format '{{{{.Config.Image}}}}' "$container_name")"
+
+  if [[ "$actual_image" != "$expected_image" ]]; then
+    echo "Container $container_name is running $actual_image, expected $expected_image" >&2
+    return 1
+  fi
+}}
+
+wait_for_container_ready() {{
+  local container_name="$1"
+  local max_attempts="${{2:-30}}"
+  local attempt=1
+
+  while (( attempt <= max_attempts )); do
+    local status
+    status="$(docker inspect --format '{{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}{{{{.State.Status}}}}{{{{end}}}}' "$container_name" 2>/dev/null || true)"
+
+    if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+      return 0
+    fi
+
+    sleep 2
+    (( attempt += 1 ))
+  done
+
+  echo "Container $container_name did not become ready in time." >&2
+  docker inspect "$container_name" >&2 || true
+  return 1
+}}
+
 echo "=== pre-deploy disk ==="
 df -h /
 mkdir -p {release_dir}
@@ -220,8 +254,7 @@ aws s3 cp s3://{bucket}/{s3_prefix}/.env.production {env_file}
 aws s3 cp s3://{bucket}/{s3_prefix}/docker-compose.prod.yml {release_dir}/docker-compose.prod.yml
 aws s3 cp s3://{bucket}/{s3_prefix}/Caddyfile.prod {release_dir}/Caddyfile.prod
 chmod 0600 {env_file}
-ln -sfn {release_dir} {app_dir}/current
-cd {app_dir}/current
+cd {release_dir}
 # Prune aggressively BEFORE pull so the new images have room to land. `prune -f`
 # (dangling only) left ~1GB tagged images per deploy piling up until the disk
 # filled. This removes every image unused by a running container older than 24h.
@@ -240,6 +273,13 @@ for prev_dir in {app_dir}/releases/*/; do
   docker compose --env-file "${{prev_dir}}.env.production" -f "${{prev_dir}}docker-compose.prod.yml" down --remove-orphans 2>/dev/null || true
 done
 docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
+wait_for_container_ready aaa-api
+wait_for_container_ready aaa-worker
+wait_for_container_ready aaa-web
+verify_container_image aaa-api "{ecr_registry}/aaa-api:{image_tag}"
+verify_container_image aaa-worker "{ecr_registry}/aaa-worker:{image_tag}"
+verify_container_image aaa-web "{ecr_registry}/aaa-web:{image_tag}"
+ln -sfn {release_dir} {app_dir}/current
 # Remove now-unused aaa-* images (old SHAs) — `prune` only catches dangling.
 for repo in aaa-api aaa-web aaa-worker; do
   docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' \
@@ -251,6 +291,7 @@ aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
 ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
 echo "=== post-deploy diagnostics ==="
 df -h /
+docker compose --env-file {env_file} -f docker-compose.prod.yml ps
 docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'
 """
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
