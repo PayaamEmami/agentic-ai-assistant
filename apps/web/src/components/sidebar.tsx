@@ -52,6 +52,10 @@ export function Sidebar({
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isConversationListCollapsed, setIsConversationListCollapsed] = useState(false);
+  const [mobileActionMenuConversationId, setMobileActionMenuConversationId] = useState<string | null>(
+    null
+  );
+  const longPressTimerRef = useRef<number | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
   const isAppsPage = pathname === '/chat/apps';
@@ -101,6 +105,7 @@ export function Sidebar({
   const startEditing = (conversationId: string, title: string | null) => {
     setEditingConversationId(conversationId);
     setDraftTitle(title ?? '');
+    setMobileActionMenuConversationId(null);
   };
 
   const cancelEditing = () => {
@@ -136,11 +141,23 @@ export function Sidebar({
       if (editingConversationId === conversationId) {
         cancelEditing();
       }
+      setMobileActionMenuConversationId(null);
       await deleteConversation(conversationId);
     } finally {
       setPendingConversationId(null);
     }
   };
+
+  const clearLongPressTimer = () => {
+    if (longPressTimerRef.current === null) {
+      return;
+    }
+
+    window.clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = null;
+  };
+
+  useEffect(() => clearLongPressTimer, []);
 
   return (
     <aside
@@ -283,10 +300,27 @@ export function Sidebar({
                     </button>
                   </form>
                 ) : (
-                  <div className="group flex items-center gap-2">
+                  <div className="group relative flex items-center gap-2">
                     <button
                       onClick={() => void openChat(conversation.id)}
-                      className="min-w-0 flex-1 text-left"
+                      onPointerDown={(event) => {
+                        if (event.pointerType !== 'touch') {
+                          return;
+                        }
+
+                        clearLongPressTimer();
+                        longPressTimerRef.current = window.setTimeout(() => {
+                          setMobileActionMenuConversationId(conversation.id);
+                        }, 450);
+                      }}
+                      onPointerUp={clearLongPressTimer}
+                      onPointerLeave={clearLongPressTimer}
+                      onPointerCancel={clearLongPressTimer}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        setMobileActionMenuConversationId(conversation.id);
+                      }}
+                      className="min-w-0 flex-1 touch-manipulation select-none text-left"
                       disabled={isPending}
                     >
                       <p className="truncate">{label}</p>
@@ -313,6 +347,40 @@ export function Sidebar({
                         <TrashIcon />
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setMobileActionMenuConversationId((previous) =>
+                          previous === conversation.id ? null : conversation.id
+                        )
+                      }
+                      disabled={isPending}
+                      className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-foreground disabled:opacity-50 md:hidden"
+                      title="Conversation actions"
+                      aria-label="Conversation actions"
+                    >
+                      <MoreIcon />
+                    </button>
+                    {mobileActionMenuConversationId === conversation.id ? (
+                      <div className="absolute right-0 top-full z-20 mt-1 flex w-40 flex-col rounded-xl border border-border bg-surface-elevated p-1 shadow-lg md:hidden">
+                        <button
+                          type="button"
+                          onClick={() => startEditing(conversation.id, conversation.title)}
+                          disabled={isPending}
+                          className="rounded-lg px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                        >
+                          Rename
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(conversation.id, conversation.title)}
+                          disabled={isPending}
+                          className="rounded-lg px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 )}
               </div>
@@ -493,6 +561,26 @@ function AppsIcon() {
       <path d="M15 8V2" />
       <path d="M18 8a3 3 0 1 0-6 0" />
       <path d="M12 17a5 5 0 0 0 5-5V8H7v4a5 5 0 0 0 5 5Z" />
+    </svg>
+  );
+}
+
+function MoreIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="19" cy="12" r="1" />
+      <circle cx="5" cy="12" r="1" />
     </svg>
   );
 }
