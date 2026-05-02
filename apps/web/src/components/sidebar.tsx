@@ -52,9 +52,9 @@ export function Sidebar({
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   const [isConversationListCollapsed, setIsConversationListCollapsed] = useState(false);
-  const [mobileActionMenuConversationId, setMobileActionMenuConversationId] = useState<string | null>(
-    null
-  );
+  const [mobileActionMenuConversationId, setMobileActionMenuConversationId] = useState<
+    string | null
+  >(null);
   const longPressTimerRef = useRef<number | null>(null);
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
@@ -351,7 +351,7 @@ export function Sidebar({
                       type="button"
                       onClick={() =>
                         setMobileActionMenuConversationId((previous) =>
-                          previous === conversation.id ? null : conversation.id
+                          previous === conversation.id ? null : conversation.id,
                         )
                       }
                       disabled={isPending}
