@@ -200,6 +200,10 @@ Manual deploys (`pnpm aws:deploy`) use the same script and are interchangeable w
 
 Required GitHub configuration is documented in `README.md` under "Continuous deployment". Account-specific values (bucket name, instance name, role ARN, CloudFront distribution ID, region, public URL, ECR registry URI) live only in GitHub Variables/Secrets — never committed to this repo.
 
+## AWS CLI Access
+
+The AWS CLI is available in the local environment and can be used directly to interact with AWS resources (S3, SSM, ECR, EC2, CloudFront, etc.). Credentials are configured via the default profile; no extra setup is needed.
+
 ## Maintenance
 
 Update this file when any of the following change:
