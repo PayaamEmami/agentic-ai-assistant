@@ -213,6 +213,20 @@ release_dir = f"{app_dir}/releases/{deployment_id}"
 env_file = f"{release_dir}/.env.production"
 remote_script = f"""
 set -euo pipefail
+deploy_success_marker="AAA_DEPLOY_SUCCESS:{image_tag}"
+
+dump_deploy_diagnostics() {{
+  local exit_code="$?"
+  if [[ "$exit_code" -ne 0 ]]; then
+    echo "=== deploy failed diagnostics ===" >&2
+    df -h / >&2 || true
+    docker ps --format 'table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}' >&2 || true
+    docker compose --env-file {env_file} -f {release_dir}/docker-compose.prod.yml ps >&2 || true
+  fi
+  exit "$exit_code"
+}}
+trap dump_deploy_diagnostics EXIT
+
 verify_container_image() {{
   local container_name="$1"
   local expected_image="$2"
@@ -263,15 +277,12 @@ docker builder prune -f --filter "until=168h" >/dev/null 2>&1 || true
 aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
 docker compose --env-file {env_file} -f docker-compose.prod.yml pull --quiet
 docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
-# Stop containers that were started from a previous release directory. Docker
-# Compose tracks ownership via working-dir labels, so an `up --force-recreate`
-# from a new directory silently leaves old containers running if they carry a
-# different working-dir label. We explicitly `down` every other release first.
-for prev_dir in {app_dir}/releases/*/; do
-  [ "${{prev_dir%/}}" = "{release_dir}" ] && continue
-  [ -f "${{prev_dir}}docker-compose.prod.yml" ] && [ -f "${{prev_dir}}.env.production" ] || continue
-  docker compose --env-file "${{prev_dir}}.env.production" -f "${{prev_dir}}docker-compose.prod.yml" down --remove-orphans 2>/dev/null || true
-done
+
+# The compose project name is fixed in docker-compose.prod.yml. Bring that one
+# project down from the new release directory, then recreate it from the new
+# image tag. This avoids the old behavior where iterating historical release
+# directories could exit before `up` while SSM still reported success.
+docker compose --env-file {env_file} -f docker-compose.prod.yml down --remove-orphans
 docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
 wait_for_container_ready aaa-api
 wait_for_container_ready aaa-worker
@@ -292,7 +303,8 @@ ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
 echo "=== post-deploy diagnostics ==="
 df -h /
 docker compose --env-file {env_file} -f docker-compose.prod.yml ps
-docker ps --format 'table {{{{.Names}}}}\t{{{{.Status}}}}'
+docker ps --format 'table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}'
+echo "$deploy_success_marker"
 """
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
 
@@ -358,14 +370,34 @@ while :; do
   sleep "${DEPLOY_POLL_INTERVAL_SECONDS}"
 done
 
-aws_cli ssm get-command-invocation \
+final_invocation_json="$(aws_cli ssm get-command-invocation \
   --command-id "${command_id}" \
   --instance-id "${instance_id}" \
   --query '{Status:Status,RequestedDateTime:RequestedDateTime,ExecutionStartDateTime:ExecutionStartDateTime,ExecutionEndDateTime:ExecutionEndDateTime,Stdout:StandardOutputContent,Stderr:StandardErrorContent}' \
-  --output text
+  --output json)"
+
+python -c 'import json,sys; data=json.loads(sys.stdin.read()); print("\t".join(str(data.get(k,"")) for k in ("ExecutionEndDateTime","ExecutionStartDateTime","RequestedDateTime","Status","Stderr","Stdout")))' <<<"${final_invocation_json}"
 
 if [[ "${status}" != "Success" ]]; then
   echo "Deployment finished with status ${status}." >&2
+  exit 1
+fi
+
+if ! MARKER_IMAGE_TAG="${IMAGE_TAG}" FINAL_INVOCATION_JSON="${final_invocation_json}" python - <<'PY'
+import json
+import os
+import sys
+
+image_tag = os.environ["MARKER_IMAGE_TAG"]
+data = json.loads(os.environ["FINAL_INVOCATION_JSON"])
+stdout = data.get("Stdout") or ""
+marker = f"AAA_DEPLOY_SUCCESS:{image_tag}"
+if marker not in stdout:
+    raise SystemExit(1)
+PY
+then
+  echo "Deployment command reported Success, but the remote success marker was not found." >&2
+  echo "Refusing to treat this deployment as complete." >&2
   exit 1
 fi
 
