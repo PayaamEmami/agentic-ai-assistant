@@ -276,7 +276,7 @@ docker image prune -af --filter "until=24h" >/dev/null 2>&1 || true
 docker builder prune -f --filter "until=168h" >/dev/null 2>&1 || true
 aws ecr get-login-password --region {region} | docker login --username AWS --password-stdin {ecr_registry}
 docker compose --env-file {env_file} -f docker-compose.prod.yml pull --quiet
-docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm migrate
+docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm -T migrate </dev/null
 
 # The compose project name is fixed in docker-compose.prod.yml. Bring that one
 # project down from the new release directory, then recreate it from the new
@@ -309,7 +309,17 @@ echo "$deploy_success_marker"
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")
 
 with open(path, "w", encoding="utf-8") as fh:
-    json.dump({"commands": [f"printf '%s' '{encoded_script}' | base64 -d | sudo bash"]}, fh)
+    json.dump(
+        {
+            "commands": [
+                "tmp_script=$(mktemp) && "
+                f"printf '%s' '{encoded_script}' | base64 -d > \"$tmp_script\" && "
+                "sudo bash \"$tmp_script\"; "
+                "rc=$?; rm -f \"$tmp_script\"; exit \"$rc\""
+            ]
+        },
+        fh,
+    )
 PY
 
 command_id="$(aws_cli ssm send-command \
