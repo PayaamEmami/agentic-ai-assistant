@@ -44,7 +44,7 @@ import json
 import sys
 
 path, backup_s3_uri = sys.argv[1:]
-env_file = "/opt/aaa/app/.env.production"
+env_file = "/opt/aaa/app/current/.env.production"
 remote_script = f"""
 set -euo pipefail
 set -a
@@ -53,9 +53,9 @@ set +a
 backup_file="/tmp/$(basename {backup_s3_uri!r})"
 aws s3 cp {backup_s3_uri!r} "${{backup_file}}"
 cd /opt/aaa/app/current
-docker compose --env-file {env_file} -f docker/docker-compose.prod.yml stop api worker web
+docker compose --env-file {env_file} -f docker-compose.prod.yml stop api worker web
 gunzip -c "${{backup_file}}" | docker exec -i -e PGPASSWORD="${{POSTGRES_PASSWORD}}" aaa-postgres pg_restore --clean --if-exists -U "${{POSTGRES_USER:-aaa}}" -d "${{POSTGRES_DB:-aaa}}"
-docker compose --env-file {env_file} -f docker/docker-compose.prod.yml up -d
+docker compose --env-file {env_file} -f docker-compose.prod.yml up -d
 echo "Restored ${{backup_file}}"
 """
 encoded_script = base64.b64encode(remote_script.encode("utf-8")).decode("ascii")

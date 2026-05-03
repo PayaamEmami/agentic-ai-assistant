@@ -39,7 +39,7 @@ import json
 import sys
 
 path, backup_prefix = sys.argv[1:]
-env_file = "/opt/aaa/app/.env.production"
+env_file = "/opt/aaa/app/current/.env.production"
 remote_script = f"""
 set -euo pipefail
 set -a

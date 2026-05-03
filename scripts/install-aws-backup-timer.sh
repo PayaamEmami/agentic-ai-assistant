@@ -40,7 +40,7 @@ import json
 import sys
 
 path, backup_prefix, on_calendar = sys.argv[1:]
-env_file = "/opt/aaa/app/.env.production"
+env_file = "/opt/aaa/app/current/.env.production"
 remote_script = f"""
 set -euo pipefail
 cat >/usr/local/bin/aaa-backup-db <<'SCRIPT'
