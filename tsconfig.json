@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/observability" },
+    { "path": "./packages/config" },
+    { "path": "./packages/memory" },
+    { "path": "./packages/db" },
+    { "path": "./packages/retrieval" },
+    { "path": "./packages/ai" },
+    { "path": "./packages/knowledge-sources" },
+    { "path": "./packages/tool-providers" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" }
+  ]
+}

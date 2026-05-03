@@ -1,15 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { SendMessageRequest, UpdateConversationRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { assertInternalServiceSecret } from '../lib/internal-service.js';
+import { authenticateInternalService } from '../lib/internal-service.js';
 import { ChatService } from '../services/chat-service.js';
-
-async function authenticateInternal(request: { headers: Record<string, unknown> }): Promise<void> {
-  const header = request.headers['x-internal-service-secret'];
-  const provided =
-    typeof header === 'string' ? header : Array.isArray(header) ? (header[0] ?? null) : null;
-  assertInternalServiceSecret(provided);
-}
 
 interface ChatRouteOptions {
   chatService?: ChatService;
@@ -18,63 +11,68 @@ interface ChatRouteOptions {
 export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions = {}) {
   const chatService = options.chatService ?? new ChatService();
 
-  app.post<{ Params: { toolExecutionId: string } }>(
-    '/chat/internal/tool-executions/:toolExecutionId/continue',
-    async (request, reply) => {
-      await authenticateInternal(request);
-      const result = await chatService.continueAfterToolExecution(request.params.toolExecutionId);
-      return reply.status(200).send(result);
-    },
-  );
+  // Internal service-to-service routes. Authenticated via shared secret rather
+  // than a user bearer token. Scoped to its own plugin so the preHandler hook
+  // does not bleed into the user-authenticated routes below.
+  await app.register(async (internalApp) => {
+    internalApp.addHook('preHandler', authenticateInternalService);
 
-  app.post('/chat', { preHandler: authenticate }, async (request, reply) => {
-    const parsed = SendMessageRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-      });
-    }
-
-    const { conversationId, content, attachmentIds, clientRunId } = parsed.data;
-    const userId = request.user!.id;
-    const result = await chatService.sendMessage(
-      userId,
-      content,
-      conversationId,
-      attachmentIds,
-      clientRunId,
+    internalApp.post<{ Params: { toolExecutionId: string } }>(
+      '/chat/internal/tool-executions/:toolExecutionId/continue',
+      async (request, reply) => {
+        const result = await chatService.continueAfterToolExecution(
+          request.params.toolExecutionId,
+        );
+        return reply.status(200).send(result);
+      },
     );
-    return reply.status(200).send(result);
   });
 
-  app.post<{ Params: { runId: string } }>(
-    '/chat/runs/:runId/interrupt',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const result = await chatService.interruptRun(request.user!.id, request.params.runId);
-      return reply.status(result.status === 'not_found' ? 404 : 200).send(result);
-    },
-  );
+  // User-authenticated routes. All routes registered in this scope require a
+  // valid user bearer token via the addHook below.
+  await app.register(async (userApp) => {
+    userApp.addHook('preHandler', authenticate);
 
-  app.get('/conversations', { preHandler: authenticate }, async (request, reply) => {
-    const userId = request.user!.id;
-    const conversations = await chatService.listConversations(userId);
-    return reply.status(200).send({ conversations });
-  });
+    userApp.post('/chat', async (request, reply) => {
+      const parsed = SendMessageRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
 
-  app.get<{ Params: { id: string } }>(
-    '/conversations/:id',
-    { preHandler: authenticate },
-    async (request, reply) => {
+      const { conversationId, content, attachmentIds, clientRunId } = parsed.data;
+      const userId = request.user!.id;
+      const result = await chatService.sendMessage(
+        userId,
+        content,
+        conversationId,
+        attachmentIds,
+        clientRunId,
+      );
+      return reply.status(200).send(result);
+    });
+
+    userApp.post<{ Params: { runId: string } }>(
+      '/chat/runs/:runId/interrupt',
+      async (request, reply) => {
+        const result = await chatService.interruptRun(request.user!.id, request.params.runId);
+        return reply.status(result.status === 'not_found' ? 404 : 200).send(result);
+      },
+    );
+
+    userApp.get('/conversations', async (request, reply) => {
+      const userId = request.user!.id;
+      const conversations = await chatService.listConversations(userId);
+      return reply.status(200).send({ conversations });
+    });
+
+    userApp.get<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
       const conversation = await chatService.getConversation(request.user!.id, request.params.id);
       return reply.status(200).send(conversation);
-    },
-  );
+    });
 
-  app.patch<{ Params: { id: string } }>(
-    '/conversations/:id',
-    { preHandler: authenticate },
-    async (request, reply) => {
+    userApp.patch<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
       const parsed = UpdateConversationRequest.safeParse(request.body);
       if (!parsed.success) {
         return reply.status(400).send({
@@ -88,15 +86,11 @@ export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions
         parsed.data.title,
       );
       return reply.status(200).send({ conversation });
-    },
-  );
+    });
 
-  app.delete<{ Params: { id: string } }>(
-    '/conversations/:id',
-    { preHandler: authenticate },
-    async (request, reply) => {
+    userApp.delete<{ Params: { id: string } }>('/conversations/:id', async (request, reply) => {
       const result = await chatService.deleteConversation(request.user!.id, request.params.id);
       return reply.status(200).send(result);
-    },
-  );
+    });
+  });
 }

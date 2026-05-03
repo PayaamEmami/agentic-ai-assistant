@@ -11,7 +11,8 @@
   },
   "dependencies": {
     "@aaa/ai": "workspace:*",
-    "@aaa/observability": "workspace:*"
+    "@aaa/observability": "workspace:*",
+    "@aaa/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

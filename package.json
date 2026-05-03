@@ -5,26 +5,28 @@
     "node": ">=20.0.0"
   },
   "scripts": {
-    "dev": "pnpm --parallel --filter @aaa/api --filter @aaa/web --filter @aaa/worker run dev",
+    "dev": "tsc -b && concurrently --kill-others-on-fail --names pkg,apps --prefix-colors blue,green \"tsc -b --watch --preserveWatchOutput\" \"pnpm --parallel --filter @aaa/api --filter @aaa/web --filter @aaa/worker run dev\"",
     "dev:local": "bash ./scripts/dev-local.sh",
     "aws:provision": "bash ./infra/aws-ec2/provision.sh",
     "aws:deploy": "bash ./scripts/deploy-aws.sh",
     "aws:backup": "bash ./scripts/backup-aws-db.sh",
     "aws:backup:timer": "bash ./scripts/install-aws-backup-timer.sh",
     "aws:restore": "bash ./scripts/restore-aws-db.sh",
-    "build": "pnpm -r run build",
+    "build": "tsc -b && pnpm --filter @aaa/web run build",
+    "build:packages": "tsc -b",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "pnpm -r run typecheck",
-    "clean": "pnpm -r run clean && rm -rf node_modules"
+    "typecheck": "tsc -b --noEmit && pnpm --filter @aaa/web run typecheck",
+    "clean": "tsc -b --clean && pnpm -r run clean && rm -rf node_modules"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",
     "@vitest/coverage-v8": "^4.1.5",
+    "concurrently": "^9.2.1",
     "eslint": "^9.0.0",
     "typescript": "^5.5.0",
     "vitest": "^4.1.5"

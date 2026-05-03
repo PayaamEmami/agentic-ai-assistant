@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { getLogger } from '@aaa/observability';
 import { AppError } from './errors.js';
 
 const INTERNAL_SERVICE_SECRET =
@@ -32,5 +34,30 @@ export function assertInternalServiceSecret(secret: string | null): void {
     !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
   ) {
     throw new AppError(403, 'Internal authentication failed', 'INTERNAL_AUTH_INVALID');
+  }
+}
+
+export async function authenticateInternalService(
+  request: FastifyRequest,
+  _reply: FastifyReply,
+): Promise<void> {
+  const header = request.headers['x-internal-service-secret'];
+  const provided =
+    typeof header === 'string' ? header : Array.isArray(header) ? (header[0] ?? null) : null;
+  const logger = getLogger({ component: 'auth' });
+
+  try {
+    assertInternalServiceSecret(provided);
+  } catch (error) {
+    logger.warn(
+      {
+        event: 'auth.failed',
+        outcome: 'failure',
+        reason: provided ? 'invalid_internal_secret' : 'missing_internal_secret',
+        authKind: 'internal_service',
+      },
+      'Internal service authentication failed',
+    );
+    throw error;
   }
 }

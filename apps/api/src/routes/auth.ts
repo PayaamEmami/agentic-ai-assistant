@@ -15,6 +15,10 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+// Auth convention for this plugin: most routes are intentionally
+// unauthenticated (login / dev-login establish the user's identity, so they
+// cannot require a bearer token themselves). `/auth/me` is the lone exception
+// and opts in via a per-route `preHandler`.
 export async function authRoutes(app: FastifyInstance) {
   // Account creation is intentionally disabled. To re-enable, restore the
   // `RegisterRequest` import above and uncomment the handler below.

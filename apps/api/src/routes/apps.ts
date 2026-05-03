@@ -76,96 +76,104 @@ export async function appRoutes(app: FastifyInstance, options: AppRouteOptions =
     }
   }
 
-  app.get('/apps/github/callback', async (request, reply) => {
-    const redirectUrl = await handleOAuthCallback(
-      request.query as OAuthCallbackQuery,
-      'github',
-      (code, state) => appService.handleGitHubCallback(code, state),
-      'GitHub app connection failed',
-    );
-    return reply.redirect(redirectUrl);
-  });
-
-  app.get('/apps/google/callback', async (request, reply) => {
-    const redirectUrl = await handleOAuthCallback(
-      request.query as OAuthCallbackQuery,
-      'google',
-      (code, state) => appService.handleGoogleCallback(code, state),
-      'Google app connection failed',
-    );
-    return reply.redirect(redirectUrl);
-  });
-
-  app.get('/apps', { preHandler: authenticate }, async (request, reply) => {
-    const apps = await appService.listApps(request.user!.id);
-    return reply.status(200).send({ apps });
-  });
-
-  app.post<{ Params: { kind: 'github' | 'google' } }>(
-    '/apps/:kind/connect',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const parsed = AppKindDto.safeParse(request.params.kind);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
-
-      const authorizationUrl = await appService.createAuthorizationUrl(
-        request.user!.id,
-        parsed.data,
+  // Intentionally unauthenticated: OAuth provider redirects with no bearer
+  // token; the callback handler establishes the user identity from the signed
+  // state parameter. Scoped to its own plugin so no auth hook is applied.
+  await app.register(async (publicApp) => {
+    publicApp.get('/apps/github/callback', async (request, reply) => {
+      const redirectUrl = await handleOAuthCallback(
+        request.query as OAuthCallbackQuery,
+        'github',
+        (code, state) => appService.handleGitHubCallback(code, state),
+        'GitHub app connection failed',
       );
-      return reply.status(200).send({ authorizationUrl });
-    },
-  );
+      return reply.redirect(redirectUrl);
+    });
 
-  app.post<{ Params: { kind: 'github' | 'google' } }>(
-    '/apps/:kind/sync',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const parsed = AppKindDto.safeParse(request.params.kind);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
-
-      await appService.triggerSync(request.user!.id, parsed.data);
-      return reply.status(200).send({ queued: true });
-    },
-  );
-
-  app.delete<{ Params: { kind: 'github' | 'google' } }>(
-    '/apps/:kind',
-    { preHandler: authenticate },
-    async (request, reply) => {
-      const parsed = AppKindDto.safeParse(request.params.kind);
-      if (!parsed.success) {
-        return reply.status(400).send({
-          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-        });
-      }
-
-      const result = await appService.disconnect(request.user!.id, parsed.data);
-      return reply.status(200).send(result);
-    },
-  );
-
-  app.get('/apps/github/repositories', { preHandler: authenticate }, async (request, reply) => {
-    const repositories = await appService.listGitHubRepositories(request.user!.id);
-    return reply.status(200).send({ repositories });
+    publicApp.get('/apps/google/callback', async (request, reply) => {
+      const redirectUrl = await handleOAuthCallback(
+        request.query as OAuthCallbackQuery,
+        'google',
+        (code, state) => appService.handleGoogleCallback(code, state),
+        'Google app connection failed',
+      );
+      return reply.redirect(redirectUrl);
+    });
   });
 
-  app.put('/apps/github/repositories', { preHandler: authenticate }, async (request, reply) => {
-    const parsed = GitHubRepoSelectionRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-      });
-    }
+  // User-authenticated routes. All routes in this scope require a valid user
+  // bearer token via the addHook below.
+  await app.register(async (userApp) => {
+    userApp.addHook('preHandler', authenticate);
 
-    await appService.saveGitHubRepositories(request.user!.id, parsed.data.repositoryIds);
-    return reply.status(200).send({ ok: true });
+    userApp.get('/apps', async (request, reply) => {
+      const apps = await appService.listApps(request.user!.id);
+      return reply.status(200).send({ apps });
+    });
+
+    userApp.post<{ Params: { kind: 'github' | 'google' } }>(
+      '/apps/:kind/connect',
+      async (request, reply) => {
+        const parsed = AppKindDto.safeParse(request.params.kind);
+        if (!parsed.success) {
+          return reply.status(400).send({
+            error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+          });
+        }
+
+        const authorizationUrl = await appService.createAuthorizationUrl(
+          request.user!.id,
+          parsed.data,
+        );
+        return reply.status(200).send({ authorizationUrl });
+      },
+    );
+
+    userApp.post<{ Params: { kind: 'github' | 'google' } }>(
+      '/apps/:kind/sync',
+      async (request, reply) => {
+        const parsed = AppKindDto.safeParse(request.params.kind);
+        if (!parsed.success) {
+          return reply.status(400).send({
+            error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+          });
+        }
+
+        await appService.triggerSync(request.user!.id, parsed.data);
+        return reply.status(200).send({ queued: true });
+      },
+    );
+
+    userApp.delete<{ Params: { kind: 'github' | 'google' } }>(
+      '/apps/:kind',
+      async (request, reply) => {
+        const parsed = AppKindDto.safeParse(request.params.kind);
+        if (!parsed.success) {
+          return reply.status(400).send({
+            error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+          });
+        }
+
+        const result = await appService.disconnect(request.user!.id, parsed.data);
+        return reply.status(200).send(result);
+      },
+    );
+
+    userApp.get('/apps/github/repositories', async (request, reply) => {
+      const repositories = await appService.listGitHubRepositories(request.user!.id);
+      return reply.status(200).send({ repositories });
+    });
+
+    userApp.put('/apps/github/repositories', async (request, reply) => {
+      const parsed = GitHubRepoSelectionRequest.safeParse(request.body);
+      if (!parsed.success) {
+        return reply.status(400).send({
+          error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+        });
+      }
+
+      await appService.saveGitHubRepositories(request.user!.id, parsed.data.repositoryIds);
+      return reply.status(200).send({ ok: true });
+    });
   });
 }

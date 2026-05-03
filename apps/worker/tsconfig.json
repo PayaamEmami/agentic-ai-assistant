@@ -2,7 +2,17 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "../.."
+    "rootDir": "src"
   },
-  "include": ["src"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["**/*.test.ts", "**/*.spec.ts"],
+  "references": [
+    { "path": "../../packages/ai" },
+    { "path": "../../packages/db" },
+    { "path": "../../packages/knowledge-sources" },
+    { "path": "../../packages/observability" },
+    { "path": "../../packages/retrieval" },
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/tool-providers" }
+  ]
 }

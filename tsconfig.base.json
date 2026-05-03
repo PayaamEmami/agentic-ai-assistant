@@ -1,17 +1,5 @@
 {
   "compilerOptions": {
-    "baseUrl": ".",
-    "paths": {
-      "@aaa/tool-providers": ["packages/tool-providers/src/index.ts"],
-      "@aaa/ai": ["packages/ai/src/index.ts"],
-      "@aaa/config": ["packages/config/src/index.ts"],
-      "@aaa/knowledge-sources": ["packages/knowledge-sources/src/index.ts"],
-      "@aaa/db": ["packages/db/src/index.ts"],
-      "@aaa/memory": ["packages/memory/src/index.ts"],
-      "@aaa/observability": ["packages/observability/src/index.ts"],
-      "@aaa/retrieval": ["packages/retrieval/src/index.ts"],
-      "@aaa/shared": ["packages/shared/src/index.ts"]
-    },
     "target": "ES2022",
     "module": "Node16",
     "moduleResolution": "Node16",
@@ -24,6 +12,8 @@
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
+    "composite": true,
+    "incremental": true,
     "outDir": "dist",
     "rootDir": "src",
     "isolatedModules": true,
@@ -34,5 +24,5 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "exclude": ["node_modules", "dist"]
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }
