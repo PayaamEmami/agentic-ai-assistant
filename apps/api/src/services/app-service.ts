@@ -827,5 +827,13 @@ export class AppService {
       },
       'GitHub repositories saved',
     );
+
+    await enqueueAppSyncJob({
+      appCapabilityConfigId: config.id,
+      appKind: 'github',
+      capability: 'knowledge',
+      userId,
+      correlationId: getLogContext().correlationId ?? crypto.randomUUID(),
+    });
   }
 }

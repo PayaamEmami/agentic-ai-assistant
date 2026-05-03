@@ -11,10 +11,6 @@ export interface AppSyncJobData {
 
 let appSyncQueue: Queue<AppSyncJobData> | null = null;
 
-function createSafeJobId(prefix: string, ...parts: string[]): string {
-  return [prefix, ...parts.map((part) => Buffer.from(part).toString('base64url'))].join('-');
-}
-
 function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
   const parsed = new URL(url);
   return {
@@ -49,7 +45,6 @@ export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
     },
     () =>
       getAppSyncQueue().add('sync-app', payload, {
-        jobId: createSafeJobId('app-sync', job.appCapabilityConfigId),
         removeOnComplete: 100,
         removeOnFail: 500,
       }),
