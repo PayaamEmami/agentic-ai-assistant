@@ -19,7 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
-    "typecheck": "tsc -b --noEmit && pnpm --filter @aaa/web run typecheck",
+    "typecheck": "tsc -b && pnpm --filter @aaa/web run typecheck",
     "clean": "tsc -b --clean && pnpm -r run clean && rm -rf node_modules"
   },
   "devDependencies": {
