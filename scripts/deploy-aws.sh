@@ -163,6 +163,10 @@ deployment_values = {
     "NEXT_PUBLIC_API_URL": public_base_url,
     "INTERNAL_API_BASE_URL": "http://api:3001",
     "CADDY_SITE_ADDRESS": caddy_site_address,
+    "GITHUB_APP_REDIRECT_URI_BASE": values.get("GITHUB_APP_REDIRECT_URI_BASE")
+    or f"{public_base_url.rstrip('/')}/api/apps/github/",
+    "GOOGLE_APP_REDIRECT_URI_BASE": values.get("GOOGLE_APP_REDIRECT_URI_BASE")
+    or f"{public_base_url.rstrip('/')}/api/apps/google/",
 }
 
 passthrough_keys = [
@@ -178,10 +182,8 @@ passthrough_keys = [
     "GITHUB_TOKEN",
     "GITHUB_CLIENT_ID",
     "GITHUB_CLIENT_SECRET",
-    "GITHUB_APP_REDIRECT_URI_BASE",
     "GOOGLE_CLIENT_ID",
     "GOOGLE_CLIENT_SECRET",
-    "GOOGLE_APP_REDIRECT_URI_BASE",
     "OTEL_SERVICE_NAMESPACE",
     "OTEL_RESOURCE_ATTRIBUTES",
 ]
