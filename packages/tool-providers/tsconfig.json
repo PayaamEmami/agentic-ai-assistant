@@ -8,6 +8,7 @@
   "exclude": ["**/*.test.ts", "**/*.spec.ts"],
   "references": [
     { "path": "../ai" },
+    { "path": "../config" },
     { "path": "../observability" },
     { "path": "../shared" }
   ]

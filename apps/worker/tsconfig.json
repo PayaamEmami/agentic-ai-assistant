@@ -8,6 +8,7 @@
   "exclude": ["**/*.test.ts", "**/*.spec.ts"],
   "references": [
     { "path": "../../packages/ai" },
+    { "path": "../../packages/config" },
     { "path": "../../packages/db" },
     { "path": "../../packages/knowledge-sources" },
     { "path": "../../packages/observability" },
