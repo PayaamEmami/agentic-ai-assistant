@@ -1,17 +1,17 @@
 # CONTEXT
 
-This file is a quick orientation guide for AI coding agents working in this repository. It complements `README.md` with practical project context, common workflows, and a few guardrails for making safe changes.
+This file is a quick working guide for coding agents in this repository. Use `README.md` for full setup and infrastructure details; use this file for where code lives, how to verify changes, and the guardrails that matter during implementation.
+
+If your change makes any part of this file inaccurate, incomplete, or misleading, update `CONTEXT.md` in the same work.
 
 ## Project Summary
 
-Agentic AI Assistant is a pnpm monorepo for an AI assistant with:
+Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with:
 
-- Web chat and voice UX
-- Fastify API and WebSocket backend
-- Background workers for async processing
-- Retrieval / RAG over connected data sources
-- Native tool execution with approvals
-- Multi-agent orchestration on top of OpenAI models
+- `apps/web`: Next.js web app
+- `apps/api`: Fastify API and WebSocket backend
+- `apps/worker`: BullMQ background processing
+- `packages/*`: shared logic for AI orchestration, retrieval, DB, observability, config, and tool providers
 
 Primary stack:
 
@@ -22,38 +22,51 @@ Primary stack:
 - Fastify 5
 - PostgreSQL 16 + pgvector
 - Redis 7 + BullMQ
-- Docker Compose for local infra
 
 ## Repo Shape
 
-Top-level apps:
+Main apps:
 
-- `apps/web`: Next.js frontend
-- `apps/api`: Fastify API server
-- `apps/worker`: BullMQ-based background worker
+- `apps/web`: UI, routes, chat and voice client flows
+- `apps/api`: HTTP endpoints, auth, uploads, WebSocket flows
+- `apps/worker`: queues, background jobs, async processing
 
 Shared packages:
 
 - `packages/shared`: shared types, DTOs, schemas, enums
 - `packages/ai`: prompts, model gateway, orchestration logic
-- `packages/tool-providers`: native tool providers used by tool execution
+- `packages/tool-providers`: native tool provider implementations
 - `packages/retrieval`: chunking, embeddings, indexing, search
-- `packages/knowledge-sources`: retrieval-oriented external source integrations and credential helpers
+- `packages/knowledge-sources`: external source integrations and credential helpers
 - `packages/memory`: personalization and memory logic
 - `packages/db`: schema, migrations, repositories
 - `packages/config`: environment parsing and constants
 - `packages/observability`: logging, tracing, metrics, sanitization
 
-Operational/infrastructure folders:
+Useful infrastructure folders:
 
-- `docker/`: Dockerfiles, local `docker-compose.yml`, and the production `docker-compose.prod.yml` (Caddy + postgres + redis + api + web + worker)
-- `infra/aws-ec2/`: provisioning script and cloud-init user-data for the single production EC2 host
-- `scripts/`: local startup helper (`dev-local.sh`), AWS deploy/backup helpers (`deploy-aws.sh`, `backup-aws-db.sh`, `restore-aws-db.sh`, `install-aws-backup-timer.sh`)
-- `.github/workflows/`: CI (`ci.yml`) and CD (`cd.yml`) pipelines
+- `docker/`: local and production Docker assets
+- `scripts/`: local startup and AWS helper scripts
+- `.github/workflows/`: CI and CD definitions
 
-## How Local Dev Works
+## Change Routing Guide
 
-The main local entrypoint is:
+When deciding where a change belongs:
+
+- UI, app routes, client interactions: start in `apps/web`
+- HTTP endpoints, auth, uploads, WebSocket flows: start in `apps/api`
+- Async jobs and queue consumers: start in `apps/worker`
+- Shared contracts between apps: check `packages/shared`
+- DB schema or persistence changes: check `packages/db`
+- Model or tool orchestration behavior: check `packages/ai`
+- Native tool provider behavior: check `packages/tool-providers`
+- Retrieval, indexing, embeddings, search: check `packages/retrieval`
+- External source integrations: check `packages/knowledge-sources`
+- Logging, tracing, sanitization, metrics: check `packages/observability`
+
+## Local Workflow
+
+Primary local entrypoint:
 
 ```bash
 pnpm dev:local
@@ -61,21 +74,48 @@ pnpm dev:local
 
 What it does:
 
-1. Requires a real `.env` file in the repo root
-2. Starts PostgreSQL, Redis, and the local observability stack with `docker/docker-compose.yml`
-3. Runs DB migrations via `pnpm --filter @aaa/db migrate:up`
+1. Requires a real `.env` in the repo root
+2. Starts PostgreSQL, Redis, and the local observability stack from `docker/docker-compose.yml`
+3. Runs DB migrations with `pnpm --filter @aaa/db migrate:up`
 4. Starts all app dev servers with `pnpm dev`
 
-Important note for Windows:
+Windows note:
 
 - `pnpm dev:local` runs `bash ./scripts/dev-local.sh`
-- WSL or Git Bash is recommended for that workflow
+- Use WSL or Git Bash for that workflow
 
-Local URLs:
+Useful local URLs:
 
 - Web: `http://localhost:3000`
 - API: `http://localhost:3001`
 - API health: `http://localhost:3001/health`
+
+## Agent Verification Checklist
+
+Before handing work back, run the narrowest useful checks during iteration, then run the broader checks needed to prove the final change is safe.
+
+Standard repo-level verification:
+
+```bash
+pnpm lint
+pnpm typecheck
+pnpm test
+```
+
+Use `pnpm build` when the change can affect runtime packaging, production behavior, or cross-workspace integration:
+
+```bash
+pnpm build
+```
+
+Notes:
+
+- CI currently runs `pnpm lint`, `pnpm typecheck`, and `pnpm test`
+- Do not claim format verification; `pnpm format:check` is not a real script in this repo
+- For quick iteration, workspace-scoped commands are fine, for example `pnpm --filter @aaa/api test`
+- Before handoff, prefer repo-level checks when a change crosses app or package boundaries
+- If you change DB schema, migrations, or persistence flows, also run the relevant `packages/db` migration or integration steps needed to prove the change works
+- If you cannot run a needed check because of missing credentials, services, or environment, say so explicitly
 
 ## Common Commands
 
@@ -89,15 +129,6 @@ Run all apps in dev mode:
 
 ```bash
 pnpm dev
-```
-
-Run quality checks:
-
-```bash
-pnpm lint
-pnpm typecheck
-pnpm test
-pnpm format:check
 ```
 
 Run tests:
@@ -123,93 +154,43 @@ pnpm build
 
 ## Environment Notes
 
-Important local dependencies and secrets:
+Common local requirements:
 
 - `DATABASE_URL`
-- `LOCAL_POSTGRES_PORT` when `5432` is already in use
 - `REDIS_URL`
-- `LOCAL_REDIS_PORT` when `6379` is already in use
 - `OPENAI_API_KEY`
 - `JWT_SECRET`
 - `APP_CREDENTIALS_SECRET`
 
-Optional but useful depending on the feature area:
+Sometimes needed depending on the feature area:
 
+- `LOCAL_POSTGRES_PORT` when `5432` is already in use
+- `LOCAL_REDIS_PORT` when `6379` is already in use
 - GitHub OAuth values
 - Google OAuth values
-- S3 / MinIO settings
-- `LOG_FORMAT` (`pretty` for local readability, `json` when you want machine-friendly output)
+- S3 or MinIO settings
+- `LOG_FORMAT`
 
 See `.env.example` for the full template.
 
 ## Logging Notes
 
-The repo uses a shared observability layer with structured logs across API, worker, knowledge-source HTTP calls, retrieval, native tool execution, and OpenAI boundaries.
+- Local logs may be written under `.logs/`
+- During `pnpm dev:local`, API and worker logging is redirected for the local observability stack
+- Do not intentionally log bearer tokens, OAuth codes, credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads
 
-Local logging defaults:
+## Production Notes
 
-- Console output is pretty-printed in development
-- NDJSON log files are written under `.logs/`
-- API logs go to `.logs/api.ndjson`
-- Worker logs go to `.logs/worker.ndjson`
-
-During `pnpm dev:local`, the script disables file logging and points logs at local Loki instead so local observability works without Docker bind mounts on the host filesystem.
-
-Useful fields to grep for:
-
-- `requestId`: one HTTP request
-- `correlationId`: one cross-boundary flow across API, queues, worker, and package calls
-- `voiceSessionId`: live voice session lifecycle
-- `appCapabilityConfigId`, `appKind`, `conversationId`, `toolExecutionId`, `jobId`
-- `event`, `component`, `outcome`
-
-Important safety rule:
-
-- Logs are structured and sanitized by default. Do not intentionally add raw bearer tokens, OAuth codes, app credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads to log objects.
-
-## Change Routing Guide
-
-When deciding where a change belongs:
-
-- UI, app routes, client interactions: start in `apps/web`
-- HTTP endpoints, auth, uploads, WebSocket flows: start in `apps/api`
-- Async jobs and queue consumers: start in `apps/worker`
-- Shared contracts between apps: check `packages/shared`
-- DB schema or persistence changes: check `packages/db`
-- Model/tool orchestration behavior: check `packages/ai`
-- Native tool provider behavior: check `packages/tool-providers`
-- Retrieval, indexing, embeddings, search: check `packages/retrieval`
-- External source integrations: check `packages/knowledge-sources`
-- Logging, tracing, sanitization, metrics: check `packages/observability`
-
-## Production Deploy
-
-Production runs as a single AWS EC2 instance (Name tag `aaa-prod-app`) running everything via `docker/docker-compose.prod.yml`. CloudFront sits in front of the EC2 public DNS for HTTPS termination and caching. Postgres and Redis run as containers on the box; uploads go to S3. The three application images (`aaa-api`, `aaa-worker`, `aaa-web`) are built in CI and stored in ECR — the EC2 instance only pulls them, never builds.
-
-Deploy flow on merge to `main` (`.github/workflows/cd.yml`):
-
-1. Reuse `ci.yml` gates (format, lint, typecheck, test)
-2. Assume an IAM role via GitHub OIDC (no long-lived AWS keys)
-3. Build the three production images in parallel on `ubuntu-24.04-arm` runners with buildx + GHA layer cache, and push them to ECR tagged with `${github.sha}` and `latest`
-4. Materialize `.env.production` from GitHub Secrets, then run `scripts/deploy-aws.sh`, which:
-   - Uploads only `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to the S3 deploy bucket under `deployments/<deployment_id>/`
-   - Sends an SSM Run Command to the EC2 instance to swap the `current` symlink, `aws ecr get-login-password | docker login`, `docker compose pull`, run DB migrations, and `docker compose up -d`
-5. Invalidate the CloudFront distribution so the new web bundle is served immediately
-
-Manual deploys (`pnpm aws:deploy`) use the same script and are interchangeable with CD, but require pushing the images to ECR yourself first. In practice, almost all deploys go through CD.
-
-Required GitHub configuration is documented in `README.md` under "Continuous deployment". Account-specific values (bucket name, instance name, role ARN, CloudFront distribution ID, region, public URL, ECR registry URI) live only in GitHub Variables/Secrets — never committed to this repo.
-
-## AWS CLI Access
-
-The AWS CLI is available in the local environment and can be used directly to interact with AWS resources. Credentials are configured via the default profile; no extra setup is needed.
+- Production uses Docker-based deployment from `.github/workflows/cd.yml`
+- CI validation lives in `.github/workflows/ci.yml`
+- Use `README.md` for deeper deploy and infrastructure details
 
 ## Maintenance
 
-Update this file when any of the following change:
+Coding agents should update this file as part of the same change whenever any of the following become stale:
 
-- Core architecture or package ownership
+- Repo shape or package ownership
 - Local startup workflow
 - Required environment variables
-- Key commands used for verification
+- Verification commands or CI expectations
 - Major product capabilities that affect how agents should reason about changes
