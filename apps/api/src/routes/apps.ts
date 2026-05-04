@@ -16,9 +16,9 @@ interface AppRouteOptions {
 }
 
 export async function appRoutes(app: FastifyInstance, options: AppRouteOptions = {}) {
-  const appService = options.appService ?? new AppService();
+  const appService = options.appService ?? new AppService(app.config);
   const logger = getLogger({ component: 'app-routes' });
-  const webBaseUrl = options.webBaseUrl ?? process.env.WEB_BASE_URL ?? 'http://localhost:3000';
+  const webBaseUrl = options.webBaseUrl ?? app.config.webBaseUrl;
 
   function buildErrorRedirect(kind: string, message: string): string {
     return (

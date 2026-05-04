@@ -138,38 +138,6 @@ describe('buildServer', () => {
     expect(response.headers['x-correlation-id']).toBe('correlation-456');
   });
 
-  it('uses injected services for internal chat continuations', async () => {
-    const services = testServices();
-    const app = await createTestServer(services);
-    apps.push(app);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/chat/internal/tool-executions/tool-execution-1/continue',
-      headers: { 'x-internal-service-secret': 'dev-internal-service-secret' },
-    });
-
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ continued: true });
-    expect(services.chatService.continueAfterToolExecution).toHaveBeenCalledWith(
-      'tool-execution-1',
-    );
-  });
-
-  it('rejects internal chat continuations without the service secret', async () => {
-    const services = testServices();
-    const app = await createTestServer(services);
-    apps.push(app);
-
-    const response = await app.inject({
-      method: 'POST',
-      url: '/api/chat/internal/tool-executions/tool-execution-1/continue',
-    });
-
-    expect(response.statusCode).toBe(401);
-    expect(services.chatService.continueAfterToolExecution).not.toHaveBeenCalled();
-  });
-
   it('returns validation errors before calling chat services', async () => {
     const services = testServices();
     const app = await createTestServer(services);

@@ -1,6 +1,13 @@
 import { Worker } from 'bullmq';
 import type { ConnectionOptions } from 'bullmq';
+import { QUEUE_NAMES, parseRedisUrl, type WorkerConfig } from '@aaa/config';
 import { withLogContext, withSpan } from '@aaa/observability';
+import type {
+  AppSyncJobData,
+  EmbeddingJobData,
+  IngestionJobData,
+  ToolExecutionJobData,
+} from '@aaa/shared';
 import { handleIngestion } from './jobs/ingestion.js';
 import { handleEmbedding } from './jobs/embedding.js';
 import { handleAppSync } from './jobs/app-sync.js';
@@ -8,21 +15,16 @@ import { handleToolExecution } from './jobs/tool-execution.js';
 import { logger } from './lib/logger.js';
 import { workerJobCounter, workerJobDurationMs } from './lib/telemetry.js';
 
-function parseRedisUrl(url: string): ConnectionOptions {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname,
-    port: parseInt(parsed.port || '6379', 10),
-    password: parsed.password || undefined,
-  };
+function toConnectionOptions(config: WorkerConfig): ConnectionOptions {
+  return parseRedisUrl(config.redisUrl);
 }
 
-export function createWorkers(redisUrl: string): Worker[] {
-  const connection = parseRedisUrl(redisUrl);
+export function createWorkers(config: WorkerConfig): Worker[] {
+  const connection = toConnectionOptions(config);
 
   const workers = [
-    new Worker(
-      'ingestion',
+    new Worker<IngestionJobData>(
+      QUEUE_NAMES.ingestion,
       (job) =>
         withLogContext(
           {
@@ -43,8 +45,8 @@ export function createWorkers(redisUrl: string): Worker[] {
         ),
       { connection },
     ),
-    new Worker(
-      'embedding',
+    new Worker<EmbeddingJobData>(
+      QUEUE_NAMES.embedding,
       (job) =>
         withLogContext(
           {
@@ -65,8 +67,8 @@ export function createWorkers(redisUrl: string): Worker[] {
         ),
       { connection },
     ),
-    new Worker(
-      'app-sync',
+    new Worker<AppSyncJobData>(
+      QUEUE_NAMES.appSync,
       (job) =>
         withLogContext(
           {
@@ -89,8 +91,8 @@ export function createWorkers(redisUrl: string): Worker[] {
         ),
       { connection },
     ),
-    new Worker(
-      'tool-execution',
+    new Worker<ToolExecutionJobData>(
+      QUEUE_NAMES.toolExecution,
       (job) =>
         withLogContext(
           {

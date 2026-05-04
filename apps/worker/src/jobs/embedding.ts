@@ -1,13 +1,9 @@
 import type { Job } from 'bullmq';
 import { OpenAIProvider } from '@aaa/ai';
+import { loadWorkerConfig } from '@aaa/config';
 import { chunkRepository, embeddingRepository } from '@aaa/db';
+import type { EmbeddingJobData } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
-
-export interface EmbeddingJobData {
-  chunkIds: string[];
-  model: string;
-  correlationId: string;
-}
 
 export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void> {
   const { chunkIds, model, correlationId } = job.data;
@@ -39,10 +35,11 @@ export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void>
 
   await embeddingRepository.deleteByChunkIds(chunks.map((chunk) => chunk.id));
 
+  const config = loadWorkerConfig();
   const provider = new OpenAIProvider(
-    process.env['OPENAI_API_KEY'] ?? '',
-    process.env['OPENAI_MODEL'],
-    process.env['OPENAI_EMBEDDING_MODEL'],
+    config.openaiApiKey,
+    config.openaiModel,
+    config.openaiEmbeddingModel,
   );
   const result = await provider.embed({
     input: chunks.map((chunk) => chunk.content),

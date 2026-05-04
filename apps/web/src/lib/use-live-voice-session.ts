@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { API_BASE, ApiError, getStoredAuthToken, api } from './api-client';
 import type { ToolEventListener, ToolEventPayload } from './chat-context';
 import { reportClientError } from './client-logging';
@@ -366,14 +366,14 @@ export function useLiveVoiceSession({
     }
   };
 
-  const sendRealtimeEvent = (event: Record<string, unknown>) => {
+  const sendRealtimeEvent = useCallback((event: Record<string, unknown>) => {
     const channel = dataChannelRef.current;
     if (!channel || channel.readyState !== 'open') {
       return;
     }
 
     channel.send(JSON.stringify(event));
-  };
+  }, []);
 
   const forwardToolResultToRealtime = (callId: string, output: unknown) => {
     sendRealtimeEvent({
@@ -456,7 +456,7 @@ export function useLiveVoiceSession({
     }
   };
 
-  const handleToolEventFromServer = (payload: ToolEventPayload) => {
+  const handleToolEventFromServer = useCallback((payload: ToolEventPayload) => {
     if (!payload.toolExecutionId) {
       return;
     }
@@ -489,12 +489,14 @@ export function useLiveVoiceSession({
         });
       }
     }
-  };
+  }, []);
 
-  const canInterruptAssistant = () =>
-    phaseRef.current === 'thinking' || phaseRef.current === 'speaking';
+  const canInterruptAssistant = useCallback(
+    () => phaseRef.current === 'thinking' || phaseRef.current === 'speaking',
+    [],
+  );
 
-  const broadcastInterruptToServer = () => {
+  const broadcastInterruptToServer = useCallback(() => {
     const sessionId = sessionIdRef.current;
     const conversationId = conversationIdRef.current;
     if (!sessionId || !conversationId) {
@@ -512,9 +514,9 @@ export function useLiveVoiceSession({
         voiceSessionId: sessionId,
       });
     });
-  };
+  }, []);
 
-  const interruptAssistant = () => {
+  const interruptAssistant = useCallback(() => {
     if (!canInterruptAssistant()) {
       return;
     }
@@ -525,9 +527,9 @@ export function useLiveVoiceSession({
     responseDoneRef.current = false;
     setAssistantCaption('');
     broadcastInterruptToServer();
-  };
+  }, [broadcastInterruptToServer, canInterruptAssistant, sendRealtimeEvent]);
 
-  const teardown = () => {
+  const teardown = useCallback(() => {
     try {
       if (canInterruptAssistant()) {
         interruptAssistant();
@@ -561,16 +563,16 @@ export function useLiveVoiceSession({
     setAssistantCaption('');
     setConnectionLabel('Voice mode is off.');
     setVoicePhase('idle');
-  };
+  }, [canInterruptAssistant, interruptAssistant]);
 
-  useEffect(() => teardown, []);
+  useEffect(() => teardown, [teardown]);
 
   useEffect(() => {
     if (!subscribeToolEvents) {
       return;
     }
     return subscribeToolEvents(handleToolEventFromServer);
-  }, [subscribeToolEvents]);
+  }, [handleToolEventFromServer, subscribeToolEvents]);
 
   const handleRealtimeEvent = async (event: { type?: string; [key: string]: unknown }) => {
     switch (event.type) {

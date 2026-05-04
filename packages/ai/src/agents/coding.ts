@@ -38,6 +38,7 @@ export class CodingAgent implements Agent {
       toolCalls,
       delegateTo: null,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),
+      usage: completion.usage,
     };
   }
 }

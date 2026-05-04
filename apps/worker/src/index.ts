@@ -1,16 +1,19 @@
 import { withLogContext } from '@aaa/observability';
 import { closePool } from '@aaa/db';
+import { loadWorkerConfig } from '@aaa/config';
 import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
+import { closeChatContinuationQueue } from './lib/chat-continuation-queue.js';
 import { closeJobQueues } from './lib/job-queues.js';
 import { startAppSyncScheduler } from './lib/sync-scheduler.js';
 import { initializeWorkerTelemetry, startWorkerObservabilityServer } from './lib/telemetry.js';
 import { shutdownTracing } from '@aaa/observability';
 
 async function main() {
-  const redisUrl = process.env.REDIS_URL ?? 'redis://localhost:6379';
+  const config = loadWorkerConfig();
+  const redisUrl = config.redisUrl;
   await initializeWorkerTelemetry();
-  const observability = await startWorkerObservabilityServer(redisUrl);
+  const observability = await startWorkerObservabilityServer(config);
   const redisTarget = new URL(redisUrl);
   logger.info(
     {
@@ -23,8 +26,8 @@ async function main() {
     'Starting worker service',
   );
 
-  const workers = createWorkers(redisUrl);
-  const syncScheduler = startAppSyncScheduler();
+  const workers = createWorkers(config);
+  const syncScheduler = startAppSyncScheduler(config);
   logger.info(
     {
       event: 'worker.started',
@@ -56,6 +59,7 @@ async function main() {
       });
     });
     await Promise.all(workers.map((w) => w.close()));
+    await closeChatContinuationQueue();
     await closeJobQueues();
     await closePool();
     await shutdownTracing();

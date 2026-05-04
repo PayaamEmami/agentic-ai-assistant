@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Job } from 'bullmq';
+import type { EmbeddingJobData } from '@aaa/shared';
 import { handleEmbedding } from './embedding.js';
-import type { EmbeddingJobData } from './embedding.js';
 
 const mocks = vi.hoisted(() => ({
   listByIds: vi.fn(),
@@ -34,6 +34,14 @@ vi.mock('../lib/logger.js', () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+}));
+
+vi.mock('@aaa/config', () => ({
+  loadWorkerConfig: vi.fn(() => ({
+    openaiApiKey: 'test-key',
+    openaiModel: 'gpt-5-mini',
+    openaiEmbeddingModel: 'text-embedding-3-small',
+  })),
 }));
 
 function job(data: EmbeddingJobData): Job<EmbeddingJobData> {

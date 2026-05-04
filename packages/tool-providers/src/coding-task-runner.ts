@@ -4,6 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { OpenAIProvider } from '@aaa/ai';
+import { loadOpenAiEnv } from '@aaa/config';
 import type { ToolProgressEvent } from '@aaa/shared';
 import { GitHubToolProvider } from './github-tool-provider.js';
 
@@ -54,11 +55,12 @@ export class CodingTaskRunner {
     progress: CodingTaskProgressReporter;
     model?: string;
   }) {
+    const env = loadOpenAiEnv();
     this.githubToken = input.githubToken;
     this.github = new GitHubToolProvider(input.githubToken);
     this.modelProvider = new OpenAIProvider(
-      process.env['OPENAI_API_KEY'] ?? '',
-      input.model ?? process.env['OPENAI_MODEL'],
+      env.OPENAI_API_KEY,
+      input.model ?? env.OPENAI_MODEL,
     );
     this.progress = input.progress;
     this.toolExecutionId = input.toolExecutionId;
@@ -151,6 +153,7 @@ export class CodingTaskRunner {
     workspaceRoot: string,
     input: GitHubCodingTaskInput,
   ): Promise<CodingPlan> {
+    const env = loadOpenAiEnv();
     const fileList = await this.execGit(['ls-files'], workspaceRoot);
     const candidates = fileList.stdout
       .split(/\r?\n/)
@@ -179,7 +182,7 @@ export class CodingTaskRunner {
             `Relevant file contents:\n${selectedFiles.join('\n\n---\n\n')}`,
         },
       ],
-      model: process.env['OPENAI_MODEL'],
+      model: env.OPENAI_MODEL,
     });
 
     const content = completion.content?.trim() ?? '';

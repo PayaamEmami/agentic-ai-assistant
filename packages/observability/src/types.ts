@@ -31,6 +31,7 @@ export interface ServiceLoggerOptions {
   level?: string;
   format?: 'pretty' | 'json';
   logDirectory?: string;
+  setAsDefault?: boolean;
 }
 
 export interface SerializedError {

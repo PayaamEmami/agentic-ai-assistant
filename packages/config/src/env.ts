@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  HOSTNAME: z.string().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
   LOG_FORMAT: z.enum(['pretty', 'json']).default('pretty'),
   LOG_FILE_ENABLED: z
@@ -34,8 +35,8 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().default('text-embedding-3-small'),
   OPENAI_REALTIME_MODEL: z.string().default('gpt-realtime-1.5'),
   OPENAI_REALTIME_VOICE: z.string().default('marin'),
-  JWT_SECRET: z.string().optional(),
-  INTERNAL_SERVICE_SECRET: z.string().optional(),
+  JWT_SECRET: z.string().default('dev-insecure-jwt-secret'),
+  INTERNAL_SERVICE_SECRET: z.string().default('dev-internal-service-secret'),
   API_INSTANCE_ID: z.string().optional(),
   API_INTERNAL_BASE_URL: z.string().optional(),
   INTERNAL_API_BASE_URL: z.string().optional(),
@@ -49,12 +50,76 @@ const envSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_APP_REDIRECT_URI_BASE: z.string().optional(),
   WEB_BASE_URL: z.string().default('http://localhost:3000'),
-  APP_CREDENTIALS_SECRET: z.string().optional(),
+  APP_CREDENTIALS_SECRET: z.string().default('dev-app-credentials-secret'),
 });
 
 export type Env = z.infer<typeof envSchema>;
+export type LogEnv = z.infer<typeof logEnvSchema>;
+export type TraceEnv = z.infer<typeof traceEnvSchema>;
+export type DatabaseEnv = z.infer<typeof databaseEnvSchema>;
+export type OpenAiEnv = z.infer<typeof openAiEnvSchema>;
+export type GoogleOAuthEnv = z.infer<typeof googleOAuthEnvSchema>;
+export type CredentialsEnv = z.infer<typeof credentialsEnvSchema>;
+export type JwtEnv = z.infer<typeof jwtEnvSchema>;
+export type InternalServiceEnv = z.infer<typeof internalServiceEnvSchema>;
+
+const logEnvSchema = envSchema.pick({
+  NODE_ENV: true,
+  HOSTNAME: true,
+  LOG_LEVEL: true,
+  LOG_FORMAT: true,
+  LOG_FILE_ENABLED: true,
+  LOG_LOKI_ENDPOINT: true,
+});
+
+const traceEnvSchema = envSchema.pick({
+  NODE_ENV: true,
+  OTEL_EXPORTER_OTLP_ENDPOINT: true,
+  OTEL_SERVICE_NAMESPACE: true,
+});
+
+const databaseEnvSchema = envSchema.pick({
+  DATABASE_URL: true,
+  DATABASE_POOL_SIZE: true,
+});
+
+const openAiEnvSchema = envSchema.pick({
+  OPENAI_API_KEY: true,
+  OPENAI_MODEL: true,
+  OPENAI_EMBEDDING_MODEL: true,
+  OPENAI_PRICING_OVERRIDES_JSON: true,
+});
+
+const googleOAuthEnvSchema = envSchema.pick({
+  GOOGLE_CLIENT_ID: true,
+  GOOGLE_CLIENT_SECRET: true,
+});
+
+const credentialsEnvSchema = envSchema.pick({
+  APP_CREDENTIALS_SECRET: true,
+});
+
+const jwtEnvSchema = envSchema.pick({
+  JWT_SECRET: true,
+});
+
+const internalServiceEnvSchema = envSchema.pick({
+  HOSTNAME: true,
+  API_PORT: true,
+  INTERNAL_SERVICE_SECRET: true,
+  API_INSTANCE_ID: true,
+  API_INTERNAL_BASE_URL: true,
+  API_BASE_URL: true,
+});
 
 let cachedEnv: Env | null = null;
+let cachedLogEnv: LogEnv | null = null;
+let cachedTraceEnv: TraceEnv | null = null;
+let cachedDatabaseEnv: DatabaseEnv | null = null;
+let cachedOpenAiEnv: OpenAiEnv | null = null;
+let cachedGoogleOAuthEnv: GoogleOAuthEnv | null = null;
+let cachedCredentialsEnv: CredentialsEnv | null = null;
+let cachedInternalServiceEnv: InternalServiceEnv | null = null;
 
 export function loadEnv(): Env {
   if (cachedEnv) return cachedEnv;
@@ -72,4 +137,61 @@ export function loadEnv(): Env {
 
 export function resetEnvCache(): void {
   cachedEnv = null;
+  cachedLogEnv = null;
+  cachedTraceEnv = null;
+  cachedDatabaseEnv = null;
+  cachedOpenAiEnv = null;
+  cachedGoogleOAuthEnv = null;
+  cachedCredentialsEnv = null;
+  cachedInternalServiceEnv = null;
+}
+
+function parseSubset<TSchema extends z.ZodTypeAny>(schema: TSchema): z.infer<TSchema> {
+  return schema.parse(process.env);
+}
+
+export function loadLogEnv(): LogEnv {
+  if (cachedLogEnv) return cachedLogEnv;
+  cachedLogEnv = parseSubset(logEnvSchema);
+  return cachedLogEnv;
+}
+
+export function loadTraceEnv(): TraceEnv {
+  if (cachedTraceEnv) return cachedTraceEnv;
+  cachedTraceEnv = parseSubset(traceEnvSchema);
+  return cachedTraceEnv;
+}
+
+export function loadDatabaseEnv(): DatabaseEnv {
+  if (cachedDatabaseEnv) return cachedDatabaseEnv;
+  cachedDatabaseEnv = parseSubset(databaseEnvSchema);
+  return cachedDatabaseEnv;
+}
+
+export function loadOpenAiEnv(): OpenAiEnv {
+  if (cachedOpenAiEnv) return cachedOpenAiEnv;
+  cachedOpenAiEnv = parseSubset(openAiEnvSchema);
+  return cachedOpenAiEnv;
+}
+
+export function loadGoogleOAuthEnv(): GoogleOAuthEnv {
+  if (cachedGoogleOAuthEnv) return cachedGoogleOAuthEnv;
+  cachedGoogleOAuthEnv = parseSubset(googleOAuthEnvSchema);
+  return cachedGoogleOAuthEnv;
+}
+
+export function loadCredentialsEnv(): CredentialsEnv {
+  if (cachedCredentialsEnv) return cachedCredentialsEnv;
+  cachedCredentialsEnv = parseSubset(credentialsEnvSchema);
+  return cachedCredentialsEnv;
+}
+
+export function loadJwtEnv(): JwtEnv {
+  return parseSubset(jwtEnvSchema);
+}
+
+export function loadInternalServiceEnv(): InternalServiceEnv {
+  if (cachedInternalServiceEnv) return cachedInternalServiceEnv;
+  cachedInternalServiceEnv = parseSubset(internalServiceEnvSchema);
+  return cachedInternalServiceEnv;
 }

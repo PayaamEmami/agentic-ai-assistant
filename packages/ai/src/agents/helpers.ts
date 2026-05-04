@@ -107,9 +107,24 @@ export function shouldDelegateToTool(context: AgentContext): boolean {
 }
 
 export function buildExplicitToolCallForRequest(
-  _context: AgentContext,
+  context: AgentContext,
 ): AgentResult['toolCalls'][number] | null {
-  return null;
+  const latestMessage = latestUserMessage(context).trim();
+  if (!latestMessage) {
+    return null;
+  }
+
+  const directToolMatch = latestMessage.match(
+    /^(?:tool:|call tool )(?<name>[a-z0-9._-]+)(?:\s+(?<args>\{[\s\S]*\}))?$/i,
+  );
+  if (!directToolMatch?.groups?.name) {
+    return null;
+  }
+
+  return {
+    name: directToolMatch.groups.name,
+    arguments: parseToolArguments(directToolMatch.groups.args ?? '{}'),
+  };
 }
 
 const CODING_HINTS = [

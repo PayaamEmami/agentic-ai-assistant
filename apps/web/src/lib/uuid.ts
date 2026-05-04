@@ -1,5 +1,3 @@
-'use client';
-
 export function createClientId(): string {
   const browserCrypto = globalThis.crypto;
 

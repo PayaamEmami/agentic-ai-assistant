@@ -15,6 +15,40 @@ export const QUEUE_NAMES = {
   embedding: 'embedding',
   appSync: 'app-sync',
   toolExecution: 'tool-execution',
+  chatContinuation: 'chat-continuation',
+} as const;
+
+export const QUEUE_JOB_OPTIONS = {
+  [QUEUE_NAMES.appSync]: {
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 5_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+  [QUEUE_NAMES.ingestion]: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+  [QUEUE_NAMES.embedding]: {
+    attempts: 4,
+    backoff: { type: 'exponential', delay: 1_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+  [QUEUE_NAMES.toolExecution]: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
+  [QUEUE_NAMES.chatContinuation]: {
+    attempts: 10,
+    backoff: { type: 'exponential', delay: 1_000 },
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  },
 } as const;
 
 export const REDIS_PREFIXES = {

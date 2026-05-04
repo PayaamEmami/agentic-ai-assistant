@@ -10,6 +10,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@aaa/config": "workspace:*",
     "@aaa/observability": "workspace:*"
   },
   "devDependencies": {

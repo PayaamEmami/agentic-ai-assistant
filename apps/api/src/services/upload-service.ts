@@ -13,6 +13,7 @@ import {
   SimpleChunkingService,
   type EmbeddingService,
 } from '@aaa/retrieval';
+import type { AppConfig } from '../config.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 
@@ -93,15 +94,15 @@ export class UploadService {
   private readonly modelProvider: OpenAIProvider;
   private readonly embeddingModel: string | undefined;
 
-  constructor(modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
+  constructor(config: AppConfig, modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
     this.modelProvider =
       modelProvider ??
       new OpenAIProvider(
-        process.env['OPENAI_API_KEY'] ?? '',
-        process.env['OPENAI_MODEL'],
-        process.env['OPENAI_EMBEDDING_MODEL'],
+        config.openaiApiKey,
+        config.openaiModel,
+        config.openaiEmbeddingModel,
       );
-    this.embeddingModel = options?.embeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'];
+    this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }
 
   private async indexAttachmentForRetrieval(

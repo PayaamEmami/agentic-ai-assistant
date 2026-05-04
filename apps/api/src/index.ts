@@ -4,16 +4,23 @@ import { buildServer } from './server.js';
 import { loadConfig } from './config.js';
 import { logger } from './lib/logger.js';
 import { initializeApiTelemetry } from './lib/telemetry.js';
+import { buildApiServices } from './services/container.js';
+import {
+  startChatContinuationWorker,
+  stopChatContinuationWorker,
+} from './services/chat-continuation-worker.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
 import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
 import { closeAppSyncQueue } from './services/app-queue.js';
 
 async function main() {
   const config = loadConfig();
+  const services = buildApiServices(config);
   await initializeApiTelemetry();
   getPool();
   await startToolEventRelay();
-  const server = await buildServer(config);
+  const server = await buildServer(config, services);
+  startChatContinuationWorker(config, services.chatService);
   let shuttingDown = false;
 
   const shutdown = async (signal: NodeJS.Signals) => {
@@ -34,6 +41,7 @@ async function main() {
 
     try {
       await server.close();
+      await stopChatContinuationWorker();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
       await stopToolEventRelay();
@@ -94,6 +102,7 @@ async function main() {
     );
     await closeToolExecutionQueue();
     await closeAppSyncQueue();
+    await stopChatContinuationWorker();
     await stopToolEventRelay();
     await closePool();
     await shutdownTracing();

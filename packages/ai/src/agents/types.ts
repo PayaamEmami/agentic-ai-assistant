@@ -39,6 +39,11 @@ export interface AgentResult {
   delegateTo: AgentRole | null;
   requiresApproval: boolean;
   verification?: AgentVerificationResult;
+  usage?: {
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+  };
 }
 
 export interface Agent {

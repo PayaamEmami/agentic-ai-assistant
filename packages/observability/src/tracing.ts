@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { loadTraceEnv } from '@aaa/config';
 import { context, trace, SpanStatusCode, type Attributes } from '@opentelemetry/api';
 import { AsyncLocalStorageContextManager } from '@opentelemetry/context-async-hooks';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
@@ -16,17 +17,19 @@ function normalizeHeaders(endpoint: string): string {
 }
 
 function buildResource(options: ServiceRuntimeOptions) {
+  const env = loadTraceEnv();
   return resourceFromAttributes({
     'service.name': options.service,
-    'service.version': options.serviceVersion ?? process.env['npm_package_version'] ?? '0.0.1',
-    'deployment.environment': options.environment ?? process.env['NODE_ENV'] ?? 'development',
-    'service.namespace': options.namespace ?? process.env['OTEL_SERVICE_NAMESPACE'] ?? 'aaa',
+    'service.version': options.serviceVersion ?? '0.0.1',
+    'deployment.environment': options.environment ?? env.NODE_ENV,
+    'service.namespace': options.namespace ?? env.OTEL_SERVICE_NAMESPACE ?? 'aaa',
     'service.instance.id': options.instanceId ?? randomUUID(),
     ...options.resourceAttributes,
   });
 }
 
 export async function initializeTracing(options: ServiceRuntimeOptions): Promise<void> {
+  const env = loadTraceEnv();
   serviceName = options.service;
   if (providerStarted) {
     return;
@@ -35,12 +38,12 @@ export async function initializeTracing(options: ServiceRuntimeOptions): Promise
   provider = new NodeTracerProvider({
     resource: buildResource(options),
     spanProcessors:
-      (options.otlpEndpoint ?? process.env['OTEL_EXPORTER_OTLP_ENDPOINT'])
+      (options.otlpEndpoint ?? env.OTEL_EXPORTER_OTLP_ENDPOINT)
         ? [
             new BatchSpanProcessor(
               new OTLPTraceExporter({
                 url: `${normalizeHeaders(
-                  options.otlpEndpoint ?? process.env['OTEL_EXPORTER_OTLP_ENDPOINT'] ?? '',
+                  options.otlpEndpoint ?? env.OTEL_EXPORTER_OTLP_ENDPOINT ?? '',
                 )}/v1/traces`,
               }),
             ),

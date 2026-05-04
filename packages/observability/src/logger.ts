@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { Writable } from 'node:stream';
+import { loadLogEnv } from '@aaa/config';
 import pino, { multistream, type Logger } from 'pino';
 import { sanitizeForLogs, serializeError } from './sanitize.js';
 import { setDefaultLogger } from './context.js';
@@ -29,24 +30,22 @@ function resolveFormat(format?: 'pretty' | 'json'): 'pretty' | 'json' {
     return format;
   }
 
-  if (process.env['LOG_FORMAT'] === 'pretty' || process.env['LOG_FORMAT'] === 'json') {
-    return process.env['LOG_FORMAT'];
-  }
-
-  return process.env.NODE_ENV === 'development' ? 'pretty' : 'json';
+  const env = loadLogEnv();
+  return env.LOG_FORMAT ?? (env.NODE_ENV === 'development' ? 'pretty' : 'json');
 }
 
 function isFileLoggingEnabled(): boolean {
-  const raw = process.env['LOG_FILE_ENABLED'];
+  const env = loadLogEnv();
+  const raw = env.LOG_FILE_ENABLED;
   if (typeof raw === 'string') {
     return raw === '1' || raw.toLowerCase() === 'true';
   }
 
-  return process.env.NODE_ENV !== 'production';
+  return env.NODE_ENV !== 'production';
 }
 
 function resolveLokiEndpoint(): string | null {
-  const raw = process.env['LOG_LOKI_ENDPOINT'];
+  const raw = loadLogEnv().LOG_LOKI_ENDPOINT;
   return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }
 
@@ -226,10 +225,11 @@ function createLoggerDestination(service: string, format: 'pretty' | 'json', log
 
   const lokiEndpoint = resolveLokiEndpoint();
   if (lokiEndpoint) {
+    const env = loadLogEnv();
     streams.push({
       stream: new LokiBatchStream(lokiEndpoint, {
         service,
-        environment: process.env['NODE_ENV'] ?? 'development',
+        environment: env.NODE_ENV,
       }),
     });
   }
@@ -238,13 +238,14 @@ function createLoggerDestination(service: string, format: 'pretty' | 'json', log
 }
 
 export function createServiceLogger(options: ServiceLoggerOptions): Logger {
+  const env = loadLogEnv();
   const format = resolveFormat(options.format);
   const logDirectory = options.logDirectory ?? path.join(process.cwd(), '.logs');
   const destination = createLoggerDestination(options.service, format, logDirectory);
 
   const logger = pino(
     {
-      level: options.level ?? process.env.LOG_LEVEL ?? 'info',
+      level: options.level ?? env.LOG_LEVEL ?? 'info',
       base: {
         service: options.service,
       },
@@ -273,6 +274,8 @@ export function createServiceLogger(options: ServiceLoggerOptions): Logger {
     destination,
   );
 
-  setDefaultLogger(logger);
+  if (options.setAsDefault) {
+    setDefaultLogger(logger);
+  }
   return logger;
 }

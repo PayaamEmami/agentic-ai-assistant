@@ -31,6 +31,7 @@ export class ResearchAgent implements Agent {
       toolCalls: [],
       delegateTo: null,
       requiresApproval: false,
+      usage: completion.usage,
     };
   }
 }

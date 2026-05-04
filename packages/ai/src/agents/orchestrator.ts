@@ -4,9 +4,6 @@ import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
   parseToolCalls,
   requiresApprovalForCalls,
-  shouldDelegateToCoding,
-  shouldDelegateToResearch,
-  shouldDelegateToTool,
   toChatMessages,
   toSystemPromptContext,
   toToolDefinitions,
@@ -21,7 +18,11 @@ export class OrchestratorAgent implements Agent {
   ) {}
 
   async execute(context: AgentContext): Promise<AgentResult> {
-    const systemPrompt = buildAgentSystemPrompt(this.role, toSystemPromptContext(context));
+    const systemPrompt =
+      buildAgentSystemPrompt(this.role, toSystemPromptContext(context)) +
+      '\n\nWhen another specialist should handle the request, start your reply with exactly one line in the form ' +
+      '<delegate role="research" />, <delegate role="coding" />, or <delegate role="tool" />. ' +
+      'If you can answer directly, do not emit a delegate tag.';
     const messages = [
       { role: 'system', content: systemPrompt } as const,
       ...toChatMessages(context.messageHistory),
@@ -35,19 +36,35 @@ export class OrchestratorAgent implements Agent {
     });
 
     const toolCalls = parseToolCalls(completion.toolCalls);
-    const delegateTo = shouldDelegateToCoding(context)
-      ? 'coding'
-      : shouldDelegateToTool(context) || toolCalls.length > 0
-        ? 'tool'
-        : shouldDelegateToResearch(context)
-          ? 'research'
-          : null;
+    const routed = stripDelegateDirective(completion.content);
+    const delegateTo = toolCalls.length > 0 ? 'tool' : routed.delegateTo;
 
     return {
-      response: completion.content,
+      response: routed.response,
       toolCalls,
       delegateTo,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),
+      usage: completion.usage,
     };
   }
+}
+
+function stripDelegateDirective(content: string | null): {
+  response: string | null;
+  delegateTo: AgentResult['delegateTo'];
+} {
+  if (!content) {
+    return { response: null, delegateTo: null };
+  }
+
+  const match = content.match(/^\s*<delegate role="(research|coding|tool)" \/>[\r\n]*/);
+  if (!match) {
+    return { response: content, delegateTo: null };
+  }
+
+  const response = content.slice(match[0].length).trim();
+  return {
+    response: response.length > 0 ? response : null,
+    delegateTo: match[1] as AgentResult['delegateTo'],
+  };
 }

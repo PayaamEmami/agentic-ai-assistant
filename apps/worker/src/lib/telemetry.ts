@@ -1,7 +1,7 @@
 import http from 'node:http';
-import { randomUUID } from 'node:crypto';
 import Redis from 'ioredis';
 import { Queue } from 'bullmq';
+import { QUEUE_NAMES, buildApiInstanceId, loadEnv, parseRedisUrl, type WorkerConfig } from '@aaa/config';
 import { pingDatabase } from '@aaa/db';
 import {
   createCounter,
@@ -13,7 +13,7 @@ import {
   renderMetrics,
 } from '@aaa/observability';
 
-const instanceId = process.env['HOSTNAME'] ?? randomUUID();
+const instanceId = buildApiInstanceId(loadEnv());
 
 export const workerJobCounter = createCounter({
   name: 'aaa_worker_jobs_total',
@@ -45,16 +45,13 @@ export const workerReadinessState = createGauge({
   labelNames: ['dependency'] as const,
 }) as ReturnType<typeof createGauge>;
 
-const QUEUE_NAMES = ['app-sync', 'ingestion', 'embedding', 'tool-execution'] as const;
-
-function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname,
-    port: parseInt(parsed.port || '6379', 10),
-    password: parsed.password || undefined,
-  };
-}
+const WORKER_QUEUE_NAMES = [
+  QUEUE_NAMES.appSync,
+  QUEUE_NAMES.ingestion,
+  QUEUE_NAMES.embedding,
+  QUEUE_NAMES.toolExecution,
+] as const;
+const queueSnapshots = new Map<string, Queue>();
 
 export async function initializeWorkerTelemetry(): Promise<void> {
   initializeMetrics('worker', instanceId);
@@ -79,37 +76,40 @@ async function pingRedis(redisUrl: string): Promise<void> {
   }
 }
 
-async function snapshotQueues(redisUrl: string): Promise<void> {
-  for (const queueName of QUEUE_NAMES) {
-    const queue = new Queue(queueName, {
+function getSnapshotQueue(queueName: string, redisUrl: string): Queue {
+  let queue = queueSnapshots.get(queueName);
+  if (!queue) {
+    queue = new Queue(queueName, {
       connection: parseRedisUrl(redisUrl),
     });
+    queueSnapshots.set(queueName, queue);
+  }
+  return queue;
+}
 
-    try {
-      const counts = await queue.getJobCounts(
-        'waiting',
-        'active',
-        'completed',
-        'failed',
-        'delayed',
-      );
-
-      workerQueueDepth.set({ queue: queueName, state: 'waiting' }, counts.waiting ?? 0);
-      workerQueueDepth.set({ queue: queueName, state: 'active' }, counts.active ?? 0);
-      workerQueueDepth.set({ queue: queueName, state: 'completed' }, counts.completed ?? 0);
-      workerQueueDepth.set({ queue: queueName, state: 'failed' }, counts.failed ?? 0);
-      workerQueueDepth.set({ queue: queueName, state: 'delayed' }, counts.delayed ?? 0);
-    } finally {
-      await queue.close();
-    }
+async function snapshotQueues(redisUrl: string): Promise<void> {
+  for (const queueName of WORKER_QUEUE_NAMES) {
+    const queue = getSnapshotQueue(queueName, redisUrl);
+    const counts = await queue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed');
+    workerQueueDepth.set({ queue: queueName, state: 'waiting' }, counts.waiting ?? 0);
+    workerQueueDepth.set({ queue: queueName, state: 'active' }, counts.active ?? 0);
+    workerQueueDepth.set({ queue: queueName, state: 'completed' }, counts.completed ?? 0);
+    workerQueueDepth.set({ queue: queueName, state: 'failed' }, counts.failed ?? 0);
+    workerQueueDepth.set({ queue: queueName, state: 'delayed' }, counts.delayed ?? 0);
   }
 }
 
+async function closeSnapshotQueues(): Promise<void> {
+  await Promise.all([...queueSnapshots.values()].map((queue) => queue.close()));
+  queueSnapshots.clear();
+}
+
 export async function startWorkerObservabilityServer(
-  redisUrl: string,
+  config: WorkerConfig,
 ): Promise<{ server: http.Server; stopPolling: () => void }> {
-  const host = process.env['WORKER_OBSERVABILITY_HOST'] ?? '0.0.0.0';
-  const port = parseInt(process.env['WORKER_OBSERVABILITY_PORT'] ?? '9464', 10);
+  const host = config.workerObservabilityHost;
+  const port = config.workerObservabilityPort;
+  const redisUrl = config.redisUrl;
 
   const server = http.createServer(async (req, res) => {
     if (!req.url) {
@@ -174,6 +174,9 @@ export async function startWorkerObservabilityServer(
 
   return {
     server,
-    stopPolling: () => clearInterval(interval),
+    stopPolling: () => {
+      clearInterval(interval);
+      void closeSnapshotQueues();
+    },
   };
 }

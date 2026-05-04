@@ -4,6 +4,7 @@ export interface KnowledgeSourceAuth {
   kind: KnowledgeSourceKind;
   credentials: Record<string, unknown>;
   settings?: Record<string, unknown>;
+  onRefresh?: (credentials: Record<string, unknown>) => Promise<void>;
 }
 
 export interface KnowledgeSourceItem {

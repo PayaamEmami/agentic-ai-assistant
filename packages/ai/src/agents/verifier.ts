@@ -19,6 +19,7 @@ export class VerifierAgent implements Agent {
         toolCalls: [],
         delegateTo: null,
         requiresApproval: false,
+        usage: undefined,
       };
     }
 
@@ -30,6 +31,7 @@ export class VerifierAgent implements Agent {
         delegateTo: null,
         requiresApproval: context.previousResult.requiresApproval,
         verification: context.previousResult.verification,
+        usage: context.previousResult.usage,
       };
     }
 
@@ -55,6 +57,7 @@ export class VerifierAgent implements Agent {
         delegateTo: null,
         requiresApproval: context.previousResult.requiresApproval,
         verification: context.previousResult.verification,
+        usage: mergeUsage(context.previousResult.usage, completion.usage),
       };
     }
 
@@ -69,8 +72,23 @@ export class VerifierAgent implements Agent {
         status: verified.status,
         issues: verified.issues,
       },
+      usage: mergeUsage(context.previousResult.usage, completion.usage),
     };
   }
+}
+
+function mergeUsage(
+  left?: AgentResult['usage'],
+  right?: AgentResult['usage'],
+): AgentResult['usage'] | undefined {
+  if (!left && !right) {
+    return undefined;
+  }
+  return {
+    promptTokens: (left?.promptTokens ?? 0) + (right?.promptTokens ?? 0),
+    completionTokens: (left?.completionTokens ?? 0) + (right?.completionTokens ?? 0),
+    totalTokens: (left?.totalTokens ?? 0) + (right?.totalTokens ?? 0),
+  };
 }
 
 function buildPreviousResultMessage(context: AgentContext): ChatMessage {

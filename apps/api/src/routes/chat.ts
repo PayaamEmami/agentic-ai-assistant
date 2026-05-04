@@ -1,7 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { SendMessageRequest, UpdateConversationRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { authenticateInternalService } from '../lib/internal-service.js';
 import { ChatService } from '../services/chat-service.js';
 
 interface ChatRouteOptions {
@@ -9,24 +8,7 @@ interface ChatRouteOptions {
 }
 
 export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions = {}) {
-  const chatService = options.chatService ?? new ChatService();
-
-  // Internal service-to-service routes. Authenticated via shared secret rather
-  // than a user bearer token. Scoped to its own plugin so the preHandler hook
-  // does not bleed into the user-authenticated routes below.
-  await app.register(async (internalApp) => {
-    internalApp.addHook('preHandler', authenticateInternalService);
-
-    internalApp.post<{ Params: { toolExecutionId: string } }>(
-      '/chat/internal/tool-executions/:toolExecutionId/continue',
-      async (request, reply) => {
-        const result = await chatService.continueAfterToolExecution(
-          request.params.toolExecutionId,
-        );
-        return reply.status(200).send(result);
-      },
-    );
-  });
+  const chatService = options.chatService ?? new ChatService({ config: app.config });
 
   // User-authenticated routes. All routes registered in this scope require a
   // valid user bearer token via the addHook below.

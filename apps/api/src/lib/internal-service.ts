@@ -1,14 +1,13 @@
-import crypto from 'node:crypto';
+import { timingSafeEqual } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
+import { buildApiInstanceId, buildApiInternalBaseUrl, loadInternalServiceEnv } from '@aaa/config';
 import { getLogger } from '@aaa/observability';
 import { AppError } from './errors.js';
 
-const INTERNAL_SERVICE_SECRET =
-  process.env['INTERNAL_SERVICE_SECRET'] ?? 'dev-internal-service-secret';
-const API_INSTANCE_ID =
-  process.env['API_INSTANCE_ID'] ?? process.env['HOSTNAME'] ?? crypto.randomUUID();
-const API_INTERNAL_BASE_URL =
-  process.env['API_INTERNAL_BASE_URL'] ?? `http://127.0.0.1:${process.env['API_PORT'] ?? '3001'}`;
+const env = loadInternalServiceEnv();
+const INTERNAL_SERVICE_SECRET = env.INTERNAL_SERVICE_SECRET;
+const API_INSTANCE_ID = buildApiInstanceId(env);
+const API_INTERNAL_BASE_URL = buildApiInternalBaseUrl(env);
 
 export function getInternalServiceSecret(): string {
   return INTERNAL_SERVICE_SECRET;
@@ -31,7 +30,7 @@ export function assertInternalServiceSecret(secret: string | null): void {
   const expectedBuffer = Buffer.from(INTERNAL_SERVICE_SECRET);
   if (
     providedBuffer.length !== expectedBuffer.length ||
-    !crypto.timingSafeEqual(providedBuffer, expectedBuffer)
+    !timingSafeEqual(providedBuffer, expectedBuffer)
   ) {
     throw new AppError(403, 'Internal authentication failed', 'INTERNAL_AUTH_INVALID');
   }

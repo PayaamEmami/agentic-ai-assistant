@@ -1,4 +1,5 @@
 import type { Job } from 'bullmq';
+import { loadWorkerConfig } from '@aaa/config';
 import {
   chunkRepository,
   appCapabilityConfigRepository,
@@ -6,20 +7,11 @@ import {
   embeddingRepository,
   sourceRepository,
 } from '@aaa/db';
-import { createKnowledgeSource, decryptCredentials } from '@aaa/knowledge-sources';
+import { createKnowledgeSource, decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
 import { SimpleChunkingService } from '@aaa/retrieval';
+import type { IngestionJobData } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 import { enqueueEmbeddingJob } from '../lib/job-queues.js';
-
-export interface IngestionJobData {
-  appCapabilityConfigId: string;
-  appKind: 'github' | 'google';
-  documentId: string;
-  sourceId: string;
-  userId: string;
-  externalId: string;
-  correlationId: string;
-}
 
 export async function handleIngestion(job: Job<IngestionJobData>): Promise<void> {
   const { appCapabilityConfigId, appKind, documentId, sourceId, externalId, correlationId } =
@@ -57,6 +49,12 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
     kind: appKind,
     credentials: decryptCredentials(config.encryptedCredentials),
     settings: config.settings,
+    onRefresh: async (credentials) => {
+      await appCapabilityConfigRepository.updateCredentials(
+        appCapabilityConfigId,
+        encryptCredentials(credentials),
+      );
+    },
   });
 
   const item = await knowledgeSource.read(externalId);
@@ -126,9 +124,10 @@ export async function handleIngestion(job: Job<IngestionJobData>): Promise<void>
   );
 
   if (chunks.length > 0) {
+    const config = loadWorkerConfig();
     await enqueueEmbeddingJob({
       chunkIds: chunks.map((chunk) => chunk.id),
-      model: process.env['OPENAI_EMBEDDING_MODEL'] ?? 'text-embedding-3-small',
+      model: config.openaiEmbeddingModel,
       correlationId,
     });
   }

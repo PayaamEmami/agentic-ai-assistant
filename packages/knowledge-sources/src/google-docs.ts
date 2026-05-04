@@ -1,3 +1,4 @@
+import { refreshGoogleAccessToken } from '@aaa/observability';
 import type {
   KnowledgeSource,
   KnowledgeSourceAuth,
@@ -30,6 +31,7 @@ function asString(value: unknown): string | undefined {
 export class GoogleKnowledgeSource implements KnowledgeSource {
   kind = 'google' as const;
   private credentials: GoogleDocsCredentials | null = null;
+  private onRefresh?: (credentials: Record<string, unknown>) => Promise<void>;
 
   async initialize(auth: KnowledgeSourceAuth): Promise<void> {
     const accessToken = asString(auth.credentials.accessToken);
@@ -42,6 +44,7 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       refreshToken: asString(auth.credentials.refreshToken),
       expiresAt: asString(auth.credentials.expiresAt),
     };
+    this.onRefresh = auth.onRefresh;
   }
 
   async list(
@@ -197,46 +200,10 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       throw new Error('Google knowledge source is not initialized');
     }
 
-    if (
-      !this.credentials.expiresAt ||
-      Date.parse(this.credentials.expiresAt) - Date.now() > 60_000
-    ) {
-      return this.credentials.accessToken;
-    }
-
-    if (!this.credentials.refreshToken) {
-      return this.credentials.accessToken;
-    }
-
-    const clientId = process.env['GOOGLE_CLIENT_ID'];
-    const clientSecret = process.env['GOOGLE_CLIENT_SECRET'];
-    if (!clientId || !clientSecret) {
-      return this.credentials.accessToken;
-    }
-
-    const response = await requestJson<{
-      access_token: string;
-      expires_in: number;
-      refresh_token?: string;
-    }>('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: this.credentials.refreshToken,
-        grant_type: 'refresh_token',
-      }),
+    this.credentials = await refreshGoogleAccessToken(this.credentials, async (nextCredentials) => {
+      this.credentials = nextCredentials;
+      await this.onRefresh?.(nextCredentials as unknown as Record<string, unknown>);
     });
-
-    this.credentials.accessToken = response.access_token;
-    this.credentials.expiresAt = new Date(Date.now() + response.expires_in * 1000).toISOString();
-    if (response.refresh_token) {
-      this.credentials.refreshToken = response.refresh_token;
-    }
-
     return this.credentials.accessToken;
   }
 

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { buildApiInstanceId, loadLogEnv } from '@aaa/config';
 import {
   createCounter,
   createGauge,
@@ -7,7 +7,7 @@ import {
   initializeTracing,
 } from '@aaa/observability';
 
-const instanceId = process.env['HOSTNAME'] ?? randomUUID();
+const instanceId = buildApiInstanceId(loadLogEnv());
 
 export async function initializeApiTelemetry(): Promise<void> {
   initializeMetrics('api', instanceId);

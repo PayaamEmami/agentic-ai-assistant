@@ -2,7 +2,6 @@ import crypto from 'node:crypto';
 import {
   appCapabilityConfigRepository,
   appSyncRunRepository,
-  getPool,
   sourceRepository,
 } from '@aaa/db';
 import {
@@ -78,8 +77,8 @@ interface GitHubRepositorySummary {
   selected: boolean;
 }
 
-function requireEnv(key: string, configuredValue?: string): string {
-  const value = configuredValue ?? process.env[key];
+function requireEnv(key: string, configuredValue: string | undefined): string {
+  const value = configuredValue;
   if (!value) {
     throw new AppError(500, `Missing required environment variable: ${key}`, 'CONFIG_MISSING');
   }
@@ -90,29 +89,29 @@ function normalizeRedirectBase(base: string): string {
   return base.endsWith('/') ? base : `${base}/`;
 }
 
-function buildGoogleRedirectUri(config?: AppConfig): string {
+function buildGoogleRedirectUri(config: AppConfig): string {
   return new URL(
     'callback',
     normalizeRedirectBase(
-      requireEnv('GOOGLE_APP_REDIRECT_URI_BASE', config?.googleAppRedirectUriBase),
+      requireEnv('GOOGLE_APP_REDIRECT_URI_BASE', config.googleAppRedirectUriBase),
     ),
   ).toString();
 }
 
-function buildGitHubRedirectUri(config?: AppConfig): string {
+function buildGitHubRedirectUri(config: AppConfig): string {
   return new URL(
     'callback',
     normalizeRedirectBase(
-      requireEnv('GITHUB_APP_REDIRECT_URI_BASE', config?.githubAppRedirectUriBase),
+      requireEnv('GITHUB_APP_REDIRECT_URI_BASE', config.githubAppRedirectUriBase),
     ),
   ).toString();
 }
 
-function getOAuthStateSecret(config?: AppConfig): string {
-  return config?.jwtSecret ?? process.env['JWT_SECRET'] ?? 'dev-insecure-jwt-secret';
+function getOAuthStateSecret(config: AppConfig): string {
+  return config.jwtSecret;
 }
 
-function signOAuthState(payload: OAuthStatePayload, config?: AppConfig): string {
+function signOAuthState(payload: OAuthStatePayload, config: AppConfig): string {
   const encodedPayload = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
   const signature = crypto
     .createHmac('sha256', getOAuthStateSecret(config))
@@ -121,7 +120,7 @@ function signOAuthState(payload: OAuthStatePayload, config?: AppConfig): string 
   return `${encodedPayload}.${signature}`;
 }
 
-function verifyOAuthState(state: string, config?: AppConfig): OAuthStatePayload {
+function verifyOAuthState(state: string, config: AppConfig): OAuthStatePayload {
   const [encodedPayload, signature] = state.split('.');
   if (!encodedPayload || !signature) {
     throw new AppError(400, 'Invalid app state', 'APP_INVALID_STATE');
@@ -161,7 +160,7 @@ function buildAppRedirect(
   message?: string,
   config?: AppConfig,
 ): string {
-  const baseUrl = config?.webBaseUrl ?? process.env['WEB_BASE_URL'] ?? 'http://localhost:3000';
+  const baseUrl = config?.webBaseUrl ?? 'http://localhost:3000';
   const url = new URL('/chat/apps', baseUrl);
   url.searchParams.set('app', kind);
   url.searchParams.set('appStatus', status);
@@ -171,10 +170,10 @@ function buildAppRedirect(
   return url.toString();
 }
 
-async function exchangeGoogleCode(code: string, config?: AppConfig) {
+async function exchangeGoogleCode(code: string, config: AppConfig) {
   const logger = getLogger({ component: 'app-service', provider: 'google' });
-  const clientId = requireEnv('GOOGLE_CLIENT_ID', config?.googleClientId);
-  const clientSecret = requireEnv('GOOGLE_CLIENT_SECRET', config?.googleClientSecret);
+  const clientId = requireEnv('GOOGLE_CLIENT_ID', config.googleClientId);
+  const clientSecret = requireEnv('GOOGLE_CLIENT_SECRET', config.googleClientSecret);
 
   const response = await fetchWithTelemetry(
     'https://oauth2.googleapis.com/token',
@@ -230,10 +229,10 @@ async function exchangeGoogleCode(code: string, config?: AppConfig) {
   }>;
 }
 
-async function exchangeGitHubCode(code: string, config?: AppConfig) {
+async function exchangeGitHubCode(code: string, config: AppConfig) {
   const logger = getLogger({ component: 'app-service', provider: 'github' });
-  const clientId = requireEnv('GITHUB_CLIENT_ID', config?.githubClientId);
-  const clientSecret = requireEnv('GITHUB_CLIENT_SECRET', config?.githubClientSecret);
+  const clientId = requireEnv('GITHUB_CLIENT_ID', config.githubClientId);
+  const clientSecret = requireEnv('GITHUB_CLIENT_SECRET', config.githubClientSecret);
 
   const response = await fetchWithTelemetry(
     'https://github.com/login/oauth/access_token',
@@ -412,10 +411,10 @@ function toCapabilitySummary(
 }
 
 export class AppService {
-  private readonly config?: AppConfig;
+  private readonly config: AppConfig;
 
-  constructor(options?: { config?: AppConfig }) {
-    this.config = options?.config;
+  constructor(config: AppConfig) {
+    this.config = config;
   }
 
   async listApps(userId: string): Promise<AppSummary[]> {
@@ -506,7 +505,7 @@ export class AppService {
 
     if (appKind === 'google') {
       const params = new URLSearchParams({
-        client_id: requireEnv('GOOGLE_CLIENT_ID', this.config?.googleClientId),
+        client_id: requireEnv('GOOGLE_CLIENT_ID', this.config.googleClientId),
         redirect_uri: buildGoogleRedirectUri(this.config),
         response_type: 'code',
         access_type: 'offline',
@@ -521,7 +520,7 @@ export class AppService {
     }
 
     const params = new URLSearchParams({
-      client_id: requireEnv('GITHUB_CLIENT_ID', this.config?.githubClientId),
+      client_id: requireEnv('GITHUB_CLIENT_ID', this.config.githubClientId),
       redirect_uri: buildGitHubRedirectUri(this.config),
       scope: 'repo workflow read:user',
       state,
@@ -692,22 +691,8 @@ export class AppService {
       throw new AppError(404, 'App is not connected', 'APP_NOT_FOUND');
     }
 
-    const pool = getPool();
-    const client = await pool.connect();
-
     try {
-      await client.query('BEGIN');
-      await client.query(
-        `DELETE FROM sources
-         WHERE user_id = $1 AND app_kind = $2`,
-        [userId, appKind],
-      );
-      await client.query(
-        `DELETE FROM app_capability_configs
-         WHERE user_id = $1 AND app_kind = $2`,
-        [userId, appKind],
-      );
-      await client.query('COMMIT');
+      await appCapabilityConfigRepository.disconnectApp(userId, appKind);
 
       getLogger({
         component: 'app-service',
@@ -722,7 +707,6 @@ export class AppService {
       );
       return { ok: true };
     } catch (error) {
-      await client.query('ROLLBACK');
       getLogger({
         component: 'app-service',
         userId,
@@ -736,8 +720,6 @@ export class AppService {
         'App disconnect failed',
       );
       throw error;
-    } finally {
-      client.release();
     }
   }
 

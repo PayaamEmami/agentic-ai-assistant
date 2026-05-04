@@ -199,11 +199,7 @@ export function Sidebar({
             ) : null}
             <button
               type="button"
-              onClick={
-                collapsed
-                  ? (onToggleDesktopCollapse ?? onCloseMobile)
-                  : (onToggleDesktopCollapse ?? onCloseMobile)
-              }
+                onClick={onToggleDesktopCollapse ?? onCloseMobile}
               className={`inline-flex items-center justify-center rounded-2xl border border-border-subtle text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground ${
                 collapsed ? 'h-11 w-11' : 'h-10 w-10'
               }`}
@@ -215,7 +211,7 @@ export function Sidebar({
           </div>
         </div>
       </div>
-      <nav className={`min-h-0 flex-1 overflow-y-auto ${collapsed ? 'p-2' : 'p-2'}`}>
+      <nav className="min-h-0 flex-1 overflow-y-auto p-2">
         {!collapsed && isConversationListCollapsed ? null : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p

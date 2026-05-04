@@ -1,29 +1,14 @@
 import { Queue } from 'bullmq';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, loadApiConfig, parseRedisUrl } from '@aaa/config';
 import { getLogContext, getLogger, withSpan } from '@aaa/observability';
-
-export interface ToolExecutionJobData {
-  toolExecutionId: string;
-  toolName: string;
-  input: Record<string, unknown>;
-  conversationId: string;
-  correlationId: string;
-}
+import type { ToolExecutionJobData } from '@aaa/shared';
 
 let queue: Queue<ToolExecutionJobData> | null = null;
 
-function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname,
-    port: parseInt(parsed.port || '6379', 10),
-    password: parsed.password || undefined,
-  };
-}
-
 function getQueue(): Queue<ToolExecutionJobData> {
   if (!queue) {
-    queue = new Queue<ToolExecutionJobData>('tool-execution', {
-      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    queue = new Queue<ToolExecutionJobData>(QUEUE_NAMES.toolExecution, {
+      connection: parseRedisUrl(loadApiConfig().redisUrl),
     });
   }
   return queue;
@@ -40,13 +25,12 @@ export async function enqueueToolExecutionJob(job: ToolExecutionJobData): Promis
   await withSpan(
     'queue.tool_execution.enqueue',
     {
-      'aaa.queue.name': 'tool-execution',
+      'aaa.queue.name': QUEUE_NAMES.toolExecution,
       'aaa.tool_execution.id': job.toolExecutionId,
     },
     () =>
       getQueue().add('execute-tool', payload, {
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.toolExecution],
       }),
   );
   getLogger({

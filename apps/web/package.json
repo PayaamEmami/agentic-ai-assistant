@@ -6,6 +6,7 @@
     "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
+    "test": "vitest run --config ../../vitest.config.mts apps/web/src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf .next"
   },
@@ -17,11 +18,12 @@
     "web-vitals": "^5.1.0"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
     "@types/node": "^20.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
     "typescript": "^5.5.0",
-    "@tailwindcss/postcss": "^4.0.0",
-    "tailwindcss": "^4.0.0"
+    "vitest": "^4.1.5"
   }
 }

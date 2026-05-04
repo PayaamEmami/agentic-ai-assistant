@@ -1,4 +1,7 @@
 export { createServiceLogger } from './logger.js';
+export { createHttpClient } from './http-client.js';
+export { refreshGoogleAccessToken } from './google-oauth.js';
+export type { RefreshableGoogleCredentials } from './google-oauth.js';
 export {
   addLogContext,
   getLogContext,

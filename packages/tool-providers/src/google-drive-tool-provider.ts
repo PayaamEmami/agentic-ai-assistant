@@ -1,3 +1,4 @@
+import { refreshGoogleAccessToken } from '@aaa/observability';
 import { requestJson, requestText } from './http.js';
 
 export interface GoogleDriveToolCredentials {
@@ -224,46 +225,10 @@ export class GoogleDriveToolProvider {
   }
 
   private async getAccessToken(): Promise<string> {
-    if (
-      !this.credentials.expiresAt ||
-      Date.parse(this.credentials.expiresAt) - Date.now() > 60_000
-    ) {
-      return this.credentials.accessToken;
-    }
-
-    if (!this.credentials.refreshToken) {
-      return this.credentials.accessToken;
-    }
-
-    const clientId = process.env['GOOGLE_CLIENT_ID'];
-    const clientSecret = process.env['GOOGLE_CLIENT_SECRET'];
-    if (!clientId || !clientSecret) {
-      return this.credentials.accessToken;
-    }
-
-    const response = await requestJson<{
-      access_token: string;
-      expires_in: number;
-      refresh_token?: string;
-    }>('https://oauth2.googleapis.com/token', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        client_id: clientId,
-        client_secret: clientSecret,
-        refresh_token: this.credentials.refreshToken,
-        grant_type: 'refresh_token',
-      }),
+    this.credentials = await refreshGoogleAccessToken(this.credentials, async (nextCredentials) => {
+      this.credentials = nextCredentials;
+      await this.onRefresh?.({ ...nextCredentials });
     });
-
-    this.credentials.accessToken = response.access_token;
-    this.credentials.expiresAt = new Date(Date.now() + response.expires_in * 1000).toISOString();
-    if (response.refresh_token) {
-      this.credentials.refreshToken = response.refresh_token;
-    }
-    await this.onRefresh?.({ ...this.credentials });
 
     return this.credentials.accessToken;
   }

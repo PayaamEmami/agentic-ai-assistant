@@ -1,29 +1,14 @@
 import { Queue } from 'bullmq';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl, loadApiConfig } from '@aaa/config';
 import { getLogContext, getLogger, withSpan } from '@aaa/observability';
-
-export interface AppSyncJobData {
-  appCapabilityConfigId: string;
-  userId: string;
-  appKind: 'github' | 'google';
-  capability: 'knowledge';
-  correlationId: string;
-}
+import type { AppSyncJobData } from '@aaa/shared';
 
 let appSyncQueue: Queue<AppSyncJobData> | null = null;
 
-function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname,
-    port: parseInt(parsed.port || '6379', 10),
-    password: parsed.password || undefined,
-  };
-}
-
 function getAppSyncQueue(): Queue<AppSyncJobData> {
   if (!appSyncQueue) {
-    appSyncQueue = new Queue<AppSyncJobData>('app-sync', {
-      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    appSyncQueue = new Queue<AppSyncJobData>(QUEUE_NAMES.appSync, {
+      connection: parseRedisUrl(loadApiConfig().redisUrl),
     });
   }
   return appSyncQueue;
@@ -40,13 +25,12 @@ export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
   await withSpan(
     'queue.app_sync.enqueue',
     {
-      'aaa.queue.name': 'app-sync',
+      'aaa.queue.name': QUEUE_NAMES.appSync,
       'aaa.app_capability_config.id': job.appCapabilityConfigId,
     },
     () =>
       getAppSyncQueue().add('sync-app', payload, {
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
       }),
   );
   getLogger({

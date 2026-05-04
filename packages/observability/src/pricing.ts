@@ -1,3 +1,5 @@
+import { loadOpenAiEnv } from '@aaa/config';
+
 export interface OpenAiUsageSample {
   model: string;
   promptTokens?: number;
@@ -20,7 +22,7 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
 };
 
 function parseOverrides(): Record<string, ModelPricing> {
-  const raw = process.env['OPENAI_PRICING_OVERRIDES_JSON'];
+  const raw = loadOpenAiEnv().OPENAI_PRICING_OVERRIDES_JSON;
   if (!raw) {
     return {};
   }

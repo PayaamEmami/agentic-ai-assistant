@@ -47,6 +47,7 @@ export class ToolAgent implements Agent {
       toolCalls,
       delegateTo: null,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),
+      usage: completion.usage,
     };
   }
 }

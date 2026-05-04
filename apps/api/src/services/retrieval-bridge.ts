@@ -6,7 +6,9 @@ import {
   embeddingRepository,
   sourceRepository,
 } from '@aaa/db';
+import type { AppConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
+import { isAbortError } from './chat-service-helpers.js';
 
 const DEFAULT_RESULT_LIMIT = 6;
 const MAX_RESULT_LIMIT = 20;
@@ -39,18 +41,6 @@ const QUERY_STOPWORDS = new Set([
 ]);
 const GOOGLE_APP_HINT = /\b(google drive|google docs?)\b/i;
 const GITHUB_APP_HINT = /\bgithub\b/i;
-
-function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return true;
-  }
-
-  if (error instanceof Error) {
-    return error.name === 'AbortError' || error.name === 'APIUserAbortError';
-  }
-
-  return false;
-}
 
 export interface RetrievalSearchResult {
   chunkId: string;
@@ -194,11 +184,15 @@ export class RetrievalBridge {
   private readonly modelProvider: OpenAIProvider | null;
   private readonly embeddingModel: string | undefined;
 
-  constructor(modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
-    const apiKey = process.env['OPENAI_API_KEY'];
+  constructor(
+    config: AppConfig,
+    modelProvider?: OpenAIProvider,
+    options?: { embeddingModel?: string },
+  ) {
     this.modelProvider =
-      modelProvider ?? (apiKey ? new OpenAIProvider(apiKey, process.env['OPENAI_MODEL']) : null);
-    this.embeddingModel = options?.embeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'];
+      modelProvider ??
+      new OpenAIProvider(config.openaiApiKey, config.openaiModel, config.openaiEmbeddingModel);
+    this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }
 
   async search(

@@ -7,6 +7,7 @@ import type {
   ConversationListItem,
   GitHubRepositoryDto,
   MemoryItemDto,
+  MemoryKindType,
   PersonalizationProfileDto,
 } from '@aaa/shared';
 
@@ -152,13 +153,7 @@ export type GitHubRepositorySummary = GitHubRepositoryDto;
 export type AppCapabilitySummary = AppCapabilitySummaryDto;
 export type AppSummary = AppSummaryDto;
 
-export type PersonalizationMemoryKind =
-  | 'fact'
-  | 'preference'
-  | 'relationship'
-  | 'project'
-  | 'person'
-  | 'instruction';
+export type PersonalizationMemoryKind = MemoryKindType;
 
 export type PersonalizationProfile = PersonalizationProfileDto;
 export type PersonalizationMemory = MemoryItemDto;

@@ -1,4 +1,96 @@
 import { z } from 'zod';
+import {
+  AppCapability,
+  AppKind,
+  AttachmentKind,
+  MemoryKind,
+  MessageRole,
+} from './enums.js';
+
+const AttachmentKindValues = [
+  AttachmentKind.Image,
+  AttachmentKind.Document,
+  AttachmentKind.Audio,
+  AttachmentKind.File,
+] as const;
+const AppKindValues = [AppKind.GitHub, AppKind.Google] as const;
+const AppCapabilityValues = [AppCapability.Knowledge, AppCapability.Tools] as const;
+const MemoryKindValues = [
+  MemoryKind.Fact,
+  MemoryKind.Preference,
+  MemoryKind.Relationship,
+  MemoryKind.Project,
+  MemoryKind.Person,
+  MemoryKind.Instruction,
+] as const;
+const MessageRoleValues = [
+  MessageRole.User,
+  MessageRole.Assistant,
+  MessageRole.System,
+  MessageRole.Tool,
+] as const;
+
+export const TextContentDto = z.object({
+  type: z.literal('text'),
+  text: z.string(),
+});
+export type TextContentDto = z.infer<typeof TextContentDto>;
+
+export const AttachmentRefContentDto = z.object({
+  type: z.literal('attachment_ref'),
+  attachmentId: z.string().uuid().optional(),
+  attachmentKind: z.enum(AttachmentKindValues).optional(),
+  mimeType: z.string().optional(),
+  fileName: z.string().optional(),
+  indexedForRag: z.boolean().optional(),
+  documentId: z.string().uuid().nullable().optional(),
+});
+export type AttachmentRefContentDto = z.infer<typeof AttachmentRefContentDto>;
+
+export const TranscriptContentDto = z.object({
+  type: z.literal('transcript'),
+  text: z.string(),
+  durationMs: z.number().finite().optional(),
+});
+export type TranscriptContentDto = z.infer<typeof TranscriptContentDto>;
+
+export const ToolResultContentDto = z.object({
+  type: z.literal('tool_result'),
+  toolExecutionId: z.string().uuid().optional(),
+  toolName: z.string().optional(),
+  status: z
+    .enum(['planned', 'pending', 'approved', 'rejected', 'running', 'completed', 'failed'])
+    .optional(),
+  detail: z.string().optional(),
+  output: z.unknown().optional(),
+});
+export type ToolResultContentDto = z.infer<typeof ToolResultContentDto>;
+
+export const CitationContentDto = z.object({
+  type: z.literal('citation'),
+  sourceId: z.string().uuid().optional(),
+  title: z.string().optional(),
+  excerpt: z.string().optional(),
+  uri: z.string().optional(),
+});
+export type CitationContentDto = z.infer<typeof CitationContentDto>;
+
+export const StatusContentDto = z.object({
+  type: z.literal('status'),
+  status: z.literal('interrupted'),
+  label: z.string().optional(),
+});
+export type StatusContentDto = z.infer<typeof StatusContentDto>;
+
+export const MessageContentDto = z.discriminatedUnion('type', [
+  TextContentDto,
+  AttachmentRefContentDto,
+  TranscriptContentDto,
+  ToolResultContentDto,
+  CitationContentDto,
+  StatusContentDto,
+]);
+export type MessageContentDto = z.infer<typeof MessageContentDto>;
 
 export const AuthCredentialsRequest = z.object({
   email: z.string().email(),
@@ -71,8 +163,8 @@ export type ConversationListResponse = z.infer<typeof ConversationListResponse>;
 
 export const MessageDto = z.object({
   id: z.string().uuid(),
-  role: z.enum(['user', 'assistant', 'system', 'tool']),
-  content: z.array(z.record(z.unknown())),
+  role: z.enum(MessageRoleValues),
+  content: z.array(MessageContentDto),
   createdAt: z.string().datetime(),
 });
 export type MessageDto = z.infer<typeof MessageDto>;
@@ -232,20 +324,13 @@ export const HealthResponse = z.object({
 });
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
-export const AppKindDto = z.enum(['github', 'google']);
+export const AppKindDto = z.enum(AppKindValues);
 export type AppKindDto = z.infer<typeof AppKindDto>;
 
-export const AppCapabilityDto = z.enum(['knowledge', 'tools']);
+export const AppCapabilityDto = z.enum(AppCapabilityValues);
 export type AppCapabilityDto = z.infer<typeof AppCapabilityDto>;
 
-export const MemoryKindDto = z.enum([
-  'fact',
-  'preference',
-  'relationship',
-  'project',
-  'person',
-  'instruction',
-]);
+export const MemoryKindDto = z.enum(MemoryKindValues);
 export type MemoryKindDto = z.infer<typeof MemoryKindDto>;
 
 export const AppStatusDto = z.enum(['pending', 'connected', 'failed']);

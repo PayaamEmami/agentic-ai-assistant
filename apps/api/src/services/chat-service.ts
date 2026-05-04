@@ -43,6 +43,7 @@ import { enqueueToolExecutionJob } from './tool-execution-queue.js';
 import { ChatRunRegistry } from './chat-run-registry.js';
 import { ChatEventPublisher } from './chat-event-publisher.js';
 import { getLatestUserRequestText, toAgentHistoryMessages } from './chat-history.js';
+import { buildConversationTitle, isAbortError } from './chat-service-helpers.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
@@ -50,27 +51,10 @@ const HISTORY_LIMIT = 20;
 const MAX_RETRIEVAL_CONTEXT = 6;
 const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'Review the pending approval request below to continue.';
-const MAX_CONVERSATION_TITLE_CHARS = 80;
 const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
 const USER_CANCELLED_REASON = 'user_cancelled' as const;
 
 type AgentToolCall = { name: string; arguments: Record<string, unknown> };
-
-function isAbortError(error: unknown): boolean {
-  if (error instanceof DOMException && error.name === 'AbortError') {
-    return true;
-  }
-
-  if (error instanceof Error) {
-    return (
-      error.name === 'AbortError' ||
-      error.name === 'APIUserAbortError' ||
-      error.message === 'Chat run interrupted'
-    );
-  }
-
-  return false;
-}
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) {
@@ -85,19 +69,6 @@ function toAgentToolContexts(tools: AvailableTool[]) {
     parameters: tool.parameters,
     requiresApproval: tool.requiresApproval,
   }));
-}
-
-function buildConversationTitle(content: string): string | undefined {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return undefined;
-  }
-
-  if (normalized.length <= MAX_CONVERSATION_TITLE_CHARS) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, MAX_CONVERSATION_TITLE_CHARS - 3).trimEnd()}...`;
 }
 
 function normalizeAssistantResponse(
@@ -148,8 +119,8 @@ export class ChatService {
   private readonly runRegistry: ChatRunRegistry;
   private readonly eventPublisher: ChatEventPublisher;
 
-  constructor(options?: {
-    config?: AppConfig;
+  constructor(options: {
+    config: AppConfig;
     retrievalBridge?: RetrievalBridge;
     modelProvider?: OpenAIProvider;
     agentOrchestrator?: AgentOrchestrator;
@@ -157,22 +128,22 @@ export class ChatService {
     runRegistry?: ChatRunRegistry;
     eventPublisher?: ChatEventPublisher;
   }) {
-    const config = options?.config;
+    const { config } = options;
     this.retrievalBridge =
-      options?.retrievalBridge ??
-      new RetrievalBridge(undefined, {
+      options.retrievalBridge ??
+      new RetrievalBridge(config, undefined, {
         embeddingModel: config?.openaiEmbeddingModel,
       });
     this.modelProvider =
-      options?.modelProvider ??
+      options.modelProvider ??
       new OpenAIProvider(
-        config?.openaiApiKey ?? process.env['OPENAI_API_KEY'] ?? '',
-        config?.openaiModel ?? process.env['OPENAI_MODEL'],
-        config?.openaiEmbeddingModel ?? process.env['OPENAI_EMBEDDING_MODEL'],
+        config.openaiApiKey,
+        config.openaiModel,
+        config.openaiEmbeddingModel,
       );
-    const model = config?.openaiModel ?? process.env['OPENAI_MODEL'];
+    const model = config.openaiModel;
     this.agentOrchestrator =
-      options?.agentOrchestrator ??
+      options.agentOrchestrator ??
       new AgentOrchestrator([
         new OrchestratorAgent(this.modelProvider, model),
         new ResearchAgent(this.modelProvider, model),
@@ -180,9 +151,9 @@ export class ChatService {
         new CodingAgent(this.modelProvider, model),
         new VerifierAgent(this.modelProvider, model),
       ]);
-    this.personalizationService = options?.personalizationService ?? new PersonalizationService();
-    this.runRegistry = options?.runRegistry ?? new ChatRunRegistry();
-    this.eventPublisher = options?.eventPublisher ?? new ChatEventPublisher();
+    this.personalizationService = options.personalizationService ?? new PersonalizationService();
+    this.runRegistry = options.runRegistry ?? new ChatRunRegistry();
+    this.eventPublisher = options.eventPublisher ?? new ChatEventPublisher();
   }
 
   async sendMessage(

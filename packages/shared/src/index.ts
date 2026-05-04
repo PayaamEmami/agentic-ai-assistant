@@ -58,6 +58,13 @@ export {
   UploadAttachmentResponse,
   ConversationListItem,
   ConversationListResponse,
+  MessageContentDto,
+  TextContentDto,
+  AttachmentRefContentDto,
+  TranscriptContentDto,
+  ToolResultContentDto,
+  CitationContentDto,
+  StatusContentDto,
   MessageDto,
   ConversationDetailResponse,
   UpdateConversationRequest,
@@ -133,3 +140,10 @@ export type {
 
 export type { NativeToolDefinition } from './tools.js';
 export { NATIVE_TOOL_DEFINITIONS } from './tools.js';
+export type {
+  AppSyncJobData,
+  IngestionJobData,
+  EmbeddingJobData,
+  ToolExecutionJobData,
+  ChatContinuationJobData,
+} from './queues.js';

@@ -20,6 +20,7 @@ import {
 import { decideRetrieval } from './retrieval-policy.js';
 import { createToolCall } from './tool-call-service.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
+import { buildConversationTitle } from './chat-service-helpers.js';
 
 const HISTORY_LIMIT = 12;
 const MAX_HISTORY_CHARS = 1_800;
@@ -84,19 +85,6 @@ function summarizeHistory(messages: DbMessage[]): string {
   }
 
   return joined.slice(joined.length - MAX_HISTORY_CHARS).trimStart();
-}
-
-function buildConversationTitle(content: string): string | undefined {
-  const normalized = content.replace(/\s+/g, ' ').trim();
-  if (!normalized) {
-    return undefined;
-  }
-
-  if (normalized.length <= 80) {
-    return normalized;
-  }
-
-  return `${normalized.slice(0, 77).trimEnd()}...`;
 }
 
 export function toRealtimeToolName(name: string): string {
@@ -219,20 +207,20 @@ export class VoiceService {
   private readonly personalizationService: PersonalizationService;
   private readonly retrievalBridge: RetrievalBridge;
   private readonly preparedTurns = new Map<string, PreparedTurnCache>();
-  private readonly config?: AppConfig;
+  private readonly config: AppConfig;
 
   constructor(
+    config: AppConfig,
     personalizationService?: PersonalizationService,
     retrievalBridge?: RetrievalBridge,
-    options?: { config?: AppConfig },
   ) {
     this.personalizationService = personalizationService ?? new PersonalizationService();
     this.retrievalBridge =
       retrievalBridge ??
-      new RetrievalBridge(undefined, {
-        embeddingModel: options?.config?.openaiEmbeddingModel,
+      new RetrievalBridge(config, undefined, {
+        embeddingModel: config.openaiEmbeddingModel,
       });
-    this.config = options?.config;
+    this.config = config;
   }
 
   private cachePreparedTurn(voiceTurnId: string, cache: PreparedTurnCache): void {
@@ -269,12 +257,8 @@ export class VoiceService {
       userId,
       conversationId: conversation.id,
     });
-    const model =
-      this.config?.openaiRealtimeModel ??
-      process.env['OPENAI_REALTIME_MODEL'] ??
-      'gpt-realtime-1.5';
-    const voice =
-      this.config?.openaiRealtimeVoice ?? process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
+    const model = this.config.openaiRealtimeModel;
+    const voice = this.config.openaiRealtimeVoice;
 
     getLogger({
       component: 'voice-service',
@@ -326,12 +310,8 @@ export class VoiceService {
       this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
       loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
-    const model =
-      this.config?.openaiRealtimeModel ??
-      process.env['OPENAI_REALTIME_MODEL'] ??
-      'gpt-realtime-1.5';
-    const voice =
-      this.config?.openaiRealtimeVoice ?? process.env['OPENAI_REALTIME_VOICE'] ?? 'marin';
+    const model = this.config.openaiRealtimeModel;
+    const voice = this.config.openaiRealtimeVoice;
     const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
     const sessionConfig = buildRealtimeSessionConfig(model, voice, instructions, availableTools);
     const formData = new FormData();
@@ -343,7 +323,7 @@ export class VoiceService {
       {
         method: 'POST',
         headers: {
-          Authorization: `Bearer ${this.config?.openaiApiKey ?? process.env['OPENAI_API_KEY'] ?? ''}`,
+          Authorization: `Bearer ${this.config.openaiApiKey}`,
         },
         body: formData,
       },

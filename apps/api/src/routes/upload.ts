@@ -7,7 +7,7 @@ interface UploadRouteOptions {
 }
 
 export async function uploadRoutes(app: FastifyInstance, options: UploadRouteOptions = {}) {
-  const uploadService = options.uploadService ?? new UploadService();
+  const uploadService = options.uploadService ?? new UploadService(app.config);
 
   app.addHook('preHandler', authenticate);
 

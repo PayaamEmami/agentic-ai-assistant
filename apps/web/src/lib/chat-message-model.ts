@@ -171,7 +171,7 @@ function normalizeContentBlock(raw: unknown): MessageContentBlock {
   if (type === 'status') {
     return {
       type,
-      status: raw.status === 'interrupted' ? 'interrupted' : 'interrupted',
+      status: 'interrupted',
       label: asString(raw.label),
     };
   }

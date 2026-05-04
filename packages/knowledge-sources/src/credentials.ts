@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { loadCredentialsEnv } from '@aaa/config';
 
 interface EncryptedPayload {
   iv: string;
@@ -7,12 +8,7 @@ interface EncryptedPayload {
 }
 
 function getEncryptionKey(): Buffer {
-  const secret = process.env['APP_CREDENTIALS_SECRET'];
-  if (!secret) {
-    throw new Error('APP_CREDENTIALS_SECRET environment variable is required');
-  }
-
-  return crypto.createHash('sha256').update(secret).digest();
+  return crypto.createHash('sha256').update(loadCredentialsEnv().APP_CREDENTIALS_SECRET).digest();
 }
 
 export function encryptCredentials(credentials: Record<string, unknown>): string {

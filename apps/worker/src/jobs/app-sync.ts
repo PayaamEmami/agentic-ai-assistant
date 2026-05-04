@@ -7,17 +7,10 @@ import {
   chunkRepository,
   embeddingRepository,
 } from '@aaa/db';
-import { createKnowledgeSource, decryptCredentials } from '@aaa/knowledge-sources';
+import { createKnowledgeSource, decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
+import type { AppSyncJobData } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
 import { enqueueIngestionJob } from '../lib/job-queues.js';
-
-export interface AppSyncJobData {
-  appCapabilityConfigId: string;
-  userId: string;
-  appKind: 'github' | 'google';
-  capability: 'knowledge';
-  correlationId: string;
-}
 
 export async function handleAppSync(job: Job<AppSyncJobData>): Promise<void> {
   const { appCapabilityConfigId, userId, appKind, capability, correlationId } = job.data;
@@ -70,6 +63,12 @@ export async function handleAppSync(job: Job<AppSyncJobData>): Promise<void> {
       kind: appKind,
       credentials: decryptCredentials(config.encryptedCredentials),
       settings: config.settings,
+      onRefresh: async (credentials) => {
+        await appCapabilityConfigRepository.updateCredentials(
+          appCapabilityConfigId,
+          encryptCredentials(credentials),
+        );
+      },
     });
 
     const result = await knowledgeSource.sync(config.lastSyncCursor ?? undefined);

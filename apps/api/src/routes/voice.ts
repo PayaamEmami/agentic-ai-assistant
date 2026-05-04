@@ -17,7 +17,7 @@ interface VoiceRouteOptions {
 }
 
 export async function voiceRoutes(app: FastifyInstance, options: VoiceRouteOptions = {}) {
-  const voiceService = options.voiceService ?? new VoiceService();
+  const voiceService = options.voiceService ?? new VoiceService(app.config);
 
   app.addHook('preHandler', authenticate);
 

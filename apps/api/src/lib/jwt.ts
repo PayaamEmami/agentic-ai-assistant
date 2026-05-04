@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { loadJwtEnv } from '@aaa/config';
 
 export interface AuthTokenClaims {
   sub: string;
@@ -28,12 +29,7 @@ function hmacSha256(input: string, secret: string): string {
 }
 
 function getJwtSecret(): string {
-  const configured = process.env['JWT_SECRET'];
-  if (configured && configured.trim().length > 0) {
-    return configured;
-  }
-
-  return 'dev-insecure-jwt-secret';
+  return loadJwtEnv().JWT_SECRET;
 }
 
 export function signAuthToken(

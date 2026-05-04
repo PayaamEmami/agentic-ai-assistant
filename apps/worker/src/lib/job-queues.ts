@@ -1,47 +1,16 @@
 import { Queue } from 'bullmq';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, loadWorkerConfig, parseRedisUrl } from '@aaa/config';
 import { getLogContext, getLogger, withSpan } from '@aaa/observability';
-
-export interface AppSyncJobData {
-  appCapabilityConfigId: string;
-  userId: string;
-  appKind: 'github' | 'google';
-  capability: 'knowledge';
-  correlationId: string;
-}
-
-export interface IngestionJobData {
-  appCapabilityConfigId: string;
-  appKind: 'github' | 'google';
-  documentId: string;
-  sourceId: string;
-  userId: string;
-  externalId: string;
-  correlationId: string;
-}
-
-export interface EmbeddingJobData {
-  chunkIds: string[];
-  model: string;
-  correlationId: string;
-}
+import type { AppSyncJobData, EmbeddingJobData, IngestionJobData } from '@aaa/shared';
 
 let appSyncQueue: Queue<AppSyncJobData> | null = null;
 let ingestionQueue: Queue<IngestionJobData> | null = null;
 let embeddingQueue: Queue<EmbeddingJobData> | null = null;
 
-function parseRedisUrl(url: string): { host: string; port: number; password?: string } {
-  const parsed = new URL(url);
-  return {
-    host: parsed.hostname,
-    port: parseInt(parsed.port || '6379', 10),
-    password: parsed.password || undefined,
-  };
-}
-
 function getAppSyncQueue(): Queue<AppSyncJobData> {
   if (!appSyncQueue) {
-    appSyncQueue = new Queue<AppSyncJobData>('app-sync', {
-      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    appSyncQueue = new Queue<AppSyncJobData>(QUEUE_NAMES.appSync, {
+      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
     });
   }
   return appSyncQueue;
@@ -49,8 +18,8 @@ function getAppSyncQueue(): Queue<AppSyncJobData> {
 
 function getIngestionQueue(): Queue<IngestionJobData> {
   if (!ingestionQueue) {
-    ingestionQueue = new Queue<IngestionJobData>('ingestion', {
-      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    ingestionQueue = new Queue<IngestionJobData>(QUEUE_NAMES.ingestion, {
+      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
     });
   }
   return ingestionQueue;
@@ -58,8 +27,8 @@ function getIngestionQueue(): Queue<IngestionJobData> {
 
 function getEmbeddingQueue(): Queue<EmbeddingJobData> {
   if (!embeddingQueue) {
-    embeddingQueue = new Queue<EmbeddingJobData>('embedding', {
-      connection: parseRedisUrl(process.env.REDIS_URL ?? 'redis://localhost:6379'),
+    embeddingQueue = new Queue<EmbeddingJobData>(QUEUE_NAMES.embedding, {
+      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
     });
   }
   return embeddingQueue;
@@ -76,13 +45,13 @@ export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
   await withSpan(
     'queue.app_sync.enqueue',
     {
-      'aaa.queue.name': 'app-sync',
+      'aaa.queue.name': QUEUE_NAMES.appSync,
       'aaa.app_capability_config.id': job.appCapabilityConfigId,
     },
     () =>
       getAppSyncQueue().add('sync-app', payload, {
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
+        jobId: `app-sync-${job.appCapabilityConfigId}`,
       }),
   );
   getLogger({
@@ -111,13 +80,13 @@ export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> 
   await withSpan(
     'queue.ingestion.enqueue',
     {
-      'aaa.queue.name': 'ingestion',
+      'aaa.queue.name': QUEUE_NAMES.ingestion,
       'aaa.document.id': job.documentId,
     },
     () =>
       getIngestionQueue().add('ingest-document', payload, {
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.ingestion],
+        jobId: `ingest-${job.documentId}`,
       }),
   );
   getLogger({
@@ -147,12 +116,11 @@ export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> 
   await withSpan(
     'queue.embedding.enqueue',
     {
-      'aaa.queue.name': 'embedding',
+      'aaa.queue.name': QUEUE_NAMES.embedding,
     },
     () =>
       getEmbeddingQueue().add('embed-chunks', payload, {
-        removeOnComplete: 100,
-        removeOnFail: 500,
+        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.embedding],
       }),
   );
   getLogger({

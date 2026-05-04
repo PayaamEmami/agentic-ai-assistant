@@ -60,6 +60,7 @@ export interface AppCapabilityConfigRepository {
   ): Promise<void>;
   delete(id: string): Promise<boolean>;
   deleteByUserAndApp(userId: string, appKind: string): Promise<number>;
+  disconnectApp(userId: string, appKind: string): Promise<void>;
 }
 
 function mapRow(row: AppCapabilityConfigRow): AppCapabilityConfig {
@@ -283,5 +284,30 @@ export const appCapabilityConfigRepository: AppCapabilityConfigRepository = {
       [userId, appKind],
     );
     return result.rowCount ?? 0;
+  },
+
+  async disconnectApp(userId: string, appKind: string): Promise<void> {
+    const pool = getPool();
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+      await client.query(
+        `DELETE FROM sources
+         WHERE user_id = $1 AND app_kind = $2`,
+        [userId, appKind],
+      );
+      await client.query(
+        `DELETE FROM app_capability_configs
+         WHERE user_id = $1 AND app_kind = $2`,
+        [userId, appKind],
+      );
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 };

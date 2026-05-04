@@ -77,7 +77,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post<{ Body: DevLoginBody }>('/auth/dev-login', async (request, reply) => {
-    if (process.env.NODE_ENV === 'production') {
+    if (app.config.nodeEnv === 'production') {
       throw new AppError(404, 'Not found', 'NOT_FOUND');
     }
 

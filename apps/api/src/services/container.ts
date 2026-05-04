@@ -24,13 +24,13 @@ export function buildApiServices(config: AppConfig): ApiServices {
     config.openaiEmbeddingModel,
   );
   const personalizationService = new PersonalizationService();
-  const retrievalBridge = new RetrievalBridge(modelProvider, {
+  const retrievalBridge = new RetrievalBridge(config, modelProvider, {
     embeddingModel: config.openaiEmbeddingModel,
   });
 
   return {
     approvalService: new ApprovalService(),
-    appService: new AppService({ config }),
+    appService: new AppService(config),
     chatService: new ChatService({
       config,
       modelProvider,
@@ -38,9 +38,9 @@ export function buildApiServices(config: AppConfig): ApiServices {
       retrievalBridge,
     }),
     personalizationService,
-    uploadService: new UploadService(modelProvider, {
+    uploadService: new UploadService(config, modelProvider, {
       embeddingModel: config.openaiEmbeddingModel,
     }),
-    voiceService: new VoiceService(personalizationService, retrievalBridge, { config }),
+    voiceService: new VoiceService(config, personalizationService, retrievalBridge),
   };
 }

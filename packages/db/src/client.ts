@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from 'pg';
+import { loadDatabaseEnv } from '@aaa/config';
 import { databaseQueryCounter, databaseQueryDurationMs, withSpan } from '@aaa/observability';
 
 const PATCHED = Symbol('aaa.db.query.patched');
@@ -76,14 +77,8 @@ let pool: Pool | null = null;
 
 export function getPool(): Pool {
   if (!pool) {
-    const connectionString = process.env['DATABASE_URL'];
-    if (!connectionString) {
-      throw new Error('DATABASE_URL environment variable is not set');
-    }
-    const poolSize = process.env['DATABASE_POOL_SIZE']
-      ? parseInt(process.env['DATABASE_POOL_SIZE'], 10)
-      : undefined;
-    pool = createPool(connectionString, poolSize);
+    const env = loadDatabaseEnv();
+    pool = createPool(env.DATABASE_URL, env.DATABASE_POOL_SIZE);
   }
   return pool;
 }

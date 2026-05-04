@@ -21,18 +21,25 @@ export class AgentOrchestrator {
     let currentAgent: Agent = orchestrator;
     let currentContext: AgentContext = context;
     let result!: AgentResult;
+    let accumulatedUsage: AgentResult['usage'];
     const maxDelegations = 5;
 
     for (let i = 0; i < maxDelegations; i++) {
       throwIfAborted(currentContext.signal);
       result = await currentAgent.execute(currentContext);
+      accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+      if (accumulatedUsage !== result.usage) {
+        result = { ...result, usage: accumulatedUsage };
+      }
       if (!result.delegateTo) {
         if (!verifier || currentAgent.role === 'verifier') {
           return result;
         }
 
         throwIfAborted(currentContext.signal);
-        return verifier.execute({ ...currentContext, previousResult: result });
+        const verified = await verifier.execute({ ...currentContext, previousResult: result });
+        const finalUsage = mergeUsage(accumulatedUsage, verified.usage);
+        return finalUsage === verified.usage ? verified : { ...verified, usage: finalUsage };
       }
 
       const next = this.agents.get(result.delegateTo);
@@ -44,4 +51,18 @@ export class AgentOrchestrator {
 
     throw new Error('Max delegation depth exceeded');
   }
+}
+
+function mergeUsage(
+  left?: AgentResult['usage'],
+  right?: AgentResult['usage'],
+): AgentResult['usage'] | undefined {
+  if (!left && !right) {
+    return undefined;
+  }
+  return {
+    promptTokens: (left?.promptTokens ?? 0) + (right?.promptTokens ?? 0),
+    completionTokens: (left?.completionTokens ?? 0) + (right?.completionTokens ?? 0),
+    totalTokens: (left?.totalTokens ?? 0) + (right?.totalTokens ?? 0),
+  };
 }

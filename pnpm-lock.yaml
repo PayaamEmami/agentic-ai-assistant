@@ -139,6 +139,9 @@ importers:
       '@aaa/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@aaa/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -208,6 +211,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../config
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
@@ -230,6 +236,9 @@ importers:
 
   packages/knowledge-sources:
     dependencies:
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../config
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
@@ -252,6 +261,9 @@ importers:
 
   packages/observability:
     dependencies:
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../config
       '@opentelemetry/api':
         specifier: ^1.9.0
         version: 1.9.1
@@ -315,6 +327,9 @@ importers:
       '@aaa/ai':
         specifier: workspace:*
         version: link:../ai
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../config
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability

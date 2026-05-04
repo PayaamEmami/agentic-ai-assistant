@@ -8,28 +8,11 @@ import {
 } from '@aaa/db';
 import { CodingTaskRunner, GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
-import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
+import type { ToolDoneEvent, ToolExecutionJobData, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
-
-export interface ToolExecutionJobData {
-  toolExecutionId: string;
-  toolName: string;
-  input: Record<string, unknown>;
-  conversationId: string;
-  correlationId: string;
-}
+import { enqueueChatContinuationJob } from '../lib/chat-continuation-queue.js';
 
 const TOOL_EVENT_CHANNEL = 'tool_execution_events';
-
-function getInternalApiBaseUrl(): string {
-  return (
-    process.env['INTERNAL_API_BASE_URL'] ?? process.env['API_BASE_URL'] ?? 'http://localhost:3001'
-  );
-}
-
-function getInternalServiceSecret(): string {
-  return process.env['INTERNAL_SERVICE_SECRET'] ?? 'dev-internal-service-secret';
-}
 
 async function publishToolEvent(
   event: ToolStartEvent | ToolProgressEvent | ToolDoneEvent,
@@ -480,33 +463,6 @@ async function executeTool(
   );
 }
 
-async function continueConversationAfterToolExecution(
-  toolExecutionId: string,
-  correlationId: string,
-): Promise<void> {
-  const response = await fetch(
-    `${getInternalApiBaseUrl()}/api/chat/internal/tool-executions/${toolExecutionId}/continue`,
-    {
-      method: 'POST',
-      headers: {
-        'x-internal-service-secret': getInternalServiceSecret(),
-        'x-correlation-id': correlationId,
-      },
-    },
-  );
-
-  if (!response.ok) {
-    const body = (await response.json().catch(() => ({}))) as {
-      error?: { message?: string };
-    };
-    throw new Error(
-      typeof body?.error?.message === 'string'
-        ? body.error.message
-        : `Chat continuation failed with status ${response.status}`,
-    );
-  }
-}
-
 export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promise<void> {
   const { toolExecutionId, toolName, conversationId, correlationId } = job.data;
   logger.info(
@@ -585,22 +541,11 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     };
     await publishToolEvent(doneEvent);
     if (execution.originMode !== 'voice') {
-      await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch(
-        (error) => {
-          logger.warn(
-            {
-              event: 'tool.execution.continuation_failed',
-              outcome: 'failure',
-              toolExecutionId,
-              toolName,
-              conversationId,
-              correlationId,
-              error,
-            },
-            'Failed to continue conversation after tool execution',
-          );
-        },
-      );
+      await enqueueChatContinuationJob({
+        toolExecutionId,
+        conversationId,
+        correlationId,
+      });
     } else {
       logger.info(
         {
@@ -647,19 +592,10 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   };
   await publishToolEvent(doneEvent);
   if (execution.originMode !== 'voice') {
-    await continueConversationAfterToolExecution(toolExecutionId, correlationId).catch((error) => {
-      logger.warn(
-        {
-          event: 'tool.execution.continuation_failed',
-          outcome: 'failure',
-          toolExecutionId,
-          toolName,
-          conversationId,
-          correlationId,
-          error,
-        },
-        'Failed to continue conversation after tool execution',
-      );
+    await enqueueChatContinuationJob({
+      toolExecutionId,
+      conversationId,
+      correlationId,
     });
   } else {
     logger.info(
