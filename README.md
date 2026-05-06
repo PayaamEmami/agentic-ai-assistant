@@ -1,108 +1,98 @@
 # Agentic AI Assistant
 
-A web-based AI assistant with chat, voice, multimodal input, RAG over connected data sources, native tool execution, and multi-agent orchestration. Built on OpenAI foundation models, running on AWS.
+Agentic AI Assistant is a self-hosted personal AI workspace with chat, voice, retrieval over connected data sources, persistent memory, and native tool execution.
 
-## Tech Stack
+The main idea behind the project is to make the assistant’s intelligence portable. Personalization, memory, connected data, and tool workflows live in the application rather than inside a single model provider’s ecosystem. That means the assistant can adopt newer or better models over time without forcing the user to rebuild their context, preferences, or workflow history. By keeping that context in user-owned storage, the assistant can provide a more durable personal layer without depending on any one vendor to preserve it.
 
-| Layer          | Technology                                     |
-| -------------- | ---------------------------------------------- |
-| Frontend       | Next.js 15, React 19, TypeScript, Tailwind CSS |
-| Backend        | Node.js, TypeScript, Fastify 5                 |
-| Database       | PostgreSQL 16 with pgvector                    |
-| Cache/Queue    | Redis 7, BullMQ                                |
-| Storage        | AWS S3                                         |
-| AI             | OpenAI API                                     |
-| Tools          | Native tool handlers, provider tools           |
-| Infrastructure | AWS EC2, Docker Compose, CloudFront            |
-| Monorepo       | pnpm workspaces                                |
+## Features
+
+- Chat interface with persistent conversation history
+- Voice mode with live transcription and spoken responses
+- Retrieval-augmented answers over connected data sources
+- Persistent personalization, preferences, and long-term memory
+- Native tool execution with approval flow for sensitive actions
+- Connected app model for separating knowledge access from tool access
+- Multi-agent orchestration for routing, research, tool use, and verification
+- Self-hosted deployment with owned database, backups, and local observability
 
 ## Architecture Overview
 
 ### Multi-Agent System
 
-The assistant uses a small multi-agent architecture:
+The assistant uses a small multi-agent architecture around each assistant turn:
 
-- **Orchestrator** — Routes requests, decides which agents to delegate to
-- **Research Agent** — Handles RAG queries and searches connected data sources
-- **Tool Agent** — Executes tools, handles external operations
-- **Verifier Agent** — Validates outputs, checks approval requirements
+- **Orchestrator** — Routes requests and decides whether to answer directly or delegate
+- **Research Agent** — Synthesizes answers from retrieved context
+- **Tool Agent** — Prepares tool calls for live reads, writes, and external operations
+- **Coding Agent** — Handles GitHub coding tasks through an isolated worker checkout
+- **Verifier Agent** — Checks the final output for safety, grounding, and approval requirements
 
-### Apps
+### Connected Apps
 
-Provider apps connect once per external provider and expose two internal capabilities:
+Provider apps connect once per external provider and expose separate internal capabilities:
 
 - **Knowledge** — Used for sync, indexing, and retrieval
 - **Tools** — Used for live tool access and side-effectful operations
 
-Those capabilities stay separate internally even when they share the same provider credentials.
+Those capabilities stay separate internally, even when they share credentials for the same provider.
 
 Current behavior:
 
 - GitHub and Google are the user-facing provider apps
-- Knowledge backs RAG over connected sources
-- Tools back native tools for live reads and writes
+- Knowledge capabilities back RAG over connected sources
+- Tool capabilities provide the credentials used by live GitHub and Google tool handlers
 
-### Tool System
+### Tool Execution
 
-The assistant exposes a unified tool surface that can include both:
+The assistant exposes a unified native tool surface to the model:
 
-- **Native tools** — Built-in functions with direct handlers; this is the primary tool path today
-- **Provider tools** — GitHub and Google tools backed by connected provider apps
+- **Built-in tools** — Local handlers such as time, sum, echo, and simulated external operations
+- **Provider-backed tools** — GitHub, Google Drive, Google Docs, and coding-task tools that execute through connected app credentials
 
 Tools requiring user confirmation go through an approval flow before execution.
 
-### Voice Support
+### Live Voice
 
 Voice mode supports an inline live conversation flow inside chat:
 
 1. Client opens a live voice session from the chat input
-2. Browser streams microphone audio to OpenAI Realtime over WebRTC
-3. OpenAI streams spoken audio and captions back in the same live session
+2. Browser streams microphone audio to a realtime voice session over WebRTC
+3. The voice session streams spoken audio and captions back to the browser
 4. Finalized user and assistant turns are persisted into the existing conversation history
 
 Current live voice behavior:
 
 - Automatic turn detection and interruption are enabled
-- Live voice is conversational-only in v1
-- Native tools, provider tools, approvals, and retrieval stay available in text chat
+- Live voice can invoke available tools during a spoken session
+- Tools that require approval pause until the user approves or rejects them in the UI
+- Retrieval context is prepared per voice turn and citations are attached when used
+
+## Tech Stack
+
+| Layer          | Technology                                          |
+| -------------- | --------------------------------------------------- |
+| Frontend       | Next.js 15, React 19, TypeScript, Tailwind CSS      |
+| Backend        | Node.js, TypeScript, Fastify 5                      |
+| Database       | PostgreSQL 16 with pgvector                         |
+| Cache/Queue    | Redis 7, BullMQ                                     |
+| Storage        | PostgreSQL attachments, AWS S3 for deploys/backups  |
+| AI             | Model provider gateway, embeddings, realtime voice  |
+| Tools          | Native tool handlers, provider tools                |
+| Infrastructure | AWS EC2, Docker Compose, Caddy, optional CloudFront |
+| Monorepo       | pnpm workspaces                                     |
 
 ## Infrastructure
 
-Production runs on a single AWS EC2 instance (in the `aaa-prod-app` Name tag) with everything containerised via [`docker/docker-compose.prod.yml`](docker/docker-compose.prod.yml):
+Production runs on AWS with a containerized web, API, worker, Postgres, and Redis stack:
 
-- **Caddy** — reverse proxy on port 80
-- **Postgres** (with `pgvector`) and **Redis** — stateful services with their data on a dedicated EBS volume
-- **api**, **web**, **worker** — application containers built from the Dockerfiles in [`docker/`](docker/)
-- **CloudFront** sits in front of the EC2 public DNS as the origin and terminates TLS
-- **S3** holds user uploads and the deploy artifacts produced by the deploy script
+- **EC2 + Docker Compose** run the application containers and stateful services
+- **Postgres with pgvector** stores app data, attachments, memory, and embeddings
+- **Redis + BullMQ** handle background jobs and queues
+- **S3** stores deployment artifacts and database backups
+- **Caddy** reverse-proxies web and API traffic; custom-domain Caddy TLS or CloudFront can provide public HTTPS
+- **GitHub Actions** runs CI and deploys changes from `main`
 
-### One-time provisioning (`infra/aws-ec2/`)
-
-```bash
-pnpm aws:provision
-```
-
-See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for what this creates (EC2 + EIP + EBS + S3 bucket), required environment variables, logging, backups, rollback, and restore steps.
-
-### Manual deploys
-
-```bash
-pnpm aws:deploy
-```
-
-This builds and pushes the three production images to ECR (locally — manual deploys assume Docker is installed and authenticated to your registry), uploads only the rendered `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to the S3 deploy bucket, and uses SSM Run Command to pull the images, run DB migrations, and restart containers on the EC2 instance. In practice, manual deploys are rarely needed — pushing to `main` runs the same flow on GitHub Actions.
-
-### Continuous deployment
-
-Pushes to `main` automatically deploy via [`.github/workflows/cd.yml`](.github/workflows/cd.yml):
-
-1. Reuse the [`ci.yml`](.github/workflows/ci.yml) gates (format, lint, typecheck, test)
-2. Assume an IAM role in AWS via GitHub OIDC (no long-lived AWS keys in GitHub)
-3. Build the `aaa-api`, `aaa-worker`, and `aaa-web` ARM64 images in parallel on `ubuntu-24.04-arm` runners with buildx + GitHub Actions layer cache, and push them to ECR tagged with the commit SHA
-4. Run `scripts/deploy-aws.sh`, which uploads the deployment manifest (`.env.production`, compose file, Caddyfile) to S3 and triggers an SSM Run Command on the EC2 instance to `docker pull`, run migrations, and `docker compose up -d`
-5. Invalidate the CloudFront cache so the new web bundle is served immediately
-
-Deploys are serialised by a `concurrency: deploy-prod` group so two pushes can't race.
+See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, backup, rollback, and restore details.
 
 ## Repository Structure
 
@@ -137,7 +127,7 @@ Deploys are serialised by a `concurrency: deploy-prod` group so two pushes can't
 - **Node.js** >= 20
 - **pnpm** >= 9
 - **Docker** and **Docker Compose** (for local services)
-- **OpenAI API key**
+- **Model provider API key**
 - **WSL or Git Bash on Windows** recommended for local app startup
 
 ### Clone The Repository
@@ -178,25 +168,7 @@ That command handles the local startup flow for you.
 
 ### Local Observability
 
-`pnpm dev:local` also starts the local observability stack. Once it is up, you can inspect it here:
-
-- App UI: `http://localhost:3000`
-- API: `http://localhost:3001`
-- API health: `http://localhost:3001/health`
-- API liveness: `http://localhost:3001/health/live`
-- API readiness: `http://localhost:3001/health/ready`
-- API metrics: `http://localhost:3001/metrics`
-- Worker liveness: `http://localhost:9464/health/live`
-- Worker readiness: `http://localhost:9464/health/ready`
-- Worker metrics: `http://localhost:9464/metrics`
-- Grafana dashboards: `http://localhost:3005`
-- Prometheus: `http://localhost:9090`
-- Loki: `http://localhost:3100`
-- Tempo: `http://localhost:3200`
-
-Grafana is provisioned with the local Prometheus, Loki, and Tempo datasources plus the repo dashboards under `docker/observability/grafana/dashboards/`.
-
-When you start the stack via `pnpm dev:local`, the observability containers use baked-in config images instead of host bind mounts, and the host-run API/worker processes push logs directly to Loki on `http://localhost:3100`.
+`pnpm dev:local` also starts the local observability stack with Grafana, Prometheus, Loki, and Tempo. App, API, worker, metrics, and dashboard endpoints are exposed locally for debugging and development.
 
 ## License
 

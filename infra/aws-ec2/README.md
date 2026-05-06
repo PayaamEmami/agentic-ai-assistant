@@ -1,23 +1,22 @@
 # AWS EC2 Deployment
 
-This is the AWS deployment path for running Agentic AI Assistant as a single-user app.
+This is the production deployment path for Agentic AI Assistant.
 
-It intentionally avoids Kubernetes, RDS, ElastiCache, NAT gateways, and load balancers. The stack runs on one EC2 instance with Docker Compose, a persistent EBS data volume, a private S3 bucket, and basic Docker JSON logs with rotation.
+The stack intentionally stays small: one EC2 instance, Docker Compose, a persistent EBS data volume, a private S3 bucket, and Docker JSON logs with rotation. It does not use Kubernetes, RDS, ElastiCache, NAT gateways, or load balancers.
 
 ## Resource Naming
 
-All AWS resources created by this path default to the `aaa-` prefix and `us-west-1`.
+Defaults:
 
-Default names:
-
+- Region: `us-west-1`
+- Resource prefix: `aaa`
 - EC2 instance: `aaa-prod-app`
 - Security group: `aaa-prod-sg`
-- IAM role: `aaa-prod-ec2-role`
-- Instance profile: `aaa-prod-instance-profile`
+- IAM role/profile: `aaa-prod-ec2-role` / `aaa-prod-instance-profile`
 - S3 bucket: `aaa-uploads-prod-<account-id>-us-west-1`
 - Tags: `Application=aaa-agentic-ai-assistant`
 
-Override with environment variables only when needed:
+Override defaults only when needed:
 
 ```bash
 export AWS_PROFILE=default
@@ -26,14 +25,14 @@ export AAA_RESOURCE_PREFIX=aaa
 export ENVIRONMENT=prod
 ```
 
-## Provision AWS Resources
+## Provision
 
 Prerequisites:
 
-- AWS CLI authenticated to the target account.
-- A default VPC in `us-west-1`.
+- AWS CLI authenticated to the target account
+- A default VPC in `us-west-1`
 
-Run:
+Create the EC2 instance, security group, IAM role/profile, EBS volume, and S3 bucket:
 
 ```bash
 bash infra/aws-ec2/provision.sh
@@ -50,14 +49,7 @@ export KEY_NAME=your-existing-ec2-keypair
 bash infra/aws-ec2/provision.sh
 ```
 
-The script prints the EC2 public DNS name, default app URL, and S3 bucket. By default the app is served over HTTP on the EC2 public DNS name. For a publicly-trusted HTTPS URL you have two supported options described in [Public HTTPS](#public-https) below: a custom domain (Caddy + Let's Encrypt) or a CloudFront distribution in front of EC2.
-
-For a stable URL, allocate an Elastic IP and associate it to the instance so the public DNS does not change on stop/start:
-
-```bash
-alloc_id="$(aws ec2 allocate-address --region us-west-1 --domain vpc --query AllocationId --output text)"
-aws ec2 associate-address --region us-west-1 --instance-id <instance-id> --allocation-id "$alloc_id"
-```
+The script prints the EC2 public DNS name, default app URL, and S3 bucket. For a stable custom-domain setup, associate an Elastic IP with the instance before configuring DNS.
 
 ## Configure Secrets
 
@@ -76,21 +68,21 @@ Generate strong secrets locally:
 openssl rand -hex 32
 ```
 
-Keep `.env` and `/opt/aaa/app/.env.production` out of git. This deployment path stores secrets on the instance; moving them to SSM Parameter Store or Secrets Manager is a later upgrade, not required for v1.
+Keep `.env` and `/opt/aaa/app/.env.production` out of git. This deployment path stores secrets on the instance; SSM Parameter Store or Secrets Manager can replace that later.
 
 ## Container Registry (ECR)
 
-The three application images (`aaa-api`, `aaa-worker`, `aaa-web`) are built in GitHub Actions and stored in ECR. The EC2 instance only pulls them. Create the ECR repositories once:
+The three application images (`aaa-api`, `aaa-worker`, `aaa-web`) are built in GitHub Actions and stored in ECR. Create the repositories once:
 
 ```bash
 bash infra/aws-ec2/ecr-setup.sh
 ```
 
-This is idempotent. It creates three repositories with a lifecycle policy that keeps the last 10 tagged images and expires untagged images after 1 day. It prints the registry URI which you must set as the `ECR_REGISTRY` environment variable locally and as a GitHub repository Variable for CD.
+The script is idempotent and prints the registry URI. Set that value as `ECR_REGISTRY` locally and as a GitHub repository variable for CD.
 
 ## Deploy
 
-The deploy script uploads only the rendered `.env.production`, `docker-compose.prod.yml`, and `Caddyfile.prod` to S3 and runs the deployment through AWS Systems Manager, so SSH is not required.
+The deploy script renders `.env.production`, uploads the deployment manifest to S3, and runs the remote deployment through AWS Systems Manager. SSH is not required.
 
 ```bash
 export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
@@ -99,23 +91,15 @@ export IMAGE_TAG="$(git rev-parse HEAD)"
 bash scripts/deploy-aws.sh
 ```
 
-For manual deploys you must also push the three images yourself before running the script, since EC2 only pulls. The simplest way is to run the same `docker buildx build --push` commands the CD workflow runs, or to trigger CD by pushing to `main`. By default the public app URL is `http://<ec2-public-dns>` served by Caddy on port 80. See [Public HTTPS](#public-https) for the two supported ways to get a publicly-trusted HTTPS URL. To use a custom domain with a publicly-trusted Let's Encrypt certificate, set:
+For manual deploys, push the three images before running the script. In normal use, push to `main` and let GitHub Actions build, push, deploy, and invalidate CloudFront.
+
+To deploy with a custom domain and Caddy-managed TLS:
 
 ```bash
 export PUBLIC_BASE_URL=https://assistant.example.com
 export CADDY_SITE_ADDRESS=assistant.example.com
 bash scripts/deploy-aws.sh
 ```
-
-Remote deploy steps:
-
-1. Download the deployment manifest (`.env.production`, compose file, Caddyfile) to `/opt/aaa/app/releases/<deployment-id>`.
-2. Update `/opt/aaa/app/current`.
-3. Authenticate to ECR with `aws ecr get-login-password`.
-4. `docker compose pull` the images tagged with the current commit SHA.
-5. Run database migrations with the `migrate` Compose profile.
-6. Start `proxy`, `web`, `api`, `worker`, `postgres`, and `redis` with `docker compose up -d`.
-7. Prune dangling images and trim old releases (keep the 5 most recent).
 
 Verify:
 
@@ -125,20 +109,18 @@ curl -fsS http://<ec2-public-dns>/health
 
 ## Public HTTPS
 
-The EC2 public hostname (`*.compute.amazonaws.com`) cannot get a publicly-trusted TLS certificate, so HTTPS at that hostname is not an option without a workaround. Two supported workarounds:
+The EC2 public hostname (`*.compute.amazonaws.com`) cannot get a publicly trusted TLS certificate. Use one of these:
 
-1. **Custom domain + Caddy + Let's Encrypt.** Bring a domain you own, point an A record at the instance's Elastic IP, and set `PUBLIC_BASE_URL` and `CADDY_SITE_ADDRESS` accordingly when running `scripts/deploy-aws.sh`. Caddy will fetch a publicly-trusted certificate automatically.
+1. **Custom domain + Caddy + Let's Encrypt.** Point an A record at the instance Elastic IP, then deploy with `PUBLIC_BASE_URL` and `CADDY_SITE_ADDRESS`.
 
-2. **CloudFront in front of EC2.** Create a CloudFront distribution with the EC2 public DNS as a custom HTTP origin. CloudFront serves the public on `https://<id>.cloudfront.net` with an Amazon-issued, publicly-trusted certificate. Caddy on EC2 stays HTTP-only on port 80, and CloudFront proxies to it over the AWS backbone. CloudFront supports WebSockets, so the chat and voice paths still work. After creating the distribution, redeploy with the CloudFront URL:
+2. **CloudFront in front of EC2.** Create a CloudFront distribution with the EC2 public DNS as a custom HTTP origin, then redeploy with the CloudFront URL:
 
    ```bash
    export PUBLIC_BASE_URL=https://<id>.cloudfront.net
    bash scripts/deploy-aws.sh
    ```
 
-   Use the `CachingDisabled` and `AllViewer` AWS-managed policies on the default cache behavior so headers, cookies, and query strings are forwarded to the origin and nothing is cached. Allowed HTTP methods must include `GET`, `HEAD`, `OPTIONS`, `PUT`, `POST`, `PATCH`, `DELETE`. Optionally, restrict the EC2 security group on port 80 to AWS's `com.amazonaws.global.cloudfront.origin-facing` managed prefix list so traffic can only reach the origin through CloudFront.
-
-Also check the web app, WebSocket-backed chat or voice behavior, worker-driven jobs, and any S3-backed upload flows you use.
+For CloudFront, use the `CachingDisabled` and `AllViewer` AWS-managed policies, allow all HTTP methods, and confirm WebSocket-backed chat/voice still work. Optionally restrict EC2 port 80 to AWS's `com.amazonaws.global.cloudfront.origin-facing` managed prefix list.
 
 ## Rollback
 
@@ -154,7 +136,7 @@ If a migration changed the database, restore from a backup instead of only rolli
 
 ## Logging
 
-The production Compose file sets `LOG_FORMAT=json` and disables local `.logs` files. Docker keeps structured container logs with rotation:
+Production uses Docker JSON logs with rotation:
 
 ```bash
 sudo docker logs aaa-api --since 1h
@@ -163,31 +145,29 @@ sudo docker logs aaa-web --since 1h
 sudo docker compose --env-file /opt/aaa/app/.env.production -f /opt/aaa/app/current/docker/docker-compose.prod.yml ps
 ```
 
-Skip Prometheus, Grafana, Loki, Tempo, and alerts for the first deployment. Add CloudWatch Logs later if reading logs through SSM or Docker becomes inconvenient.
+CloudWatch Logs can be added later if Docker logs through SSM become inconvenient.
 
 ## Backups
 
-Create an on-demand Postgres backup and upload it to S3:
+Create an on-demand Postgres backup:
 
 ```bash
 export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
 bash scripts/backup-aws-db.sh
 ```
 
-Restore from a backup:
+Restore:
 
 ```bash
 export BACKUP_S3_URI=s3://aaa-uploads-prod-<account-id>-us-west-1/db-backups/aaa-postgres-20260101T000000Z.dump.gz
 bash scripts/restore-aws-db.sh
 ```
 
-For ongoing maintenance, schedule the backup script from your local machine, GitHub Actions, or an EventBridge Scheduler target that invokes an SSM command. Periodically test a restore before you rely on the backups.
-
-To install a daily backup timer on the EC2 instance:
+Install a daily backup timer on the EC2 instance:
 
 ```bash
 export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
 pnpm aws:backup:timer
 ```
 
-The timer runs `/usr/local/bin/aaa-backup-db` daily at `03:15` UTC by default. Override with `BACKUP_ON_CALENDAR=04:30` before installing.
+The timer runs `/usr/local/bin/aaa-backup-db` daily at `03:15` UTC by default. Override with `BACKUP_ON_CALENDAR=04:30` before installing. Periodically test restores before relying on backups.
