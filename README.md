@@ -34,22 +34,12 @@ Provider apps connect once per external provider and expose separate internal ca
 - **Knowledge** — Used for sync, indexing, and retrieval
 - **Tools** — Used for live tool access and side-effectful operations
 
-Those capabilities stay separate internally, even when they share credentials for the same provider.
-
-Current behavior:
-
-- GitHub and Google are the user-facing provider apps
-- Knowledge capabilities back RAG over connected sources
-- Tool capabilities provide the credentials used by live GitHub and Google tool handlers
-
 ### Tool Execution
 
 The assistant exposes a unified native tool surface to the model:
 
 - **Built-in tools** — Local handlers such as time, sum, echo, and simulated external operations
 - **Provider-backed tools** — GitHub, Google Drive, Google Docs, and coding-task tools that execute through connected app credentials
-
-Tools requiring user confirmation go through an approval flow before execution.
 
 ### Live Voice
 
