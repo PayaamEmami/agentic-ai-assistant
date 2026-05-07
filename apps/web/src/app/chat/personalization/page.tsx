@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api, type PersonalizationMemory, type PersonalizationMemoryKind } from '@/lib/api-client';
 
@@ -77,16 +77,6 @@ export default function PersonalizationPage() {
   useEffect(() => {
     void loadPersonalization();
   }, []);
-
-  const groupedMemories = useMemo(
-    () =>
-      MEMORY_KIND_ORDER.map((kind) => ({
-        kind,
-        label: MEMORY_KIND_LABELS[kind],
-        items: memories.filter((memory) => memory.kind === kind),
-      })),
-    [memories],
-  );
 
   const handleSaveProfile = async () => {
     setError(null);
@@ -187,245 +177,207 @@ export default function PersonalizationPage() {
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-surface-elevated">
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-          <section>
-            <div className="flex items-center justify-between gap-4">
-              <h1 className="text-3xl font-semibold text-foreground">Personalization</h1>
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+          <section className="border-b border-border pb-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-foreground-inactive">
+                  Settings
+                </p>
+                <h1 className="text-2xl font-semibold text-foreground">Personalization</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground-muted">
+                  A few durable details the assistant can use across chats.
+                </p>
+              </div>
               <Link
                 href="/chat"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle bg-surface text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
                 aria-label="Close personalization"
                 title="Close"
               >
                 <CloseIcon />
               </Link>
             </div>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-              Manage profile details and memories for this workspace.
-            </p>
           </section>
 
           {error ? (
-            <div className="rounded-2xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
+            <div className="rounded-xl border border-error/30 bg-error/10 px-4 py-3 text-sm text-error">
               {error}
             </div>
           ) : null}
 
           {isLoading ? (
-            <div className="rounded-3xl border border-border bg-surface p-6 text-sm text-foreground-muted">
-              Loading personalization...
-            </div>
+            <div className="py-10 text-sm text-foreground-muted">Loading personalization...</div>
           ) : (
             <>
-              <section className="rounded-3xl border border-border bg-surface p-6">
-                <div className="flex flex-col gap-6">
+              <section className="space-y-5">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Profile</h2>
-                    <p className="mt-2 text-sm text-foreground-muted">
-                      These settings shape the assistant&apos;s default writing style and tone
-                      whenever it chats with you.
+                    <h2 className="text-base font-medium text-foreground">Profile</h2>
+                    <p className="mt-1 text-sm text-foreground-muted">
+                      Default style guidance for future replies.
                     </p>
                   </div>
+                  <button
+                    onClick={() => void handleSaveProfile()}
+                    disabled={isSavingProfile}
+                    className="self-start rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {isSavingProfile ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
 
-                  <div className="grid gap-4 lg:grid-cols-2">
-                    <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">Writing style</span>
-                      <textarea
-                        value={writingStyle}
-                        onChange={(event) => setWritingStyle(event.target.value)}
-                        rows={4}
-                        maxLength={500}
-                        placeholder="Concise, direct, and technical."
-                        className="rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
-                      />
-                    </label>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm text-foreground-muted">Writing style</span>
+                    <textarea
+                      value={writingStyle}
+                      onChange={(event) => setWritingStyle(event.target.value)}
+                      rows={4}
+                      maxLength={500}
+                      placeholder="Concise, direct, and technical."
+                      className="resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-foreground-inactive focus:border-accent"
+                    />
+                  </label>
 
-                    <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">Tone preference</span>
-                      <textarea
-                        value={tonePreference}
-                        onChange={(event) => setTonePreference(event.target.value)}
-                        rows={4}
-                        maxLength={500}
-                        placeholder="Warm, collaborative, and low-jargon."
-                        className="rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-xs text-foreground-inactive">
-                      Leave a field blank to clear it.
-                    </p>
-                    <button
-                      onClick={() => void handleSaveProfile()}
-                      disabled={isSavingProfile}
-                      className="rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      {isSavingProfile ? 'Saving...' : 'Save profile'}
-                    </button>
-                  </div>
+                  <label className="flex flex-col gap-2">
+                    <span className="text-sm text-foreground-muted">Tone preference</span>
+                    <textarea
+                      value={tonePreference}
+                      onChange={(event) => setTonePreference(event.target.value)}
+                      rows={4}
+                      maxLength={500}
+                      placeholder="Warm, collaborative, and low-jargon."
+                      className="resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-foreground-inactive focus:border-accent"
+                    />
+                  </label>
                 </div>
               </section>
 
-              <section className="rounded-3xl border border-border bg-surface p-6">
-                <div className="flex flex-col gap-6">
+              <section className="border-t border-border pt-6">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
-                    <h2 className="text-lg font-semibold text-foreground">Add memory</h2>
-                    <p className="mt-2 text-sm text-foreground-muted">
-                      Save details the assistant should keep in mind. Each memory has a fixed
-                      category in this first version.
+                    <h2 className="text-base font-medium text-foreground">Memories</h2>
+                    <p className="mt-1 text-sm text-foreground-muted">
+                      {memories.length === 0
+                        ? 'No saved memories yet.'
+                        : `${memories.length} saved ${memories.length === 1 ? 'memory' : 'memories'}.`}
                     </p>
                   </div>
 
-                  <div className="grid gap-4 lg:grid-cols-[220px_1fr]">
-                    <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">Category</span>
-                      <select
-                        value={newMemoryKind}
-                        onChange={(event) =>
-                          setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
-                        }
-                        className="rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
-                      >
-                        {MEMORY_KIND_ORDER.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {MEMORY_KIND_LABELS[kind]}
-                          </option>
-                        ))}
-                      </select>
+                  <div className="flex items-center gap-2">
+                    <label className="sr-only" htmlFor="new-memory-kind">
+                      Category
                     </label>
+                    <select
+                      id="new-memory-kind"
+                      value={newMemoryKind}
+                      onChange={(event) =>
+                        setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
+                      }
+                      className="h-9 rounded-xl border border-border bg-surface-elevated px-3 text-sm text-foreground outline-none transition focus:border-accent"
+                    >
+                      {MEMORY_KIND_ORDER.map((kind) => (
+                        <option key={kind} value={kind}>
+                          {MEMORY_KIND_LABELS[kind]}
+                        </option>
+                      ))}
+                    </select>
 
-                    <label className="flex flex-col gap-2">
-                      <span className="text-sm font-medium text-foreground">Content</span>
-                      <textarea
-                        value={newMemoryContent}
-                        onChange={(event) => setNewMemoryContent(event.target.value)}
-                        rows={4}
-                        maxLength={2000}
-                        placeholder="I prefer concrete examples over abstract explanations."
-                        className="rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
-                      />
-                    </label>
-                  </div>
-
-                  <div className="flex justify-end">
                     <button
                       onClick={() => void handleCreateMemory()}
                       disabled={isCreatingMemory || !newMemoryContent.trim()}
-                      className="rounded-2xl bg-accent px-4 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      className="h-9 rounded-xl bg-accent px-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {isCreatingMemory ? 'Saving...' : 'Add memory'}
+                      {isCreatingMemory ? 'Saving...' : 'Add'}
                     </button>
                   </div>
                 </div>
-              </section>
 
-              <section className="rounded-3xl border border-border bg-surface p-6">
-                <div className="flex flex-col gap-6">
-                  <div>
-                    <h2 className="text-lg font-semibold text-foreground">Saved memories</h2>
-                    <p className="mt-2 text-sm text-foreground-muted">
-                      Memories are grouped by category. You can edit the text or remove entries
-                      here.
+                <label className="mt-4 block">
+                  <span className="sr-only">New memory</span>
+                  <textarea
+                    value={newMemoryContent}
+                    onChange={(event) => setNewMemoryContent(event.target.value)}
+                    rows={3}
+                    maxLength={2000}
+                    placeholder="Add something the assistant should remember..."
+                    className="w-full resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-foreground-inactive focus:border-accent"
+                  />
+                </label>
+
+                <div className="mt-6 divide-y divide-border">
+                  {memories.length === 0 ? (
+                    <p className="py-8 text-sm text-foreground-muted">
+                      Add your first memory to help future conversations feel more tailored.
                     </p>
-                  </div>
+                  ) : (
+                    memories.map((memory) => {
+                      const isEditing = editingMemoryId === memory.id;
+                      const isPending = pendingMemoryId === memory.id;
 
-                  <div className="grid gap-4 xl:grid-cols-2">
-                    {groupedMemories.map((group) => (
-                      <div
-                        key={group.kind}
-                        className="rounded-2xl border border-border bg-surface-elevated p-4"
-                      >
-                        <div className="flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-semibold text-foreground">{group.label}</h3>
-                          <span className="rounded-full bg-surface-input px-2.5 py-1 text-xs text-foreground-muted">
-                            {group.items.length}
-                          </span>
-                        </div>
-
-                        <div className="mt-4 space-y-3">
-                          {group.items.length === 0 ? (
-                            <p className="rounded-2xl border border-dashed border-border-subtle px-4 py-4 text-sm text-foreground-inactive">
-                              No saved {group.label.toLowerCase()} yet.
-                            </p>
-                          ) : (
-                            group.items.map((memory) => {
-                              const isEditing = editingMemoryId === memory.id;
-                              const isPending = pendingMemoryId === memory.id;
-
-                              return (
-                                <div
-                                  key={memory.id}
-                                  className="rounded-2xl border border-border-subtle bg-surface px-4 py-4"
+                      return (
+                        <div key={memory.id} className="py-4">
+                          {isEditing ? (
+                            <div className="space-y-3">
+                              <textarea
+                                value={editingMemoryContent}
+                                onChange={(event) => setEditingMemoryContent(event.target.value)}
+                                rows={4}
+                                maxLength={2000}
+                                disabled={isPending}
+                                className="w-full resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition focus:border-accent"
+                              />
+                              <div className="flex items-center justify-end gap-2">
+                                <button
+                                  onClick={cancelEditingMemory}
+                                  disabled={isPending}
+                                  className="rounded-xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
                                 >
-                                  {isEditing ? (
-                                    <div className="space-y-3">
-                                      <textarea
-                                        value={editingMemoryContent}
-                                        onChange={(event) =>
-                                          setEditingMemoryContent(event.target.value)
-                                        }
-                                        rows={4}
-                                        maxLength={2000}
-                                        disabled={isPending}
-                                        className="w-full rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm text-foreground outline-none transition focus:border-accent"
-                                      />
-                                      <div className="flex items-center justify-end gap-2">
-                                        <button
-                                          onClick={cancelEditingMemory}
-                                          disabled={isPending}
-                                          className="rounded-2xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
-                                        >
-                                          Cancel
-                                        </button>
-                                        <button
-                                          onClick={() => void handleSaveMemory(memory.id)}
-                                          disabled={isPending || !editingMemoryContent.trim()}
-                                          className="rounded-2xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-                                        >
-                                          {isPending ? 'Saving...' : 'Save'}
-                                        </button>
-                                      </div>
-                                    </div>
-                                  ) : (
-                                    <div className="space-y-3">
-                                      <p className="text-sm leading-6 text-foreground">
-                                        {memory.content}
-                                      </p>
-                                      <div className="flex items-center justify-between gap-3">
-                                        <p className="text-xs text-foreground-inactive">
-                                          Updated {new Date(memory.updatedAt).toLocaleString()}
-                                        </p>
-                                        <div className="flex items-center gap-2">
-                                          <button
-                                            onClick={() => beginEditingMemory(memory)}
-                                            disabled={isPending}
-                                            className="rounded-2xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
-                                          >
-                                            Edit
-                                          </button>
-                                          <button
-                                            onClick={() => void handleDeleteMemory(memory)}
-                                            disabled={isPending}
-                                            className="rounded-2xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
-                                          >
-                                            {isPending ? 'Deleting...' : 'Delete'}
-                                          </button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              );
-                            })
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={() => void handleSaveMemory(memory.id)}
+                                  disabled={isPending || !editingMemoryContent.trim()}
+                                  className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  {isPending ? 'Saving...' : 'Save'}
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-inactive">
+                                <span className="font-medium text-foreground-muted">
+                                  {MEMORY_KIND_LABELS[memory.kind]}
+                                </span>
+                                <span>Updated {new Date(memory.updatedAt).toLocaleString()}</span>
+                              </div>
+                              <p className="text-sm leading-6 text-foreground">{memory.content}</p>
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => beginEditingMemory(memory)}
+                                  disabled={isPending}
+                                  className="rounded-lg px-2 py-1 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  onClick={() => void handleDeleteMemory(memory)}
+                                  disabled={isPending}
+                                  className="rounded-lg px-2 py-1 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                                >
+                                  {isPending ? 'Deleting...' : 'Delete'}
+                                </button>
+                              </div>
+                            </div>
                           )}
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      );
+                    })
+                  )}
                 </div>
               </section>
             </>

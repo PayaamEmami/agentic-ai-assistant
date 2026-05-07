@@ -223,11 +223,13 @@ export function AppManager() {
   };
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {appKind && appStatus ? (
         <p
-          className={`rounded-xl px-3 py-2 text-xs ${
-            appStatus === 'connected' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'
+          className={`rounded-xl border px-3 py-2 text-sm ${
+            appStatus === 'connected'
+              ? 'border-success/30 bg-success/10 text-success'
+              : 'border-error/30 bg-error/10 text-error'
           }`}
         >
           {appLabel(appKind)} {appStatus === 'connected' ? 'connected.' : 'failed.'}
@@ -236,13 +238,15 @@ export function AppManager() {
       ) : null}
 
       {actionError ? (
-        <p className="rounded-xl bg-error/10 px-3 py-2 text-xs text-error">{actionError}</p>
+        <p className="rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
+          {actionError}
+        </p>
       ) : null}
 
       {loading ? (
-        <p className="text-xs text-foreground-muted">Loading apps...</p>
+        <p className="py-10 text-sm text-foreground-muted">Loading apps...</p>
       ) : (
-        <div className="space-y-4">
+        <div className="divide-y divide-border">
           {apps.map((app) => {
             const selectedRepoCount = app.selectedRepoCount ?? 0;
             const isConnected = app.hasCredentials;
@@ -251,23 +255,31 @@ export function AppManager() {
               (app.kind === 'github' && selectedRepoCount === 0);
 
             return (
-              <section
-                key={app.kind}
-                className="rounded-3xl border border-border bg-surface-overlay p-4"
-              >
-                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <section key={app.kind} className="py-6 first:pt-0">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="max-w-2xl">
-                    <p className="text-lg font-semibold text-foreground">{app.displayName}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-base font-medium text-foreground">{app.displayName}</p>
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-xs ${
+                          isConnected
+                            ? 'bg-success/10 text-success'
+                            : 'bg-surface-elevated text-foreground-muted'
+                        }`}
+                      >
+                        {isConnected ? 'Connected' : 'Not connected'}
+                      </span>
+                    </div>
                     <p className="mt-1 text-sm text-foreground-muted">
                       {providerDescription(app.kind)}
                     </p>
                     {app.lastError ? (
-                      <p className="mt-3 rounded-xl bg-error/10 px-3 py-2 text-xs text-error">
+                      <p className="mt-3 rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
                         {app.lastError}
                       </p>
                     ) : null}
                     {isConnected ? (
-                      <p className="mt-3 text-xs text-foreground-muted">
+                      <p className="mt-3 text-sm text-foreground-muted">
                         Knowledge: {statusLabel(app.knowledge.status)}. Tools:{' '}
                         {statusLabel(app.tools.status)}.
                       </p>
@@ -276,7 +288,7 @@ export function AppManager() {
                     isConnected &&
                     app.knowledge.status === 'connected' &&
                     selectedRepoCount === 0 ? (
-                      <p className="mt-3 rounded-xl bg-warning/10 px-3 py-2 text-xs text-warning">
+                      <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
                         Select at least one repository before syncing GitHub knowledge.
                       </p>
                     ) : null}
@@ -285,7 +297,7 @@ export function AppManager() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => void connectApp(app.kind)}
-                      className="rounded-xl bg-accent px-3 py-2 text-xs font-medium text-white hover:bg-accent-hover"
+                      className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
                     >
                       {isConnected ? 'Reconnect' : 'Connect'}
                     </button>
@@ -293,16 +305,16 @@ export function AppManager() {
                       <button
                         onClick={() => void syncApp(app.kind)}
                         disabled={syncDisabled}
-                        className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground hover:bg-surface-hover disabled:opacity-50"
+                        className="rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
                       >
-                        Sync knowledge
+                        Sync
                       </button>
                     ) : null}
                     {isConnected ? (
                       <button
                         onClick={() => void disconnectApp(app.kind)}
                         disabled={disconnectingKind === app.kind}
-                        className="rounded-xl border border-border-subtle px-3 py-2 text-xs font-medium text-foreground-muted hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                        className="rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
                       >
                         {disconnectingKind === app.kind ? 'Disconnecting...' : 'Disconnect'}
                       </button>
@@ -312,11 +324,11 @@ export function AppManager() {
 
                 {isConnected ? (
                   <>
-                    <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
                       {[app.knowledge, app.tools].map((capability) => (
                         <div
                           key={capability.capability}
-                          className="rounded-2xl border border-border bg-surface px-4 py-3"
+                          className="border-t border-border pt-4"
                         >
                           <p className="text-sm font-medium text-foreground">
                             {capability.capability === 'knowledge' ? 'Knowledge' : 'Tools'}
@@ -324,7 +336,7 @@ export function AppManager() {
                           <p className="mt-1 text-xs text-foreground-muted">
                             {capabilityDescription(capability)}
                           </p>
-                          <div className="mt-3 grid gap-2 text-xs text-foreground-muted sm:grid-cols-2">
+                          <div className="mt-3 grid gap-2 text-xs text-foreground-muted">
                             <p>Status: {statusLabel(capability.status)}</p>
                             <p>Last sync: {formatTimestamp(capability.lastSyncAt)}</p>
                             <p>
@@ -336,7 +348,7 @@ export function AppManager() {
                             </p>
                           </div>
                           {capability.lastError ? (
-                            <p className="mt-3 rounded-xl bg-error/10 px-3 py-2 text-xs text-error">
+                            <p className="mt-3 rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">
                               {capability.lastError}
                             </p>
                           ) : null}
@@ -344,17 +356,17 @@ export function AppManager() {
                       ))}
                     </div>
 
-                    <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                      <div className="min-w-0 rounded-2xl border border-border bg-surface px-4 py-3">
+                    <div className="mt-5 grid gap-6 border-t border-border pt-5 xl:grid-cols-2">
+                      <div className="min-w-0">
                         <p className="text-sm font-medium text-foreground">Recent Sync Runs</p>
                         {app.knowledge.recentSyncRuns.length === 0 ? (
                           <p className="mt-2 text-xs text-foreground-muted">No sync history yet.</p>
                         ) : (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-3 divide-y divide-border">
                             {app.knowledge.recentSyncRuns.map((run) => (
                               <div
                                 key={run.id}
-                                className="min-w-0 rounded-xl border border-border px-3 py-2 text-xs"
+                                className="min-w-0 py-3 text-xs first:pt-0 last:pb-0"
                               >
                                 <div className="flex items-start justify-between gap-3">
                                   <p className="font-medium text-foreground">{run.status}</p>
@@ -378,7 +390,7 @@ export function AppManager() {
                         )}
                       </div>
 
-                      <div className="min-w-0 rounded-2xl border border-border bg-surface px-4 py-3">
+                      <div className="min-w-0">
                         <p className="break-words text-sm font-medium text-foreground">
                           Indexed Sources ({app.knowledge.searchableSourceCount}/
                           {app.knowledge.totalSourceCount})
@@ -388,11 +400,11 @@ export function AppManager() {
                             No indexed sources yet.
                           </p>
                         ) : (
-                          <div className="mt-3 space-y-2">
+                          <div className="mt-3 divide-y divide-border">
                             {app.knowledge.recentSources.map((source) => (
                               <div
                                 key={source.id}
-                                className="min-w-0 rounded-xl border border-border px-3 py-2 text-xs"
+                                className="min-w-0 py-3 text-xs first:pt-0 last:pb-0"
                               >
                                 <p className="break-words font-medium text-foreground">
                                   {source.title}
@@ -412,7 +424,7 @@ export function AppManager() {
                     </div>
 
                     {app.kind === 'github' ? (
-                      <div className="mt-4 rounded-2xl border border-border bg-surface px-4 py-3">
+                      <div className="mt-5 border-t border-border pt-5">
                         <p className="text-sm font-medium text-foreground">
                           Repositories ({selectedRepoIds.length} selected)
                         </p>
@@ -421,11 +433,11 @@ export function AppManager() {
                             No repositories loaded yet.
                           </p>
                         ) : (
-                          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                          <div className="mt-3 max-h-56 divide-y divide-border overflow-y-auto pr-1">
                             {githubRepositories.map((repository) => (
                               <label
                                 key={repository.id}
-                                className="flex items-start gap-2 rounded-xl border border-border px-3 py-2 text-xs"
+                                className="flex items-start gap-2 py-3 text-xs first:pt-0 last:pb-0"
                               >
                                 <input
                                   type="checkbox"
@@ -455,7 +467,7 @@ export function AppManager() {
                         <button
                           onClick={() => void saveGitHubRepositories()}
                           disabled={savingRepos}
-                          className="mt-3 rounded-xl bg-surface-input px-3 py-2 text-xs font-medium text-foreground ring-1 ring-border-subtle hover:bg-surface-hover disabled:opacity-50"
+                          className="mt-3 rounded-xl bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:opacity-50"
                         >
                           {savingRepos ? 'Saving...' : 'Save repositories'}
                         </button>

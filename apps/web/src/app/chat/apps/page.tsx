@@ -3,29 +3,32 @@ import { AppManager } from '@/components/app-manager';
 
 export default function AppsPage() {
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-surface-elevated">
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-          <section>
-            <div className="flex items-center justify-between gap-4">
-              <h1 className="text-3xl font-semibold text-foreground">Apps</h1>
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">
+          <section className="border-b border-border pb-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-[0.2em] text-foreground-inactive">
+                  Settings
+                </p>
+                <h1 className="text-2xl font-semibold text-foreground">Apps</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground-muted">
+                  Connect providers for tools, retrieval, and workspace context.
+                </p>
+              </div>
               <Link
                 href="/chat"
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle bg-surface text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
                 aria-label="Close apps"
                 title="Close"
               >
                 <CloseIcon />
               </Link>
             </div>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-foreground-muted">
-              Connect provider apps and environments for this workspace.
-            </p>
           </section>
 
-          <section className="rounded-3xl border border-border bg-surface p-6">
-            <AppManager />
-          </section>
+          <AppManager />
         </div>
       </div>
     </div>
