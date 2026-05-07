@@ -35,3 +35,24 @@ label:has(input:not(:disabled)),
 [role='button']:not([aria-disabled='true']) {
   cursor: pointer;
 }
+
+@keyframes voice-word-fade {
+  from {
+    opacity: 0;
+    transform: translateY(0.2em);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.voice-word-fade {
+  animation: voice-word-fade 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-word-fade {
+    animation: none;
+  }
+}

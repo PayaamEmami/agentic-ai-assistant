@@ -20,11 +20,16 @@ export type TranscriptContentBlock = TranscriptContent;
 export type StatusContentBlock = StatusContent;
 export type MessageContentBlock = MessageContent;
 
+export interface ChatMessagePresentation {
+  voiceStreaming?: boolean;
+}
+
 export interface ChatMessage {
   id: string;
   role: ChatRole;
   content: MessageContentBlock[];
   createdAt: string;
+  presentation?: ChatMessagePresentation;
 }
 
 export interface ConversationSummary {
@@ -320,9 +325,10 @@ export function createFallbackAssistantMessage(messageId: string): ChatMessage {
 export function createOptimisticVoiceMessage(
   role: 'user' | 'assistant',
   text: string,
+  options: { id?: string; voiceStreaming?: boolean } = {},
 ): ChatMessage {
-  return {
-    id: `local-voice-${role}-${createClientId()}`,
+  const message: ChatMessage = {
+    id: options.id ?? `local-voice-${role}-${createClientId()}`,
     role,
     content: [
       {
@@ -332,6 +338,12 @@ export function createOptimisticVoiceMessage(
     ],
     createdAt: new Date().toISOString(),
   };
+
+  if (options.voiceStreaming) {
+    message.presentation = { voiceStreaming: true };
+  }
+
+  return message;
 }
 
 export function patchMessagesToolResult(

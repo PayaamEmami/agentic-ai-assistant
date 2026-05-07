@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
-import { ApprovalCard } from './approval-card';
 
 const INDEXABLE_MIME_TYPES = new Set(['application/json', 'application/xml']);
 
@@ -26,7 +25,7 @@ export function InputBar() {
     interruptMessage,
     uploadAttachment,
     startLiveVoiceSession,
-    appendVoiceMessage,
+    upsertVoiceMessage,
     syncConversationState,
     subscribeToolEvents,
     pendingApprovals,
@@ -40,7 +39,7 @@ export function InputBar() {
 
   const liveVoice = useLiveVoiceSession({
     startSession: startLiveVoiceSession,
-    appendVoiceMessage,
+    upsertVoiceMessage,
     syncConversation: syncConversationState,
     subscribeToolEvents,
   });
@@ -126,15 +125,6 @@ export function InputBar() {
     setAttachments((previous) => previous.filter((attachment) => attachment.id !== attachmentId));
   };
 
-  const voiceApprovalsByToolExecution = useMemo(() => {
-    const pendingExecutionIds = new Set(
-      liveVoice.pendingToolCalls
-        .filter((call) => call.status === 'requires_approval')
-        .map((call) => call.toolExecutionId),
-    );
-    return pendingApprovals.filter((approval) => pendingExecutionIds.has(approval.toolExecutionId));
-  }, [liveVoice.pendingToolCalls, pendingApprovals]);
-
   const micDisabledReason = useMemo(() => {
     if (loading.isSendingMessage) {
       return 'End the current text response before starting voice.';
@@ -151,77 +141,33 @@ export function InputBar() {
   if (liveVoice.isActive) {
     return (
       <section className="border-t border-border bg-surface-elevated p-4">
-        <div className="rounded-3xl border border-border bg-surface px-4 py-4 shadow-sm">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-foreground">Live Voice</p>
-              <p className="mt-1 text-xs text-foreground-muted">{liveVoice.connectionLabel}</p>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  const partial = liveVoice.userCaption.trim();
-                  void liveVoice.stop();
-                  if (partial) {
-                    setMessage((current) => (current.trim().length > 0 ? current : partial));
-                  }
-                  setFocusRequestId((value) => value + 1);
-                }}
-                className="rounded-full border border-border bg-surface-input px-4 py-2 text-xs font-medium text-foreground transition-colors hover:bg-surface-hover"
-              >
-                Switch to text
-              </button>
-              <button
-                type="button"
-                onClick={() => void liveVoice.stop()}
-                className="rounded-full border border-error/30 bg-error/10 px-4 py-2 text-xs font-medium text-error transition-colors hover:bg-error/20"
-              >
-                End voice mode
-              </button>
-            </div>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <div className="rounded-2xl border border-border-subtle bg-surface-input p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
-                You
-              </p>
-              <p className="mt-2 min-h-16 text-sm text-foreground">
-                {liveVoice.userCaption || 'Start speaking and your live caption will appear here.'}
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-border-subtle bg-surface-input p-3">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
-                Assistant
-              </p>
-              <p className="mt-2 min-h-16 text-sm text-foreground">
-                {liveVoice.assistantCaption ||
-                  'The assistant will answer here in text while speaking back to you.'}
-              </p>
-            </div>
-          </div>
-
-          {voiceApprovalsByToolExecution.length > 0 ? (
-            <div className="mt-4 space-y-2">
-              <p className="text-[11px] font-medium uppercase tracking-[0.18em] text-foreground-inactive">
-                Awaiting approval
-              </p>
-              {voiceApprovalsByToolExecution.map((approval) => (
-                <ApprovalCard
-                  key={approval.id}
-                  id={approval.id}
-                  description={approval.description}
-                />
-              ))}
-            </div>
-          ) : null}
-
-          <p className="mt-3 text-[11px] text-foreground-inactive">
-            Live voice can invoke tools. Sensitive tools will pause for approval here before
-            running.
+        <div className="flex items-center gap-4 rounded-[2rem] border border-border-subtle bg-surface p-3">
+          <p className="sr-only" aria-live="polite">
+            {liveVoice.connectionLabel}
           </p>
+          <VoiceActivityBar
+            levels={liveVoice.voiceLevels}
+            volume={liveVoice.voiceVolume}
+            phase={liveVoice.phase}
+          />
+          <button
+            type="button"
+            onClick={() => {
+              const partial = liveVoice.userCaption.trim();
+              void liveVoice.stop();
+              if (partial) {
+                setMessage((current) => (current.trim().length > 0 ? current : partial));
+              }
+              setFocusRequestId((value) => value + 1);
+            }}
+            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-input text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+            aria-label="Switch to text mode"
+            title="Switch to text mode"
+          >
+            <CloseIcon />
+          </button>
+        </div>
+        <div>
           {liveVoice.error ? <p className="mt-2 text-xs text-error">{liveVoice.error}</p> : null}
         </div>
       </section>
@@ -325,6 +271,52 @@ export function InputBar() {
   );
 }
 
+function VoiceActivityBar({
+  levels,
+  volume,
+  phase,
+}: {
+  levels: number[];
+  volume: number;
+  phase: 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
+}) {
+  const fallbackBoost = phase === 'connecting' || phase === 'thinking' ? 0.22 : 0.08;
+  const hasSignal = volume > 0.02;
+  const displayLevels = levels.length > 0 ? levels : Array.from({ length: 24 }, () => 0);
+  const style = {
+    '--voice-level': Math.max(volume, fallbackBoost).toFixed(3),
+  } as CSSProperties;
+
+  return (
+    <div
+      className="relative flex h-16 flex-1 items-center justify-center overflow-hidden rounded-full bg-surface-input px-6"
+      style={style}
+      aria-hidden="true"
+    >
+      <div className="absolute inset-0 bg-link/10 opacity-[calc(.18+var(--voice-level)*.5)]" />
+      <div className="relative flex h-12 items-center gap-1.5">
+        {displayLevels.map((level, index) => {
+          const centerDistance = Math.abs(index - (displayLevels.length - 1) / 2);
+          const centerWeight = 1 - centerDistance / Math.max(1, displayLevels.length / 2);
+          const fallbackLevel = fallbackBoost * (0.45 + centerWeight * 0.55);
+          const displayLevel = hasSignal ? level : fallbackLevel;
+
+          return (
+            <span
+              key={index}
+              className="w-1.5 rounded-full bg-foreground transition-[height,opacity] duration-100"
+              style={{
+                height: `${8 + displayLevel * 36}px`,
+                opacity: 0.35 + displayLevel * 0.65,
+              }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function AttachmentIcon() {
   return (
     <svg
@@ -360,6 +352,25 @@ function MicIcon() {
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
       <line x1="12" y1="19" x2="12" y2="23" />
       <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M18 6 6 18" />
+      <path d="m6 6 12 12" />
     </svg>
   );
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import {
+  type ChatMessage,
   type CitationContentBlock,
   type MessageContentBlock,
   useChatContext,
@@ -10,6 +11,7 @@ import { CitationCard } from './citation-card';
 interface MessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: MessageContentBlock[];
+  presentation?: ChatMessage['presentation'];
 }
 
 function stringify(value: unknown) {
@@ -80,11 +82,36 @@ function getDisplayToolStatus(
   return status;
 }
 
-export function Message({ role, content }: MessageProps) {
+function splitTextTokens(text: string) {
+  return text.match(/\S+|\s+/g) ?? [];
+}
+
+function WordFadeText({ text }: { text: string }) {
+  const tokens = splitTextTokens(text);
+
+  return (
+    <>
+      {tokens.map((token, index) => {
+        if (/^\s+$/.test(token)) {
+          return <span key={`space-${index}`}>{token}</span>;
+        }
+
+        return (
+          <span key={`word-${index}-${token}`} className="voice-word-fade inline-block">
+            {token}
+          </span>
+        );
+      })}
+    </>
+  );
+}
+
+export function Message({ role, content, presentation }: MessageProps) {
   const { pendingApprovals, approvalStatusesByToolExecution, approveAction, rejectAction } =
     useChatContext();
   const isUser = role === 'user';
   const isSystem = role === 'system';
+  const shouldFadeVoiceText = role === 'assistant' && Boolean(presentation?.voiceStreaming);
   const visibleContent = content.filter((block) => block.type !== 'citation');
   const statusBlocks = visibleContent.filter(
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
@@ -101,7 +128,7 @@ export function Message({ role, content }: MessageProps) {
     if (block.type === 'text') {
       return (
         <p key={index} className="whitespace-pre-wrap leading-relaxed">
-          {block.text}
+          {shouldFadeVoiceText ? <WordFadeText text={block.text} /> : block.text}
         </p>
       );
     }

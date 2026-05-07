@@ -6,6 +6,7 @@ import type { ToolEventListener, ToolEventPayload } from './chat-context';
 import { reportClientError } from './client-logging';
 
 type VoicePhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
+const VOICE_LEVEL_BAND_COUNT = 24;
 
 interface SessionInit {
   sessionId: string;
@@ -25,9 +26,23 @@ interface VoicePendingToolCall {
 
 interface UseLiveVoiceSessionOptions {
   startSession: () => Promise<SessionInit>;
-  appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
+  upsertVoiceMessage: (
+    conversationId: string,
+    messageId: string,
+    role: 'user' | 'assistant',
+    text: string,
+    options?: { voiceStreaming?: boolean },
+  ) => void;
   syncConversation: (conversationId: string) => Promise<void>;
   subscribeToolEvents?: (listener: ToolEventListener) => () => void;
+}
+
+function createEmptyVoiceLevels() {
+  return Array.from({ length: VOICE_LEVEL_BAND_COUNT }, () => 0);
+}
+
+function clampVoiceLevel(value: number) {
+  return Math.max(0, Math.min(1, value));
 }
 
 function parseEvent(raw: string): { type?: string; [key: string]: unknown } | null {
@@ -74,7 +89,7 @@ async function requestSdpAnswerFallback(
 
 export function useLiveVoiceSession({
   startSession,
-  appendVoiceMessage,
+  upsertVoiceMessage,
   syncConversation,
   subscribeToolEvents,
 }: UseLiveVoiceSessionOptions) {
@@ -84,13 +99,19 @@ export function useLiveVoiceSession({
   const [assistantCaption, setAssistantCaption] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pendingToolCalls, setPendingToolCalls] = useState<VoicePendingToolCall[]>([]);
+  const [voiceLevels, setVoiceLevels] = useState<number[]>(() => createEmptyVoiceLevels());
+  const [voiceVolume, setVoiceVolume] = useState(0);
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
+  const voiceMeterAudioContextRef = useRef<AudioContext | null>(null);
+  const voiceMeterAnimationRef = useRef<number | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const activeUserMessageIdRef = useRef<string | null>(null);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
   const pendingUserTranscriptRef = useRef('');
   const pendingAssistantTranscriptRef = useRef('');
   const responseDoneRef = useRef(false);
@@ -103,6 +124,63 @@ export function useLiveVoiceSession({
   const pendingTurnStartPromiseRef = useRef<Promise<string | null> | null>(null);
   const toolCallsByExecutionIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
   const toolCallsByCallIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
+
+  const stopVoiceMeter = useCallback(() => {
+    if (voiceMeterAnimationRef.current !== null) {
+      window.cancelAnimationFrame(voiceMeterAnimationRef.current);
+      voiceMeterAnimationRef.current = null;
+    }
+
+    void voiceMeterAudioContextRef.current?.close();
+    voiceMeterAudioContextRef.current = null;
+    setVoiceLevels(createEmptyVoiceLevels());
+    setVoiceVolume(0);
+  }, []);
+
+  const startVoiceMeter = useCallback(
+    (stream: MediaStream) => {
+      stopVoiceMeter();
+
+      try {
+        const audioContext = new AudioContext();
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.82;
+        source.connect(analyser);
+
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        voiceMeterAudioContextRef.current = audioContext;
+
+        const animate = () => {
+          analyser.getByteFrequencyData(data);
+          const bucketSize = Math.max(1, Math.floor(data.length / VOICE_LEVEL_BAND_COUNT));
+          const nextLevels = Array.from({ length: VOICE_LEVEL_BAND_COUNT }, (_, index) => {
+            const start = index * bucketSize;
+            const end = Math.min(data.length, start + bucketSize);
+            let total = 0;
+
+            for (let cursor = start; cursor < end; cursor += 1) {
+              total += data[cursor] ?? 0;
+            }
+
+            const average = total / Math.max(1, end - start) / 255;
+            return clampVoiceLevel(Math.sqrt(average) * 1.25);
+          });
+
+          setVoiceLevels(nextLevels);
+          setVoiceVolume(nextLevels.reduce((sum, level) => sum + level, 0) / nextLevels.length);
+          voiceMeterAnimationRef.current = window.requestAnimationFrame(animate);
+        };
+
+        voiceMeterAnimationRef.current = window.requestAnimationFrame(animate);
+      } catch {
+        setVoiceLevels(createEmptyVoiceLevels());
+        setVoiceVolume(0);
+      }
+    },
+    [stopVoiceMeter],
+  );
 
   const setVoicePhase = (nextPhase: VoicePhase) => {
     phaseRef.current = nextPhase;
@@ -117,6 +195,8 @@ export function useLiveVoiceSession({
     assistantMessageAddedRef.current = false;
     assistantCaptionSourceRef.current = null;
     activeVoiceTurnIdRef.current = null;
+    activeUserMessageIdRef.current = null;
+    activeAssistantMessageIdRef.current = null;
     pendingTurnStartPromiseRef.current = null;
   };
 
@@ -189,13 +269,18 @@ export function useLiveVoiceSession({
       : new Error(typeof lastError === 'string' ? lastError : 'Voice request failed');
   };
 
-  const addVoiceMessageToChat = (role: 'user' | 'assistant', text: string) => {
+  const addVoiceMessageToChat = (
+    role: 'user' | 'assistant',
+    text: string,
+    options: { voiceStreaming?: boolean } = {},
+  ) => {
     const conversationId = conversationIdRef.current;
-    if (!conversationId) {
+    const messageId = role === 'user' ? activeUserMessageIdRef.current : activeAssistantMessageIdRef.current;
+    if (!conversationId || !messageId) {
       return;
     }
 
-    appendVoiceMessage(conversationId, role, text);
+    upsertVoiceMessage(conversationId, messageId, role, text, options);
   };
 
   const ensureTurnStarted = async (userTranscript: string): Promise<string | null> => {
@@ -214,6 +299,8 @@ export function useLiveVoiceSession({
           api.voice.startTurn(conversationId, userTranscript),
         );
         activeVoiceTurnIdRef.current = result.voiceTurnId;
+        activeUserMessageIdRef.current = result.userMessageId;
+        activeAssistantMessageIdRef.current = result.assistantMessageId;
         conversationIdRef.current = result.conversationId;
         return result.voiceTurnId;
       } catch (startError) {
@@ -239,14 +326,14 @@ export function useLiveVoiceSession({
     pendingUserTranscriptRef.current = trimmed;
     setUserCaption(trimmed);
 
-    if (!userMessageAddedRef.current) {
-      addVoiceMessageToChat('user', trimmed);
-      userMessageAddedRef.current = true;
-    }
-
     const voiceTurnId = await ensureTurnStarted(trimmed);
     if (!voiceTurnId) {
       return;
+    }
+
+    if (!userMessageAddedRef.current) {
+      addVoiceMessageToChat('user', trimmed);
+      userMessageAddedRef.current = true;
     }
 
     try {
@@ -285,6 +372,7 @@ export function useLiveVoiceSession({
 
     if (current === 'output_text' && source === 'audio_transcript') {
       assistantCaptionSourceRef.current = source;
+      pendingAssistantTranscriptRef.current = '';
       setAssistantCaption('');
       return true;
     }
@@ -309,12 +397,19 @@ export function useLiveVoiceSession({
     setVoicePhase('speaking');
     setConnectionLabel('Assistant is speaking...');
     if (mode === 'append') {
+      pendingAssistantTranscriptRef.current += value;
       setAssistantCaption((previous) => previous + value);
+      addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current, {
+        voiceStreaming: true,
+      });
       return;
     }
 
     pendingAssistantTranscriptRef.current = normalized;
     setAssistantCaption(normalized);
+    addVoiceMessageToChat('assistant', normalized, {
+      voiceStreaming: true,
+    });
   };
 
   const maybePersistTurn = async () => {
@@ -549,6 +644,7 @@ export function useLiveVoiceSession({
 
     microphoneStreamRef.current?.getTracks().forEach((track) => track.stop());
     microphoneStreamRef.current = null;
+    stopVoiceMeter();
 
     if (remoteAudioRef.current) {
       remoteAudioRef.current.pause();
@@ -563,7 +659,7 @@ export function useLiveVoiceSession({
     setAssistantCaption('');
     setConnectionLabel('Voice mode is off.');
     setVoicePhase('idle');
-  }, [canInterruptAssistant, interruptAssistant]);
+  }, [canInterruptAssistant, interruptAssistant, stopVoiceMeter]);
 
   useEffect(() => teardown, [teardown]);
 
@@ -740,6 +836,7 @@ export function useLiveVoiceSession({
 
       const microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
       microphoneStreamRef.current = microphoneStream;
+      startVoiceMeter(microphoneStream);
       for (const track of microphoneStream.getTracks()) {
         pc.addTrack(track, microphoneStream);
       }
@@ -822,6 +919,8 @@ export function useLiveVoiceSession({
     connectionLabel,
     userCaption,
     assistantCaption,
+    voiceLevels,
+    voiceVolume,
     error,
     pendingToolCalls,
     start,

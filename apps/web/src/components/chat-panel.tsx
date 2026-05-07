@@ -59,7 +59,12 @@ export function ChatPanel() {
         </div>
       ) : (
         messages.map((message) => (
-          <Message key={message.id} role={message.role} content={message.content} />
+          <Message
+            key={message.id}
+            role={message.role}
+            content={message.content}
+            presentation={message.presentation}
+          />
         ))
       )}
       {loading.isSendingMessage ? <ThinkingIndicator /> : null}

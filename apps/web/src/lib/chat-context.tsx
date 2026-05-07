@@ -105,7 +105,13 @@ interface ChatContextValue {
     model: string;
     voice: string;
   }>;
-  appendVoiceMessage: (conversationId: string, role: 'user' | 'assistant', text: string) => void;
+  upsertVoiceMessage: (
+    conversationId: string,
+    messageId: string,
+    role: 'user' | 'assistant',
+    text: string,
+    options?: { voiceStreaming?: boolean },
+  ) => void;
   syncConversationState: (conversationId: string) => Promise<void>;
   subscribeToolEvents: (listener: ToolEventListener) => () => void;
 }
@@ -426,15 +432,51 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     return session;
   }, [currentConversationId, syncConversationState]);
 
-  const appendVoiceMessage = useCallback(
-    (conversationId: string, role: 'user' | 'assistant', text: string) => {
+  const upsertVoiceMessage = useCallback(
+    (
+      conversationId: string,
+      messageId: string,
+      role: 'user' | 'assistant',
+      text: string,
+      options: { voiceStreaming?: boolean } = {},
+    ) => {
       const trimmed = text.trim();
       if (!trimmed) {
         return;
       }
 
       setCurrentConversationId(conversationId);
-      setMessages((previous) => [...previous, createOptimisticVoiceMessage(role, trimmed)]);
+      setMessages((previous) => {
+        const message = createOptimisticVoiceMessage(role, trimmed, {
+          id: messageId,
+          voiceStreaming: options.voiceStreaming,
+        });
+        const textBlock = message.content[0];
+        const existingIndex = previous.findIndex((item) => item.id === messageId);
+
+        if (!textBlock) {
+          return previous;
+        }
+
+        if (existingIndex === -1) {
+          return [...previous, message];
+        }
+
+        return previous.map((item, index) =>
+          index === existingIndex
+            ? {
+                ...item,
+                role,
+                content: item.content.some((block) => block.type === 'text')
+                  ? item.content.map((block) =>
+                      block.type === 'text' ? textBlock : block,
+                    )
+                  : [textBlock, ...item.content],
+                presentation: message.presentation,
+              }
+            : item,
+        );
+      });
       setConversations((previous) => {
         const existing = previous.find((conversation) => conversation.id === conversationId);
         const timestamp = new Date().toISOString();
@@ -697,7 +739,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       approveAction,
       rejectAction,
       startLiveVoiceSession,
-      appendVoiceMessage,
+      upsertVoiceMessage,
       syncConversationState,
       subscribeToolEvents,
     }),
@@ -719,7 +761,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       selectConversation,
       sendMessage,
       startLiveVoiceSession,
-      appendVoiceMessage,
+      upsertVoiceMessage,
       syncConversationState,
       subscribeToolEvents,
       uploadAttachment,
