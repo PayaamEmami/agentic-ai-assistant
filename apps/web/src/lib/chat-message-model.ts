@@ -21,7 +21,7 @@ export type StatusContentBlock = StatusContent;
 export type MessageContentBlock = MessageContent;
 
 export interface ChatMessagePresentation {
-  voiceStreaming?: boolean;
+  animateText?: boolean;
 }
 
 export interface ChatMessage {
@@ -308,8 +308,11 @@ export function createOptimisticUserMessage(
   };
 }
 
-export function createFallbackAssistantMessage(messageId: string): ChatMessage {
-  return {
+export function createFallbackAssistantMessage(
+  messageId: string,
+  options: { animateText?: boolean } = {},
+): ChatMessage {
+  const message: ChatMessage = {
     id: `local-assistant-${messageId}`,
     role: 'assistant',
     content: [
@@ -320,12 +323,18 @@ export function createFallbackAssistantMessage(messageId: string): ChatMessage {
     ],
     createdAt: new Date().toISOString(),
   };
+
+  if (options.animateText) {
+    message.presentation = { animateText: true };
+  }
+
+  return message;
 }
 
 export function createOptimisticVoiceMessage(
   role: 'user' | 'assistant',
   text: string,
-  options: { id?: string; voiceStreaming?: boolean } = {},
+  options: { id?: string; animateText?: boolean } = {},
 ): ChatMessage {
   const message: ChatMessage = {
     id: options.id ?? `local-voice-${role}-${createClientId()}`,
@@ -339,8 +348,8 @@ export function createOptimisticVoiceMessage(
     createdAt: new Date().toISOString(),
   };
 
-  if (options.voiceStreaming) {
-    message.presentation = { voiceStreaming: true };
+  if (options.animateText) {
+    message.presentation = { animateText: true };
   }
 
   return message;

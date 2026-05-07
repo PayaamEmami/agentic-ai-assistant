@@ -8,6 +8,10 @@ import {
 } from '@/lib/chat-context';
 import { CitationCard } from './citation-card';
 
+const WORD_FADE_MS = 380;
+const WORD_STAGGER_MS = 34;
+const MAX_FOLLOWUP_DELAY_MS = 2400;
+
 interface MessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: MessageContentBlock[];
@@ -86,8 +90,13 @@ function splitTextTokens(text: string) {
   return text.match(/\S+|\s+/g) ?? [];
 }
 
+function countWords(text: string) {
+  return text.match(/\S+/g)?.length ?? 0;
+}
+
 function WordFadeText({ text }: { text: string }) {
   const tokens = splitTextTokens(text);
+  let wordIndex = 0;
 
   return (
     <>
@@ -96,8 +105,15 @@ function WordFadeText({ text }: { text: string }) {
           return <span key={`space-${index}`}>{token}</span>;
         }
 
+        const animationDelay = Math.min(wordIndex * WORD_STAGGER_MS, MAX_FOLLOWUP_DELAY_MS);
+        wordIndex += 1;
+
         return (
-          <span key={`word-${index}-${token}`} className="voice-word-fade inline-block">
+          <span
+            key={`word-${index}-${token}`}
+            className="voice-word-fade inline-block"
+            style={{ animationDelay: `${animationDelay}ms` }}
+          >
             {token}
           </span>
         );
@@ -106,12 +122,30 @@ function WordFadeText({ text }: { text: string }) {
   );
 }
 
+function DelayedAssistantReveal({
+  children,
+  delayMs,
+}: {
+  children: React.ReactNode;
+  delayMs: number;
+}) {
+  if (delayMs <= 0) {
+    return children;
+  }
+
+  return (
+    <div className="assistant-followup-reveal" style={{ animationDelay: `${delayMs}ms` }}>
+      {children}
+    </div>
+  );
+}
+
 export function Message({ role, content, presentation }: MessageProps) {
   const { pendingApprovals, approvalStatusesByToolExecution, approveAction, rejectAction } =
     useChatContext();
   const isUser = role === 'user';
   const isSystem = role === 'system';
-  const shouldFadeVoiceText = role === 'assistant' && Boolean(presentation?.voiceStreaming);
+  const shouldAnimateAssistantOutput = role === 'assistant' && Boolean(presentation?.animateText);
   const visibleContent = content.filter((block) => block.type !== 'citation');
   const statusBlocks = visibleContent.filter(
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
@@ -120,6 +154,17 @@ export function Message({ role, content, presentation }: MessageProps) {
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
+  const assistantTextWordCount =
+    shouldAnimateAssistantOutput
+      ? primaryContent.reduce(
+          (total, block) => (block.type === 'text' ? total + countWords(block.text) : total),
+          0,
+        )
+      : 0;
+  const assistantFollowupDelayMs =
+    shouldAnimateAssistantOutput && assistantTextWordCount > 0
+      ? Math.min(WORD_FADE_MS + assistantTextWordCount * WORD_STAGGER_MS, MAX_FOLLOWUP_DELAY_MS)
+      : 0;
   const pendingApprovalsByToolExecution = new Map(
     pendingApprovals.map((approval) => [approval.toolExecutionId, approval] as const),
   );
@@ -128,7 +173,7 @@ export function Message({ role, content, presentation }: MessageProps) {
     if (block.type === 'text') {
       return (
         <p key={index} className="whitespace-pre-wrap leading-relaxed">
-          {shouldFadeVoiceText ? <WordFadeText text={block.text} /> : block.text}
+          {shouldAnimateAssistantOutput ? <WordFadeText text={block.text} /> : block.text}
         </p>
       );
     }
@@ -257,31 +302,47 @@ export function Message({ role, content, presentation }: MessageProps) {
     >
       <div className={bubbleClassName}>
         {primaryContent.length > 0 ? (
-          primaryContent.map(renderContentBlock)
+          primaryContent.map((block, index) => {
+            const renderedBlock = renderContentBlock(block, index);
+
+            if (!shouldAnimateAssistantOutput || block.type === 'text') {
+              return renderedBlock;
+            }
+
+            return (
+              <DelayedAssistantReveal key={`followup-${index}`} delayMs={assistantFollowupDelayMs}>
+                {renderedBlock}
+              </DelayedAssistantReveal>
+            );
+          })
         ) : statusBlocks.length > 0 && role === 'assistant' ? (
           <p className="text-xs italic text-foreground-muted">No response generated before stop.</p>
         ) : null}
         {citations.length > 0 ? (
-          <details className="rounded-lg border border-border-subtle bg-surface-input/60">
-            <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-foreground-muted">
-              Sources ({citations.length})
-            </summary>
-            <div className="space-y-2 px-3 pb-3">
-              {citations.map((citation, index) => (
-                <CitationCard
-                  key={`${citation.sourceId ?? citation.title ?? 'citation'}-${index}`}
-                  title={citation.title ?? citation.sourceId ?? 'Source'}
-                  excerpt={citation.excerpt ?? 'Citation excerpt unavailable.'}
-                  uri={citation.uri}
-                />
-              ))}
-            </div>
-          </details>
+          <DelayedAssistantReveal delayMs={assistantFollowupDelayMs}>
+            <details className="rounded-lg border border-border-subtle bg-surface-input/60">
+              <summary className="cursor-pointer list-none px-3 py-2 text-xs font-medium text-foreground-muted">
+                Sources ({citations.length})
+              </summary>
+              <div className="space-y-2 px-3 pb-3">
+                {citations.map((citation, index) => (
+                  <CitationCard
+                    key={`${citation.sourceId ?? citation.title ?? 'citation'}-${index}`}
+                    title={citation.title ?? citation.sourceId ?? 'Source'}
+                    excerpt={citation.excerpt ?? 'Citation excerpt unavailable.'}
+                    uri={citation.uri}
+                  />
+                ))}
+              </div>
+            </details>
+          </DelayedAssistantReveal>
         ) : null}
         {statusBlocks.length > 0 ? (
-          <div className="border-t border-border-subtle/80 pt-2">
-            {statusBlocks.map(renderContentBlock)}
-          </div>
+          <DelayedAssistantReveal delayMs={assistantFollowupDelayMs}>
+            <div className="border-t border-border-subtle/80 pt-2">
+              {statusBlocks.map(renderContentBlock)}
+            </div>
+          </DelayedAssistantReveal>
         ) : null}
       </div>
     </div>

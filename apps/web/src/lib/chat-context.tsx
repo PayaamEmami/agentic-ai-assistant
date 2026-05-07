@@ -110,7 +110,6 @@ interface ChatContextValue {
     messageId: string,
     role: 'user' | 'assistant',
     text: string,
-    options?: { voiceStreaming?: boolean },
   ) => void;
   syncConversationState: (conversationId: string) => Promise<void>;
   subscribeToolEvents: (listener: ToolEventListener) => () => void;
@@ -139,6 +138,11 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunConversationIdRef = useRef<string | undefined>(undefined);
   const toolEventListenersRef = useRef<Set<ToolEventListener>>(new Set());
+  const messagesRef = useRef<ChatMessage[]>([]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const subscribeToolEvents = useCallback((listener: ToolEventListener) => {
     toolEventListenersRef.current.add(listener);
@@ -264,6 +268,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setIsInterruptingMessage(false);
 
       const clientRunId = createClientId();
+      const existingMessageIds = new Set(messagesRef.current.map((message) => message.id));
       activeRunIdRef.current = clientRunId;
       activeRunConversationIdRef.current = currentConversationId;
 
@@ -294,7 +299,16 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         let hasAssistantMessage = false;
         try {
           const detail = await api.chat.getConversation(response.conversationId);
-          const nextMessages = detail.messages.map(normalizeMessage);
+          const nextMessages = detail.messages.map((message) => {
+            const normalized = normalizeMessage(message);
+            if (normalized.role === 'assistant' && !existingMessageIds.has(normalized.id)) {
+              return {
+                ...normalized,
+                presentation: { animateText: true },
+              };
+            }
+            return normalized;
+          });
           if (nextMessages.length > 0) {
             hasAssistantMessage = nextMessages.some((message) => message.role !== 'user');
             setMessages(nextMessages);
@@ -312,7 +326,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         if (!hasAssistantMessage) {
           setMessages((previous) => [
             ...previous,
-            createFallbackAssistantMessage(response.messageId),
+            createFallbackAssistantMessage(response.messageId, { animateText: true }),
           ]);
         }
 
@@ -328,6 +342,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
             role: 'assistant',
             content: [{ type: 'text', text: `Error: ${message}` }],
             createdAt: new Date().toISOString(),
+            presentation: { animateText: true },
           },
         ]);
       } finally {
@@ -438,7 +453,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       messageId: string,
       role: 'user' | 'assistant',
       text: string,
-      options: { voiceStreaming?: boolean } = {},
     ) => {
       const trimmed = text.trim();
       if (!trimmed) {
@@ -449,7 +463,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       setMessages((previous) => {
         const message = createOptimisticVoiceMessage(role, trimmed, {
           id: messageId,
-          voiceStreaming: options.voiceStreaming,
+          animateText: role === 'assistant',
         });
         const textBlock = message.content[0];
         const existingIndex = previous.findIndex((item) => item.id === messageId);

@@ -31,7 +31,6 @@ interface UseLiveVoiceSessionOptions {
     messageId: string,
     role: 'user' | 'assistant',
     text: string,
-    options?: { voiceStreaming?: boolean },
   ) => void;
   syncConversation: (conversationId: string) => Promise<void>;
   subscribeToolEvents?: (listener: ToolEventListener) => () => void;
@@ -272,7 +271,6 @@ export function useLiveVoiceSession({
   const addVoiceMessageToChat = (
     role: 'user' | 'assistant',
     text: string,
-    options: { voiceStreaming?: boolean } = {},
   ) => {
     const conversationId = conversationIdRef.current;
     const messageId = role === 'user' ? activeUserMessageIdRef.current : activeAssistantMessageIdRef.current;
@@ -280,7 +278,7 @@ export function useLiveVoiceSession({
       return;
     }
 
-    upsertVoiceMessage(conversationId, messageId, role, text, options);
+    upsertVoiceMessage(conversationId, messageId, role, text);
   };
 
   const ensureTurnStarted = async (userTranscript: string): Promise<string | null> => {
@@ -399,17 +397,13 @@ export function useLiveVoiceSession({
     if (mode === 'append') {
       pendingAssistantTranscriptRef.current += value;
       setAssistantCaption((previous) => previous + value);
-      addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current, {
-        voiceStreaming: true,
-      });
+      addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current);
       return;
     }
 
     pendingAssistantTranscriptRef.current = normalized;
     setAssistantCaption(normalized);
-    addVoiceMessageToChat('assistant', normalized, {
-      voiceStreaming: true,
-    });
+    addVoiceMessageToChat('assistant', normalized);
   };
 
   const maybePersistTurn = async () => {

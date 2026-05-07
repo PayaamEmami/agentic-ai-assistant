@@ -47,12 +47,28 @@ label:has(input:not(:disabled)),
   }
 }
 
+@keyframes assistant-followup-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(0.35rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .voice-word-fade {
-  animation: voice-word-fade 220ms ease-out both;
+  animation: voice-word-fade 380ms ease-out both;
+}
+
+.assistant-followup-reveal {
+  animation: assistant-followup-reveal 240ms ease-out both;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .voice-word-fade {
+  .voice-word-fade,
+  .assistant-followup-reveal {
     animation: none;
   }
 }
