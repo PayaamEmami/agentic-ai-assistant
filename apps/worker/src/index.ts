@@ -3,8 +3,11 @@ import { closePool } from '@aaa/db';
 import { loadWorkerConfig } from '@aaa/config';
 import { createWorkers } from './workers.js';
 import { logger } from './lib/logger.js';
-import { closeChatContinuationQueue } from './lib/chat-continuation-queue.js';
-import { closeJobQueues } from './lib/job-queues.js';
+import {
+  closeChatContinuationQueue,
+  initializeChatContinuationQueue,
+} from './lib/chat-continuation-queue.js';
+import { closeJobQueues, initializeJobQueues } from './lib/job-queues.js';
 import { startAppSyncScheduler } from './lib/sync-scheduler.js';
 import { initializeWorkerTelemetry, startWorkerObservabilityServer } from './lib/telemetry.js';
 import { shutdownTracing } from '@aaa/observability';
@@ -26,6 +29,8 @@ async function main() {
     'Starting worker service',
   );
 
+  initializeJobQueues(config);
+  initializeChatContinuationQueue(config);
   const workers = createWorkers(config);
   const syncScheduler = startAppSyncScheduler(config);
   logger.info(

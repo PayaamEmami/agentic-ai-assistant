@@ -1,56 +1,53 @@
-import { Queue } from 'bullmq';
-import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl, loadApiConfig } from '@aaa/config';
-import { getLogContext, getLogger, withSpan } from '@aaa/observability';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl } from '@aaa/config';
+import { createQueueProducer, type QueueProducer } from '@aaa/queues';
 import type { AppSyncJobData } from '@aaa/shared';
+import type { AppConfig } from '../config.js';
 
-let appSyncQueue: Queue<AppSyncJobData> | null = null;
+let producer: QueueProducer<AppSyncJobData> | null = null;
 
-function getAppSyncQueue(): Queue<AppSyncJobData> {
-  if (!appSyncQueue) {
-    appSyncQueue = new Queue<AppSyncJobData>(QUEUE_NAMES.appSync, {
-      connection: parseRedisUrl(loadApiConfig().redisUrl),
-    });
-  }
-  return appSyncQueue;
+export type EnqueueAppSyncJob = (job: AppSyncJobData) => Promise<void>;
+
+export function configureAppSyncQueue(config: Pick<AppConfig, 'redisUrl'>): EnqueueAppSyncJob {
+  producer = createQueueProducer<AppSyncJobData>({
+    queueName: QUEUE_NAMES.appSync,
+    jobName: 'sync-app',
+    component: 'worker-job-queues',
+    spanName: 'queue.app_sync.enqueue',
+    connection: parseRedisUrl(config.redisUrl),
+    jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
+    fallbackCorrelationId: (job) => `app-${job.appCapabilityConfigId}`,
+    jobId: (job) => `app-sync-${job.appCapabilityConfigId}`,
+    spanAttributes: (job) => ({
+      'aaa.app_capability_config.id': job.appCapabilityConfigId,
+    }),
+    log: {
+      event: 'app.sync.enqueued',
+      message: 'App sync job enqueued',
+      context: (job) => ({
+        appCapabilityConfigId: job.appCapabilityConfigId,
+      }),
+      fields: (job) => ({
+        appKind: job.appKind,
+        appCapability: job.capability,
+      }),
+    },
+  });
+  return enqueueAppSyncJob;
 }
 
 export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
-  const correlationId =
-    job.correlationId || getLogContext().correlationId || `app-${job.appCapabilityConfigId}`;
-  const payload = {
-    ...job,
-    correlationId,
-  };
+  if (!producer) {
+    throw new Error('App sync queue has not been configured');
+  }
 
-  await withSpan(
-    'queue.app_sync.enqueue',
-    {
-      'aaa.queue.name': QUEUE_NAMES.appSync,
-      'aaa.app_capability_config.id': job.appCapabilityConfigId,
-    },
-    () =>
-      getAppSyncQueue().add('sync-app', payload, {
-        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
-      }),
-  );
-  getLogger({
-    component: 'worker-job-queues',
-    appCapabilityConfigId: job.appCapabilityConfigId,
-    correlationId,
-  }).info(
-    {
-      event: 'app.sync.enqueued',
-      outcome: 'accepted',
-      appKind: job.appKind,
-      appCapability: job.capability,
-    },
-    'App sync job enqueued',
-  );
+  await producer.enqueue(job);
 }
 
 export async function closeAppSyncQueue(): Promise<void> {
-  if (appSyncQueue) {
-    await appSyncQueue.close();
+  if (!producer) {
+    return;
   }
-  appSyncQueue = null;
+  const current = producer;
+  producer = null;
+  await current.close();
 }

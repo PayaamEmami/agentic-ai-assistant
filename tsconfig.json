@@ -4,6 +4,7 @@
     { "path": "./packages/shared" },
     { "path": "./packages/observability" },
     { "path": "./packages/config" },
+    { "path": "./packages/queues" },
     { "path": "./packages/memory" },
     { "path": "./packages/db" },
     { "path": "./packages/retrieval" },

@@ -2,9 +2,11 @@ import { OpenAIProvider } from '@aaa/ai';
 import type { AppConfig } from '../config.js';
 import { ApprovalService } from './approval-service.js';
 import { AppService } from './app-service.js';
+import { configureAppSyncQueue } from './app-queue.js';
 import { ChatService } from './chat-service.js';
 import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
+import { configureToolExecutionQueue } from './tool-execution-queue.js';
 import { UploadService } from './upload-service.js';
 import { VoiceService } from './voice-service.js';
 
@@ -27,20 +29,25 @@ export function buildApiServices(config: AppConfig): ApiServices {
   const retrievalBridge = new RetrievalBridge(config, modelProvider, {
     embeddingModel: config.openaiEmbeddingModel,
   });
+  const enqueueToolExecutionJob = configureToolExecutionQueue(config);
+  const enqueueAppSyncJob = configureAppSyncQueue(config);
 
   return {
-    approvalService: new ApprovalService(),
-    appService: new AppService(config),
+    approvalService: new ApprovalService({ enqueueToolExecutionJob }),
+    appService: new AppService(config, { enqueueAppSyncJob }),
     chatService: new ChatService({
       config,
       modelProvider,
       personalizationService,
       retrievalBridge,
+      enqueueToolExecutionJob,
     }),
     personalizationService,
     uploadService: new UploadService(config, modelProvider, {
       embeddingModel: config.openaiEmbeddingModel,
     }),
-    voiceService: new VoiceService(config, personalizationService, retrievalBridge),
+    voiceService: new VoiceService(config, personalizationService, retrievalBridge, {
+      enqueueToolExecutionJob,
+    }),
   };
 }

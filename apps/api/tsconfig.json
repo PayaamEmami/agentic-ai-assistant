@@ -13,6 +13,7 @@
     { "path": "../../packages/knowledge-sources" },
     { "path": "../../packages/memory" },
     { "path": "../../packages/observability" },
+    { "path": "../../packages/queues" },
     { "path": "../../packages/retrieval" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/tool-providers" }

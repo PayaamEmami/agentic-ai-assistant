@@ -12,6 +12,7 @@
     { "path": "../../packages/db" },
     { "path": "../../packages/knowledge-sources" },
     { "path": "../../packages/observability" },
+    { "path": "../../packages/queues" },
     { "path": "../../packages/retrieval" },
     { "path": "../../packages/shared" },
     { "path": "../../packages/tool-providers" }

@@ -1,59 +1,47 @@
-import { Queue } from 'bullmq';
-import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, loadWorkerConfig, parseRedisUrl } from '@aaa/config';
-import { getLogContext, getLogger, withSpan } from '@aaa/observability';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl, type WorkerConfig } from '@aaa/config';
+import { createQueueProducer, type QueueProducer } from '@aaa/queues';
 import type { ChatContinuationJobData } from '@aaa/shared';
 
-let queue: Queue<ChatContinuationJobData> | null = null;
+let producer: QueueProducer<ChatContinuationJobData> | null = null;
 
-function getQueue(): Queue<ChatContinuationJobData> {
-  if (!queue) {
-    queue = new Queue<ChatContinuationJobData>(QUEUE_NAMES.chatContinuation, {
-      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
-    });
-  }
-  return queue;
+export function initializeChatContinuationQueue(config: WorkerConfig): void {
+  producer = createQueueProducer<ChatContinuationJobData>({
+    queueName: QUEUE_NAMES.chatContinuation,
+    jobName: 'continue-chat',
+    component: 'chat-continuation-queue',
+    spanName: 'queue.chat_continuation.enqueue',
+    connection: parseRedisUrl(config.redisUrl),
+    jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.chatContinuation],
+    fallbackCorrelationId: (job) => `continue-${job.toolExecutionId}`,
+    jobId: (job) => `chat-continuation-${job.toolExecutionId}`,
+    spanAttributes: (job) => ({
+      'aaa.tool_execution.id': job.toolExecutionId,
+      'aaa.conversation.id': job.conversationId,
+    }),
+    log: {
+      event: 'chat.continuation.enqueued',
+      message: 'Chat continuation job enqueued',
+      context: (job) => ({
+        toolExecutionId: job.toolExecutionId,
+        conversationId: job.conversationId,
+      }),
+    },
+  });
 }
 
 export async function enqueueChatContinuationJob(job: ChatContinuationJobData): Promise<void> {
-  const correlationId =
-    job.correlationId || getLogContext().correlationId || `continue-${job.toolExecutionId}`;
-  const payload = {
-    ...job,
-    correlationId,
-  };
+  if (!producer) {
+    throw new Error('Chat continuation queue has not been initialized');
+  }
 
-  await withSpan(
-    'queue.chat_continuation.enqueue',
-    {
-      'aaa.queue.name': QUEUE_NAMES.chatContinuation,
-      'aaa.tool_execution.id': job.toolExecutionId,
-      'aaa.conversation.id': job.conversationId,
-    },
-    () =>
-      getQueue().add('continue-chat', payload, {
-        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.chatContinuation],
-        jobId: `chat-continuation-${job.toolExecutionId}`,
-      }),
-  );
-
-  getLogger({
-    component: 'chat-continuation-queue',
-    toolExecutionId: job.toolExecutionId,
-    conversationId: job.conversationId,
-    correlationId,
-  }).info(
-    {
-      event: 'chat.continuation.enqueued',
-      outcome: 'accepted',
-    },
-    'Chat continuation job enqueued',
-  );
+  await producer.enqueue(job);
 }
 
 export async function closeChatContinuationQueue(): Promise<void> {
-  if (!queue) {
+  if (!producer) {
     return;
   }
-  await queue.close();
-  queue = null;
+  const current = producer;
+  producer = null;
+  await current.close();
 }

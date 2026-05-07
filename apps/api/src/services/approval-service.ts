@@ -2,7 +2,10 @@ import { approvalRepository, messageRepository, toolExecutionRepository } from '
 import { getLogContext, getLogger } from '@aaa/observability';
 import type { ApprovalResolvedEvent, ToolDoneEvent } from '@aaa/shared';
 import { AppError } from '../lib/errors.js';
-import { enqueueToolExecutionJob } from './tool-execution-queue.js';
+import {
+  type EnqueueToolExecutionJob,
+  enqueueToolExecutionJob as defaultEnqueueToolExecutionJob,
+} from './tool-execution-queue.js';
 import { broadcast } from '../ws/connections.js';
 
 function toRecord(input: unknown): Record<string, unknown> {
@@ -13,6 +16,13 @@ function toRecord(input: unknown): Record<string, unknown> {
 }
 
 export class ApprovalService {
+  private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
+
+  constructor(options?: { enqueueToolExecutionJob?: EnqueueToolExecutionJob }) {
+    this.enqueueToolExecutionJob =
+      options?.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
+  }
+
   async listPending(userId: string) {
     return approvalRepository.listPendingByUser(userId);
   }
@@ -46,7 +56,7 @@ export class ApprovalService {
           output: undefined,
         });
       }
-      await enqueueToolExecutionJob({
+      await this.enqueueToolExecutionJob({
         toolExecutionId: toolExecution.id,
         toolName: toolExecution.toolName,
         input: toRecord(toolExecution.input),

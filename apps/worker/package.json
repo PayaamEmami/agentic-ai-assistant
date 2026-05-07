@@ -18,6 +18,7 @@
     "@aaa/knowledge-sources": "workspace:*",
     "@aaa/db": "workspace:*",
     "@aaa/observability": "workspace:*",
+    "@aaa/queues": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",
     "bullmq": "^5.0.0",

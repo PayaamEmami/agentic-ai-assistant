@@ -2,7 +2,10 @@ import { approvalRepository, toolExecutionRepository } from '@aaa/db';
 import { getLogContext } from '@aaa/observability';
 import type { ApprovalRequestedEvent } from '@aaa/shared';
 import { broadcast } from '../ws/connections.js';
-import { enqueueToolExecutionJob } from './tool-execution-queue.js';
+import {
+  type EnqueueToolExecutionJob,
+  enqueueToolExecutionJob as defaultEnqueueToolExecutionJob,
+} from './tool-execution-queue.js';
 import type { AvailableTool } from './tools-loader.js';
 
 function getStringField(input: Record<string, unknown>, key: string): string | null {
@@ -97,6 +100,7 @@ export interface CreateToolCallOptions {
   input: Record<string, unknown>;
   messageId?: string | null;
   originMode: 'text' | 'voice';
+  enqueueToolExecutionJob?: EnqueueToolExecutionJob;
 }
 
 export interface CreateToolCallResult {
@@ -105,13 +109,21 @@ export interface CreateToolCallResult {
   approvalId?: string;
 }
 
+export interface StagedToolCallResult extends CreateToolCallResult {
+  toolName: string;
+  input: Record<string, unknown>;
+  approvalEvent?: ApprovalRequestedEvent;
+  queuedJob?: Parameters<EnqueueToolExecutionJob>[0];
+}
+
 /**
- * Creates a tool_executions row and either requests approval or enqueues the
- * execution job. Shared between text-chat flow and voice.
+ * Creates a tool_executions row and prepares either an approval event or queue
+ * job. Text chat uses this in two phases so it can bind the eventual assistant
+ * message before broadcasting/enqueueing side effects.
  */
-export async function createToolCall(
+export async function stageToolCall(
   options: CreateToolCallOptions,
-): Promise<CreateToolCallResult> {
+): Promise<StagedToolCallResult> {
   const { conversationId, userId, tool, input, messageId, originMode } = options;
 
   const toolExecution = await toolExecutionRepository.create(
@@ -139,26 +151,65 @@ export async function createToolCall(
       toolExecutionId: toolExecution.id,
       description: approval.description,
     };
-    broadcast(conversationId, approvalEvent);
 
     return {
       toolExecutionId: toolExecution.id,
+      toolName: tool.name,
+      input,
       status: 'requires_approval',
       approvalId: approval.id,
+      approvalEvent,
     };
   }
 
-  await enqueueToolExecutionJob({
+  const queuedJob = {
     toolExecutionId: toolExecution.id,
     toolName: tool.name,
     input,
     conversationId,
     correlationId:
       getLogContext().correlationId ?? `${originMode}-${conversationId}-${toolExecution.id}`,
-  });
+  };
 
   return {
     toolExecutionId: toolExecution.id,
+    toolName: tool.name,
+    input,
     status: 'pending',
+    queuedJob,
+  };
+}
+
+export async function finalizeStagedToolCall(
+  result: StagedToolCallResult,
+  enqueueToolExecutionJob: EnqueueToolExecutionJob = defaultEnqueueToolExecutionJob,
+): Promise<void> {
+  if (result.approvalEvent) {
+    broadcast(result.approvalEvent.conversationId, result.approvalEvent);
+    return;
+  }
+
+  if (result.queuedJob) {
+    await enqueueToolExecutionJob(result.queuedJob);
+  }
+}
+
+/**
+ * Creates a tool_executions row and either requests approval or enqueues the
+ * execution job. Shared between text-chat flow and voice.
+ */
+export async function createToolCall(
+  options: CreateToolCallOptions,
+): Promise<CreateToolCallResult> {
+  const staged = await stageToolCall(options);
+  await finalizeStagedToolCall(
+    staged,
+    options.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob,
+  );
+
+  return {
+    toolExecutionId: staged.toolExecutionId,
+    status: staged.status,
+    approvalId: staged.approvalId,
   };
 }

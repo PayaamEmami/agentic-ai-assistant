@@ -18,6 +18,7 @@
     "@aaa/db": "workspace:*",
     "@aaa/memory": "workspace:*",
     "@aaa/observability": "workspace:*",
+    "@aaa/queues": "workspace:*",
     "@aaa/retrieval": "workspace:*",
     "@aaa/shared": "workspace:*",
     "@aaa/tool-providers": "workspace:*",

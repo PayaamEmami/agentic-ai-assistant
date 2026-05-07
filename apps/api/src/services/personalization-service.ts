@@ -1,4 +1,10 @@
-import { MemoryServiceImpl, PgMemoryAdapter, type MemoryItem, type MemoryKind } from '@aaa/memory';
+import {
+  MemoryServiceImpl,
+  PgMemoryAdapter,
+  type MemoryItem,
+  type MemoryKind,
+  type MemoryService,
+} from '@aaa/memory';
 import { getPool } from '@aaa/db';
 import { AppError } from '../lib/errors.js';
 
@@ -98,7 +104,11 @@ export function buildPersonalContext(state: PersonalizationState): string | unde
 }
 
 export class PersonalizationService {
-  private readonly memoryService = new MemoryServiceImpl(new PgMemoryAdapter(getPool()));
+  private readonly memoryService: MemoryService;
+
+  constructor(memoryService?: MemoryService) {
+    this.memoryService = memoryService ?? new MemoryServiceImpl(new PgMemoryAdapter(getPool()));
+  }
 
   async getPersonalization(userId: string): Promise<PersonalizationState> {
     const [profile, memories] = await Promise.all([

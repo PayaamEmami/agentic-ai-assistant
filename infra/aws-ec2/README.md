@@ -132,7 +132,7 @@ cd /opt/aaa/app/current
 sudo docker compose --env-file /opt/aaa/app/.env.production -f docker/docker-compose.prod.yml up -d
 ```
 
-If a migration changed the database, restore from a backup instead of only rolling back the container release.
+If a migration changed the database, recover it with your chosen operational process instead of only rolling back the container release.
 
 ## Logging
 
@@ -146,28 +146,3 @@ sudo docker compose --env-file /opt/aaa/app/.env.production -f /opt/aaa/app/curr
 ```
 
 CloudWatch Logs can be added later if Docker logs through SSM become inconvenient.
-
-## Backups
-
-Create an on-demand Postgres backup:
-
-```bash
-export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
-bash scripts/backup-aws-db.sh
-```
-
-Restore:
-
-```bash
-export BACKUP_S3_URI=s3://aaa-uploads-prod-<account-id>-us-west-1/db-backups/aaa-postgres-20260101T000000Z.dump.gz
-bash scripts/restore-aws-db.sh
-```
-
-Install a daily backup timer on the EC2 instance:
-
-```bash
-export S3_BUCKET=aaa-uploads-prod-<account-id>-us-west-1
-pnpm aws:backup:timer
-```
-
-The timer runs `/usr/local/bin/aaa-backup-db` daily at `03:15` UTC by default. Override with `BACKUP_ON_CALENDAR=04:30` before installing. Periodically test restores before relying on backups.

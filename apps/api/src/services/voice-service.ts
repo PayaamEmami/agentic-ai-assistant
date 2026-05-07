@@ -19,6 +19,10 @@ import {
 } from './retrieval-helpers.js';
 import { decideRetrieval } from './retrieval-policy.js';
 import { createToolCall } from './tool-call-service.js';
+import {
+  type EnqueueToolExecutionJob,
+  enqueueToolExecutionJob as defaultEnqueueToolExecutionJob,
+} from './tool-execution-queue.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
 import { buildConversationTitle } from './chat-service-helpers.js';
 
@@ -208,11 +212,13 @@ export class VoiceService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly preparedTurns = new Map<string, PreparedTurnCache>();
   private readonly config: AppConfig;
+  private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
 
   constructor(
     config: AppConfig,
     personalizationService?: PersonalizationService,
     retrievalBridge?: RetrievalBridge,
+    options?: { enqueueToolExecutionJob?: EnqueueToolExecutionJob },
   ) {
     this.personalizationService = personalizationService ?? new PersonalizationService();
     this.retrievalBridge =
@@ -221,6 +227,8 @@ export class VoiceService {
         embeddingModel: config.openaiEmbeddingModel,
       });
     this.config = config;
+    this.enqueueToolExecutionJob =
+      options?.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
   }
 
   private cachePreparedTurn(voiceTurnId: string, cache: PreparedTurnCache): void {
@@ -656,6 +664,7 @@ export class VoiceService {
       input: toolInput,
       messageId: params.voiceTurnId,
       originMode: 'voice',
+      enqueueToolExecutionJob: this.enqueueToolExecutionJob,
     });
 
     getLogger({

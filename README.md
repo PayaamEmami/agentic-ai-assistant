@@ -13,7 +13,7 @@ The main idea behind the project is to make the assistant’s intelligence porta
 - Native tool execution with approval flow for sensitive actions
 - Connected app model for separating knowledge access from tool access
 - Multi-agent orchestration for routing, research, tool use, and verification
-- Self-hosted deployment with owned database, backups, and local observability
+- Self-hosted deployment with an owned database and local observability
 
 ## Architecture Overview
 
@@ -65,7 +65,7 @@ Current live voice behavior:
 | Backend        | Node.js, TypeScript, Fastify 5                      |
 | Database       | PostgreSQL 16 with pgvector                         |
 | Cache/Queue    | Redis 7, BullMQ                                     |
-| Storage        | PostgreSQL attachments, AWS S3 for deploys/backups  |
+| Storage        | PostgreSQL attachments, AWS S3 for deployment assets |
 | AI             | Model provider gateway, embeddings, realtime voice  |
 | Tools          | Native tool handlers, provider tools                |
 | Infrastructure | AWS EC2, Docker Compose, Caddy, optional CloudFront |
@@ -78,11 +78,11 @@ Production runs on AWS with a containerized web, API, worker, Postgres, and Redi
 - **EC2 + Docker Compose** run the application containers and stateful services
 - **Postgres with pgvector** stores app data, attachments, memory, and embeddings
 - **Redis + BullMQ** handle background jobs and queues
-- **S3** stores deployment artifacts and database backups
+- **S3** stores deployment artifacts
 - **Caddy** reverse-proxies web and API traffic; custom-domain Caddy TLS or CloudFront can provide public HTTPS
 - **GitHub Actions** runs CI and deploys changes from `main`
 
-See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, backup, rollback, and restore details.
+See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, and rollback details.
 
 ## Repository Structure
 

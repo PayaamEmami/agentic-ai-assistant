@@ -1,149 +1,116 @@
-import { Queue } from 'bullmq';
-import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, loadWorkerConfig, parseRedisUrl } from '@aaa/config';
-import { getLogContext, getLogger, withSpan } from '@aaa/observability';
+import type { ConnectionOptions } from 'bullmq';
+import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl, type WorkerConfig } from '@aaa/config';
+import { createQueueProducer, type QueueProducer } from '@aaa/queues';
 import type { AppSyncJobData, EmbeddingJobData, IngestionJobData } from '@aaa/shared';
 
-let appSyncQueue: Queue<AppSyncJobData> | null = null;
-let ingestionQueue: Queue<IngestionJobData> | null = null;
-let embeddingQueue: Queue<EmbeddingJobData> | null = null;
-
-function getAppSyncQueue(): Queue<AppSyncJobData> {
-  if (!appSyncQueue) {
-    appSyncQueue = new Queue<AppSyncJobData>(QUEUE_NAMES.appSync, {
-      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
-    });
-  }
-  return appSyncQueue;
+interface JobQueueProducers {
+  appSync: QueueProducer<AppSyncJobData>;
+  ingestion: QueueProducer<IngestionJobData>;
+  embedding: QueueProducer<EmbeddingJobData>;
 }
 
-function getIngestionQueue(): Queue<IngestionJobData> {
-  if (!ingestionQueue) {
-    ingestionQueue = new Queue<IngestionJobData>(QUEUE_NAMES.ingestion, {
-      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
-    });
-  }
-  return ingestionQueue;
+let producers: JobQueueProducers | null = null;
+
+function createJobQueueProducers(connection: ConnectionOptions): JobQueueProducers {
+  return {
+    appSync: createQueueProducer<AppSyncJobData>({
+      queueName: QUEUE_NAMES.appSync,
+      jobName: 'sync-app',
+      component: 'worker-job-queues',
+      spanName: 'queue.app_sync.enqueue',
+      connection,
+      jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
+      fallbackCorrelationId: (job) => `app-${job.appCapabilityConfigId}`,
+      jobId: (job) => `app-sync-${job.appCapabilityConfigId}`,
+      spanAttributes: (job) => ({
+        'aaa.app_capability_config.id': job.appCapabilityConfigId,
+      }),
+      log: {
+        event: 'app.sync.enqueued',
+        message: 'App sync job enqueued',
+        context: (job) => ({
+          appCapabilityConfigId: job.appCapabilityConfigId,
+        }),
+        fields: (job) => ({
+          appKind: job.appKind,
+          appCapability: job.capability,
+        }),
+      },
+    }),
+    ingestion: createQueueProducer<IngestionJobData>({
+      queueName: QUEUE_NAMES.ingestion,
+      jobName: 'ingest-document',
+      component: 'worker-job-queues',
+      spanName: 'queue.ingestion.enqueue',
+      connection,
+      jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.ingestion],
+      fallbackCorrelationId: (job) => `ingestion-${job.documentId}`,
+      jobId: (job) => `ingest-${job.documentId}`,
+      spanAttributes: (job) => ({
+        'aaa.document.id': job.documentId,
+      }),
+      log: {
+        event: 'ingestion.enqueued',
+        message: 'Ingestion job enqueued',
+        context: (job) => ({
+          documentId: job.documentId,
+        }),
+        fields: (job) => ({
+          sourceId: job.sourceId,
+          externalId: job.externalId,
+          appKind: job.appKind,
+        }),
+      },
+    }),
+    embedding: createQueueProducer<EmbeddingJobData>({
+      queueName: QUEUE_NAMES.embedding,
+      jobName: 'embed-chunks',
+      component: 'worker-job-queues',
+      spanName: 'queue.embedding.enqueue',
+      connection,
+      jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.embedding],
+      fallbackCorrelationId: (job) => `embedding-${job.chunkIds[0] ?? 'batch'}`,
+      log: {
+        event: 'embedding.enqueued',
+        message: 'Embedding job enqueued',
+        fields: (job) => ({
+          chunkCount: job.chunkIds.length,
+          model: job.model,
+        }),
+      },
+    }),
+  };
 }
 
-function getEmbeddingQueue(): Queue<EmbeddingJobData> {
-  if (!embeddingQueue) {
-    embeddingQueue = new Queue<EmbeddingJobData>(QUEUE_NAMES.embedding, {
-      connection: parseRedisUrl(loadWorkerConfig().redisUrl),
-    });
+export function initializeJobQueues(config: WorkerConfig): void {
+  producers = createJobQueueProducers(parseRedisUrl(config.redisUrl));
+}
+
+function getProducers(): JobQueueProducers {
+  if (!producers) {
+    throw new Error('Job queues have not been initialized');
   }
-  return embeddingQueue;
+  return producers;
 }
 
 export async function enqueueAppSyncJob(job: AppSyncJobData): Promise<void> {
-  const correlationId =
-    job.correlationId || getLogContext().correlationId || `app-${job.appCapabilityConfigId}`;
-  const payload = {
-    ...job,
-    correlationId,
-  };
-
-  await withSpan(
-    'queue.app_sync.enqueue',
-    {
-      'aaa.queue.name': QUEUE_NAMES.appSync,
-      'aaa.app_capability_config.id': job.appCapabilityConfigId,
-    },
-    () =>
-      getAppSyncQueue().add('sync-app', payload, {
-        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.appSync],
-        jobId: `app-sync-${job.appCapabilityConfigId}`,
-      }),
-  );
-  getLogger({
-    component: 'worker-job-queues',
-    appCapabilityConfigId: job.appCapabilityConfigId,
-    correlationId,
-  }).info(
-    {
-      event: 'app.sync.enqueued',
-      outcome: 'accepted',
-      appKind: job.appKind,
-      appCapability: job.capability,
-    },
-    'App sync job enqueued',
-  );
+  await getProducers().appSync.enqueue(job);
 }
 
 export async function enqueueIngestionJob(job: IngestionJobData): Promise<void> {
-  const correlationId =
-    job.correlationId || getLogContext().correlationId || `ingestion-${job.documentId}`;
-  const payload = {
-    ...job,
-    correlationId,
-  };
-
-  await withSpan(
-    'queue.ingestion.enqueue',
-    {
-      'aaa.queue.name': QUEUE_NAMES.ingestion,
-      'aaa.document.id': job.documentId,
-    },
-    () =>
-      getIngestionQueue().add('ingest-document', payload, {
-        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.ingestion],
-        jobId: `ingest-${job.documentId}`,
-      }),
-  );
-  getLogger({
-    component: 'worker-job-queues',
-    correlationId,
-    documentId: job.documentId,
-  }).info(
-    {
-      event: 'ingestion.enqueued',
-      outcome: 'accepted',
-      sourceId: job.sourceId,
-      externalId: job.externalId,
-      appKind: job.appKind,
-    },
-    'Ingestion job enqueued',
-  );
+  await getProducers().ingestion.enqueue(job);
 }
 
 export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> {
-  const correlationId =
-    job.correlationId || getLogContext().correlationId || `embedding-${job.chunkIds[0] ?? 'batch'}`;
-  const payload = {
-    ...job,
-    correlationId,
-  };
-
-  await withSpan(
-    'queue.embedding.enqueue',
-    {
-      'aaa.queue.name': QUEUE_NAMES.embedding,
-    },
-    () =>
-      getEmbeddingQueue().add('embed-chunks', payload, {
-        ...QUEUE_JOB_OPTIONS[QUEUE_NAMES.embedding],
-      }),
-  );
-  getLogger({
-    component: 'worker-job-queues',
-    correlationId,
-  }).info(
-    {
-      event: 'embedding.enqueued',
-      outcome: 'accepted',
-      chunkCount: job.chunkIds.length,
-      model: job.model,
-    },
-    'Embedding job enqueued',
-  );
+  await getProducers().embedding.enqueue(job);
 }
 
 export async function closeJobQueues(): Promise<void> {
-  await Promise.all(
-    [appSyncQueue, ingestionQueue, embeddingQueue]
-      .filter((queue): queue is Queue => queue !== null)
-      .map((queue) => queue.close()),
-  );
-  appSyncQueue = null;
-  ingestionQueue = null;
-  embeddingQueue = null;
+  if (!producers) {
+    return;
+  }
+
+  const current = producers;
+  producers = null;
+  await Promise.all([current.appSync.close(), current.ingestion.close(), current.embedding.close()]);
 }

@@ -8,7 +8,6 @@ import {
   VerifierAgent,
 } from '@aaa/ai';
 import {
-  approvalRepository,
   attachmentRepository,
   appCapabilityConfigRepository,
   conversationRepository,
@@ -16,7 +15,6 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import { getLogContext } from '@aaa/observability';
 import {
   type ApprovalRequestedEvent,
   type AssistantInterruptedEvent,
@@ -25,7 +23,7 @@ import {
 } from '@aaa/shared';
 import type { AppConfig } from '../config.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
-import { buildApprovalDescription } from './tool-call-service.js';
+import { stageToolCall } from './tool-call-service.js';
 import { AppError } from '../lib/errors.js';
 import { logger } from '../lib/logger.js';
 import type { RetrievalResponse } from './retrieval-bridge.js';
@@ -39,7 +37,10 @@ import {
   selectDisplayedCitations,
   toCitationContentBlocks,
 } from './retrieval-helpers.js';
-import { enqueueToolExecutionJob } from './tool-execution-queue.js';
+import {
+  type EnqueueToolExecutionJob,
+  enqueueToolExecutionJob as defaultEnqueueToolExecutionJob,
+} from './tool-execution-queue.js';
 import { ChatRunRegistry } from './chat-run-registry.js';
 import { ChatEventPublisher } from './chat-event-publisher.js';
 import { getLatestUserRequestText, toAgentHistoryMessages } from './chat-history.js';
@@ -118,6 +119,7 @@ export class ChatService {
   private readonly personalizationService: PersonalizationService;
   private readonly runRegistry: ChatRunRegistry;
   private readonly eventPublisher: ChatEventPublisher;
+  private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
 
   constructor(options: {
     config: AppConfig;
@@ -127,6 +129,7 @@ export class ChatService {
     personalizationService?: PersonalizationService;
     runRegistry?: ChatRunRegistry;
     eventPublisher?: ChatEventPublisher;
+    enqueueToolExecutionJob?: EnqueueToolExecutionJob;
   }) {
     const { config } = options;
     this.retrievalBridge =
@@ -154,6 +157,8 @@ export class ChatService {
     this.personalizationService = options.personalizationService ?? new PersonalizationService();
     this.runRegistry = options.runRegistry ?? new ChatRunRegistry();
     this.eventPublisher = options.eventPublisher ?? new ChatEventPublisher();
+    this.enqueueToolExecutionJob =
+      options.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
   }
 
   async sendMessage(
@@ -362,13 +367,7 @@ export class ChatService {
       );
       const toolResultBlocks: Array<Record<string, unknown>> = [];
       const toolExecutionIds: string[] = [];
-      const queuedToolJobs: Array<{
-        toolExecutionId: string;
-        toolName: string;
-        input: Record<string, unknown>;
-        conversationId: string;
-        correlationId: string;
-      }> = [];
+      const queuedToolJobs: Array<Parameters<EnqueueToolExecutionJob>[0]> = [];
       const approvalEvents: ApprovalRequestedEvent[] = [];
       let hasApprovalRequest = false;
 
@@ -381,53 +380,36 @@ export class ChatService {
         }
 
         const toolInput = toolCall.arguments;
-        const toolExecution = await toolExecutionRepository.create(
-          conversation.id,
-          null,
-          toolCall.name,
-          toolInput,
-          { originMode: 'text' },
-        );
-        toolExecutionIds.push(toolExecution.id);
+        const stagedToolCall = await stageToolCall({
+          conversationId: conversation.id,
+          userId,
+          tool,
+          input: toolInput,
+          messageId: null,
+          originMode: 'text',
+          enqueueToolExecutionJob: this.enqueueToolExecutionJob,
+        });
+        toolExecutionIds.push(stagedToolCall.toolExecutionId);
 
-        if (tool.requiresApproval) {
+        if (stagedToolCall.status === 'requires_approval') {
           hasApprovalRequest = true;
-          await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
-          const approval = await approvalRepository.create(
-            userId,
-            conversation.id,
-            toolExecution.id,
-            buildApprovalDescription(tool, toolInput),
-          );
-          await toolExecutionRepository.setApproval(toolExecution.id, approval.id);
 
           toolResultBlocks.push({
             type: 'tool_result',
-            toolExecutionId: toolExecution.id,
+            toolExecutionId: stagedToolCall.toolExecutionId,
             toolName: toolCall.name,
             status: 'pending',
           });
 
-          approvalEvents.push({
-            type: 'approval.requested',
-            conversationId: conversation.id,
-            approvalId: approval.id,
-            toolExecutionId: toolExecution.id,
-            description: approval.description,
-          });
-        } else {
-          queuedToolJobs.push({
-            toolExecutionId: toolExecution.id,
-            toolName: toolCall.name,
-            input: toolInput,
-            conversationId: conversation.id,
-            correlationId:
-              getLogContext().correlationId ?? `chat-${conversation.id}-${toolExecution.id}`,
-          });
+          if (stagedToolCall.approvalEvent) {
+            approvalEvents.push(stagedToolCall.approvalEvent);
+          }
+        } else if (stagedToolCall.queuedJob) {
+          queuedToolJobs.push(stagedToolCall.queuedJob);
 
           toolResultBlocks.push({
             type: 'tool_result',
-            toolExecutionId: toolExecution.id,
+            toolExecutionId: stagedToolCall.toolExecutionId,
             toolName: toolCall.name,
             status: 'planned',
           });
@@ -472,7 +454,7 @@ export class ChatService {
         );
       }
       if (queuedToolJobs.length > 0) {
-        await Promise.all(queuedToolJobs.map((job) => enqueueToolExecutionJob(job)));
+        await Promise.all(queuedToolJobs.map((job) => this.enqueueToolExecutionJob(job)));
       }
 
       const event: AssistantTextDoneEvent = {
