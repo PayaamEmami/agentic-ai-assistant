@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   api,
@@ -76,6 +76,143 @@ function capabilityDescription(capability: AppCapabilitySummary): string {
   return capability.capability === 'knowledge'
     ? 'Synced retrieval context and citations.'
     : 'Live provider tools available during chat.';
+}
+
+function selectedRepositoryLabel(count: number): string {
+  if (count === 0) {
+    return 'Select repositories';
+  }
+
+  if (count === 1) {
+    return '1 repository selected';
+  }
+
+  return `${count} repositories selected`;
+}
+
+function GitHubRepositorySelector({
+  repositories,
+  selectedRepoIds,
+  saving,
+  onSave,
+  onSelectedRepoIdsChange,
+}: {
+  repositories: GitHubRepositorySummary[];
+  selectedRepoIds: number[];
+  saving: boolean;
+  onSave: () => Promise<void>;
+  onSelectedRepoIdsChange: Dispatch<SetStateAction<number[]>>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const selectedRepoIdSet = useMemo(() => new Set(selectedRepoIds), [selectedRepoIds]);
+  const filteredRepositories = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return repositories;
+    }
+
+    return repositories.filter((repository) =>
+      repository.fullName.toLowerCase().includes(normalizedQuery),
+    );
+  }, [query, repositories]);
+
+  const toggleRepository = (repositoryId: number, checked: boolean) => {
+    onSelectedRepoIdsChange((previous) => {
+      if (checked) {
+        return previous.includes(repositoryId) ? previous : [...previous, repositoryId];
+      }
+
+      return previous.filter((id) => id !== repositoryId);
+    });
+  };
+
+  const saveSelection = async () => {
+    await onSave();
+    setOpen(false);
+  };
+
+  return (
+    <div className="relative mt-4">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-xs font-medium text-foreground">Repositories</p>
+          <p className="mt-0.5 text-xs text-foreground-muted">Knowledge sync source</p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setOpen((previous) => !previous)}
+          disabled={repositories.length === 0}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+          className="inline-flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
+        >
+          <span>{selectedRepositoryLabel(selectedRepoIds.length)}</span>
+          <span className="text-foreground-muted">v</span>
+        </button>
+      </div>
+
+      {repositories.length === 0 ? (
+        <p className="mt-2 text-xs text-foreground-muted">No repositories loaded yet.</p>
+      ) : null}
+
+      {open ? (
+        <div className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg sm:w-96">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search repositories"
+            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-foreground-inactive focus:border-accent"
+          />
+          {filteredRepositories.length === 0 ? (
+            <p className="py-4 text-xs text-foreground-muted">No repositories match this search.</p>
+          ) : (
+            <div className="mt-3 max-h-56 divide-y divide-border overflow-y-auto pr-1">
+              {filteredRepositories.map((repository) => (
+                <label
+                  key={repository.id}
+                  className="flex items-start gap-2 py-3 text-xs first:pt-0 last:pb-0"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selectedRepoIdSet.has(repository.id)}
+                    onChange={(event) => toggleRepository(repository.id, event.target.checked)}
+                    className="mt-0.5"
+                  />
+                  <span className="min-w-0">
+                    <span className="block truncate font-medium text-foreground">
+                      {repository.fullName}
+                    </span>
+                    <span className="block text-foreground-muted">
+                      {repository.private ? 'Private' : 'Public'} | {repository.defaultBranch}
+                    </span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          )}
+          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-xl px-3 py-2 text-xs font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => void saveSelection()}
+              disabled={saving}
+              className="rounded-xl bg-accent px-3 py-2 text-xs font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+            >
+              {saving ? 'Saving...' : 'Save and sync'}
+            </button>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function AppManager() {
@@ -347,6 +484,15 @@ export function AppManager() {
                               Credentials: {capability.hasCredentials ? 'Available' : 'Missing'}
                             </p>
                           </div>
+                          {app.kind === 'github' && capability.capability === 'knowledge' ? (
+                            <GitHubRepositorySelector
+                              repositories={githubRepositories}
+                              selectedRepoIds={selectedRepoIds}
+                              saving={savingRepos}
+                              onSave={saveGitHubRepositories}
+                              onSelectedRepoIdsChange={setSelectedRepoIds}
+                            />
+                          ) : null}
                           {capability.lastError ? (
                             <p className="mt-3 rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">
                               {capability.lastError}
@@ -422,57 +568,6 @@ export function AppManager() {
                         )}
                       </div>
                     </div>
-
-                    {app.kind === 'github' ? (
-                      <div className="mt-5 border-t border-border pt-5">
-                        <p className="text-sm font-medium text-foreground">
-                          Repositories ({selectedRepoIds.length} selected)
-                        </p>
-                        {githubRepositories.length === 0 ? (
-                          <p className="mt-2 text-xs text-foreground-muted">
-                            No repositories loaded yet.
-                          </p>
-                        ) : (
-                          <div className="mt-3 max-h-56 divide-y divide-border overflow-y-auto pr-1">
-                            {githubRepositories.map((repository) => (
-                              <label
-                                key={repository.id}
-                                className="flex items-start gap-2 py-3 text-xs first:pt-0 last:pb-0"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={selectedRepoIds.includes(repository.id)}
-                                  onChange={(event) => {
-                                    setSelectedRepoIds((previous) =>
-                                      event.target.checked
-                                        ? [...previous, repository.id]
-                                        : previous.filter((id) => id !== repository.id),
-                                    );
-                                  }}
-                                  className="mt-0.5"
-                                />
-                                <span>
-                                  <span className="block font-medium text-foreground">
-                                    {repository.fullName}
-                                  </span>
-                                  <span className="block text-foreground-muted">
-                                    {repository.private ? 'Private' : 'Public'} |{' '}
-                                    {repository.defaultBranch}
-                                  </span>
-                                </span>
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                        <button
-                          onClick={() => void saveGitHubRepositories()}
-                          disabled={savingRepos}
-                          className="mt-3 rounded-xl bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground transition hover:bg-surface-hover disabled:opacity-50"
-                        >
-                          {savingRepos ? 'Saving...' : 'Save repositories'}
-                        </button>
-                      </div>
-                    ) : null}
                   </>
                 ) : null}
               </section>
