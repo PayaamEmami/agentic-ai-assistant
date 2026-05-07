@@ -435,6 +435,8 @@ export function useLiveVoiceSession({
       );
       await withRetry('complete', () => api.voice.completeTurn(voiceTurnId, assistantTranscript));
       await syncConversation(conversationId);
+      setUserCaption('');
+      setAssistantCaption('');
       resetPendingTurn();
     } catch (persistError) {
       void reportClientError({
