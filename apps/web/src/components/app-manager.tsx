@@ -39,23 +39,6 @@ function formatTimestamp(value: string | null): string {
   return Number.isNaN(timestamp.getTime()) ? 'Unknown time' : timestamp.toLocaleString();
 }
 
-function formatDuration(startedAt: string, completedAt: string | null): string {
-  const start = new Date(startedAt).getTime();
-  const end = completedAt ? new Date(completedAt).getTime() : Date.now();
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) {
-    return completedAt ? 'Completed' : 'Running';
-  }
-
-  const totalSeconds = Math.round((end - start) / 1000);
-  if (totalSeconds < 60) {
-    return `${totalSeconds}s`;
-  }
-
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  return seconds === 0 ? `${minutes}m` : `${minutes}m ${seconds}s`;
-}
-
 function sourceLabel(kind: string): string {
   if (kind === 'code_repository') {
     return 'Code';
@@ -88,6 +71,77 @@ function selectedRepositoryLabel(count: number): string {
   }
 
   return `${count} repositories selected`;
+}
+
+function ChevronDownIcon({ open = false }: { open?: boolean }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={`shrink-0 text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`}
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function IndexedSourcesSection({ app }: { app: AppSummary }) {
+  const [open, setOpen] = useState(false);
+  const sourcesId = `${app.kind}-indexed-sources`;
+
+  return (
+    <div className="mt-5 min-w-0 border-t border-border pt-5">
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        aria-expanded={open}
+        aria-controls={sourcesId}
+        className="flex w-full items-center justify-between gap-3 rounded-xl text-left transition hover:text-foreground"
+      >
+        <span className="min-w-0">
+          <span className="block break-words text-sm font-medium text-foreground">
+            Indexed Sources ({app.knowledge.searchableSourceCount}/
+            {app.knowledge.totalSourceCount})
+          </span>
+          <span className="mt-1 block text-xs text-foreground-muted">
+            {open ? 'Hide indexed source details' : 'Show indexed source details'}
+          </span>
+        </span>
+        <ChevronDownIcon open={open} />
+      </button>
+
+      {open ? (
+        <div id={sourcesId}>
+          {app.knowledge.recentSources.length === 0 ? (
+            <p className="mt-3 text-xs text-foreground-muted">No indexed sources yet.</p>
+          ) : (
+            <div className="mt-3 divide-y divide-border">
+              {app.knowledge.recentSources.map((source) => (
+                <div key={source.id} className="min-w-0 py-3 text-xs first:pt-0 last:pb-0">
+                  <p className="break-words font-medium text-foreground">{source.title}</p>
+                  <p className="mt-1 break-words text-foreground-muted">
+                    {sourceLabel(source.kind)}
+                    {source.mimeType ? ` | ${source.mimeType}` : ''}
+                  </p>
+                  <p className="mt-1 text-foreground-muted">
+                    Updated {formatTimestamp(source.updatedAt)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function GitHubRepositorySelector({
@@ -149,7 +203,7 @@ function GitHubRepositorySelector({
           className="inline-flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
         >
           <span>{selectedRepositoryLabel(selectedRepoIds.length)}</span>
-          <span className="text-foreground-muted">v</span>
+          <ChevronDownIcon open={open} />
         </button>
       </div>
 
@@ -502,72 +556,7 @@ export function AppManager() {
                       ))}
                     </div>
 
-                    <div className="mt-5 grid gap-6 border-t border-border pt-5 xl:grid-cols-2">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-foreground">Recent Sync Runs</p>
-                        {app.knowledge.recentSyncRuns.length === 0 ? (
-                          <p className="mt-2 text-xs text-foreground-muted">No sync history yet.</p>
-                        ) : (
-                          <div className="mt-3 divide-y divide-border">
-                            {app.knowledge.recentSyncRuns.map((run) => (
-                              <div
-                                key={run.id}
-                                className="min-w-0 py-3 text-xs first:pt-0 last:pb-0"
-                              >
-                                <div className="flex items-start justify-between gap-3">
-                                  <p className="font-medium text-foreground">{run.status}</p>
-                                  <p className="shrink-0 text-foreground-muted">
-                                    {formatDuration(run.startedAt, run.completedAt)}
-                                  </p>
-                                </div>
-                                <p className="mt-1 text-foreground-muted">
-                                  Started {formatTimestamp(run.startedAt)}
-                                </p>
-                                <p className="mt-1 break-words text-foreground-muted">
-                                  {run.itemsDiscovered} seen | {run.itemsQueued} queued
-                                  {run.itemsDeleted > 0 ? ` | ${run.itemsDeleted} removed` : ''}
-                                </p>
-                                {run.errorSummary ? (
-                                  <p className="mt-1 break-words text-error">{run.errorSummary}</p>
-                                ) : null}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="min-w-0">
-                        <p className="break-words text-sm font-medium text-foreground">
-                          Indexed Sources ({app.knowledge.searchableSourceCount}/
-                          {app.knowledge.totalSourceCount})
-                        </p>
-                        {app.knowledge.recentSources.length === 0 ? (
-                          <p className="mt-2 text-xs text-foreground-muted">
-                            No indexed sources yet.
-                          </p>
-                        ) : (
-                          <div className="mt-3 divide-y divide-border">
-                            {app.knowledge.recentSources.map((source) => (
-                              <div
-                                key={source.id}
-                                className="min-w-0 py-3 text-xs first:pt-0 last:pb-0"
-                              >
-                                <p className="break-words font-medium text-foreground">
-                                  {source.title}
-                                </p>
-                                <p className="mt-1 break-words text-foreground-muted">
-                                  {sourceLabel(source.kind)}
-                                  {source.mimeType ? ` | ${source.mimeType}` : ''}
-                                </p>
-                                <p className="mt-1 text-foreground-muted">
-                                  Updated {formatTimestamp(source.updatedAt)}
-                                </p>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    <IndexedSourcesSection app={app} />
                   </>
                 ) : null}
               </section>
