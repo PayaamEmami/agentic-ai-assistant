@@ -12,7 +12,6 @@ import {
 import { useSearchParams } from 'next/navigation';
 import {
   api,
-  type AppCapabilitySummary,
   type AppSummary,
   type GitHubRepositorySummary,
 } from '@/lib/api-client';
@@ -57,16 +56,6 @@ function sourceLabel(kind: string): string {
   }
 
   return kind;
-}
-
-function statusLabel(status: 'pending' | 'connected' | 'failed'): string {
-  return status === 'connected' ? 'Connected' : status === 'failed' ? 'Failed' : 'Pending';
-}
-
-function capabilityDescription(capability: AppCapabilitySummary): string {
-  return capability.capability === 'knowledge'
-    ? 'Synced retrieval context and citations.'
-    : 'Live provider tools available during chat.';
 }
 
 function selectedRepositoryLabel(count: number): string {
@@ -120,7 +109,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
         onClick={() => setOpen((previous) => !previous)}
         aria-expanded={open}
         aria-controls={sourcesId}
-        className="flex w-full items-center justify-between gap-3 rounded-xl text-left transition hover:text-foreground"
+        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-surface-hover hover:text-foreground"
       >
         <span className="min-w-0">
           <span className="block break-words text-sm font-medium text-foreground">
@@ -227,7 +216,6 @@ function GitHubRepositorySelector({
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-medium text-foreground">Repositories</p>
-          <p className="mt-0.5 text-xs text-foreground-muted">Knowledge sync source</p>
         </div>
         <button
           type="button"
@@ -504,12 +492,6 @@ export function AppManager() {
                         {app.lastError}
                       </p>
                     ) : null}
-                    {isConnected ? (
-                      <p className="mt-3 text-sm text-foreground-muted">
-                        Knowledge: {statusLabel(app.knowledge.status)}. Tools:{' '}
-                        {statusLabel(app.tools.status)}.
-                      </p>
-                    ) : null}
                     {app.kind === 'github' &&
                     isConnected &&
                     app.knowledge.status === 'connected' &&
@@ -552,46 +534,15 @@ export function AppManager() {
 
                 {isConnected ? (
                   <>
-                    <div className="mt-5 grid gap-4 sm:grid-cols-2">
-                      {[app.knowledge, app.tools].map((capability) => (
-                        <div
-                          key={capability.capability}
-                          className="pt-4"
-                        >
-                          <p className="text-sm font-medium text-foreground">
-                            {capability.capability === 'knowledge' ? 'Knowledge' : 'Tools'}
-                          </p>
-                          <p className="mt-1 text-xs text-foreground-muted">
-                            {capabilityDescription(capability)}
-                          </p>
-                          <div className="mt-3 grid gap-2 text-xs text-foreground-muted">
-                            <p>Status: {statusLabel(capability.status)}</p>
-                            <p>Last sync: {formatTimestamp(capability.lastSyncAt)}</p>
-                            <p>
-                              Searchable: {capability.searchableSourceCount}/
-                              {capability.totalSourceCount}
-                            </p>
-                            <p>
-                              Credentials: {capability.hasCredentials ? 'Available' : 'Missing'}
-                            </p>
-                          </div>
-                          {app.kind === 'github' && capability.capability === 'knowledge' ? (
-                            <GitHubRepositorySelector
-                              repositories={githubRepositories}
-                              selectedRepoIds={selectedRepoIds}
-                              saving={savingRepos}
-                              onSave={saveGitHubRepositories}
-                              onSelectedRepoIdsChange={setSelectedRepoIds}
-                            />
-                          ) : null}
-                          {capability.lastError ? (
-                            <p className="mt-3 rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-xs text-error">
-                              {capability.lastError}
-                            </p>
-                          ) : null}
-                        </div>
-                      ))}
-                    </div>
+                    {app.kind === 'github' ? (
+                      <GitHubRepositorySelector
+                        repositories={githubRepositories}
+                        selectedRepoIds={selectedRepoIds}
+                        saving={savingRepos}
+                        onSave={saveGitHubRepositories}
+                        onSelectedRepoIdsChange={setSelectedRepoIds}
+                      />
+                    ) : null}
 
                     <IndexedSourcesSection app={app} />
                   </>

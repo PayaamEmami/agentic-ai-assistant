@@ -190,7 +190,7 @@ export function Sidebar({
               <button
                 type="button"
                 onClick={() => void openChat(undefined)}
-                className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
                 title="New conversation"
                 aria-label="New conversation"
               >
@@ -199,56 +199,32 @@ export function Sidebar({
             ) : null}
             <button
               type="button"
-                onClick={onToggleDesktopCollapse ?? onCloseMobile}
-              className={`inline-flex items-center justify-center rounded-2xl border border-border-subtle text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground ${
-                collapsed ? 'h-11 w-11' : 'h-10 w-10'
-              }`}
+              onClick={onToggleDesktopCollapse ?? onCloseMobile}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
-              {collapsed ? <ChevronRightIcon /> : <ChevronLeftIcon />}
+              <SidebarToggleIcon />
             </button>
           </div>
         </div>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto p-2">
-        {!collapsed && isConversationListCollapsed ? null : loading.isLoadingConversations &&
+        {collapsed || isConversationListCollapsed ? null : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p
-            className={`text-sm text-foreground-muted ${collapsed ? 'px-1 py-2 text-center text-xs' : 'p-2'}`}
+            className="p-2 text-sm text-foreground-muted"
           >
             Loading conversations...
           </p>
         ) : conversations.length === 0 ? (
-          collapsed ? null : (
-            <p className="p-2 text-sm text-foreground-muted">No conversations yet</p>
-          )
+          <p className="p-2 text-sm text-foreground-muted">No conversations yet</p>
         ) : (
           conversations.map((conversation) => {
             const isActive = currentConversationId === conversation.id;
             const isEditing = editingConversationId === conversation.id;
             const isPending = pendingConversationId === conversation.id;
             const label = conversationLabel(conversation.title);
-
-            if (collapsed) {
-              return (
-                <button
-                  key={conversation.id}
-                  type="button"
-                  onClick={() => void openChat(conversation.id)}
-                  disabled={isPending}
-                  title={label}
-                  aria-label={label}
-                  className={`mb-2 flex h-12 w-full items-center justify-center rounded-2xl border text-sm font-semibold transition ${
-                    isActive
-                      ? 'border-transparent bg-surface-accent text-foreground'
-                      : 'border-transparent text-foreground-muted hover:border-border hover:bg-surface-hover hover:text-foreground'
-                  } disabled:opacity-50`}
-                >
-                  {getInitials(label)}
-                </button>
-              );
-            }
 
             return (
               <div
@@ -600,12 +576,12 @@ function SignOutIcon() {
   );
 }
 
-function ChevronLeftIcon() {
+function SidebarToggleIcon() {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
+      width="18"
+      height="18"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -613,25 +589,8 @@ function ChevronLeftIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function ChevronRightIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="m9 18 6-6-6-6" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
     </svg>
   );
 }
