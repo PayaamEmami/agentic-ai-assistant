@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api, type PersonalizationMemory, type PersonalizationMemoryKind } from '@/lib/api-client';
 
@@ -55,6 +55,14 @@ export default function PersonalizationPage() {
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [editingMemoryContent, setEditingMemoryContent] = useState('');
   const [pendingMemoryId, setPendingMemoryId] = useState<string | null>(null);
+  const memoryGroups = useMemo(
+    () =>
+      MEMORY_KIND_ORDER.map((kind) => ({
+        kind,
+        memories: memories.filter((memory) => memory.kind === kind),
+      })).filter((group) => group.memories.length > 0),
+    [memories],
+  );
 
   const loadPersonalization = async () => {
     setError(null);
@@ -213,9 +221,6 @@ export default function PersonalizationPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div>
                     <h2 className="text-base font-medium text-foreground">Profile</h2>
-                    <p className="mt-1 text-sm text-foreground-muted">
-                      Default style guidance for future replies.
-                    </p>
                   </div>
                   <button
                     onClick={() => void handleSaveProfile()}
@@ -257,11 +262,6 @@ export default function PersonalizationPage() {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <h2 className="text-base font-medium text-foreground">Memories</h2>
-                    <p className="mt-1 text-sm text-foreground-muted">
-                      {memories.length === 0
-                        ? 'No saved memories yet.'
-                        : `${memories.length} saved ${memories.length === 1 ? 'memory' : 'memories'}.`}
-                    </p>
                   </div>
 
                   <div className="flex items-center gap-2">
@@ -310,74 +310,93 @@ export default function PersonalizationPage() {
                   />
                 </label>
 
-                <div className="mt-6 divide-y divide-border">
+                <div className="mt-6">
                   {memories.length === 0 ? (
                     <p className="py-8 text-sm text-foreground-muted">
                       Add your first memory to help future conversations feel more tailored.
                     </p>
                   ) : (
-                    memories.map((memory) => {
-                      const isEditing = editingMemoryId === memory.id;
-                      const isPending = pendingMemoryId === memory.id;
+                    <div className="space-y-6">
+                      {memoryGroups.map((group) => (
+                        <section key={group.kind} className="space-y-2">
+                          <h3 className="text-sm font-medium text-foreground-muted">
+                            {MEMORY_KIND_LABELS[group.kind]}
+                          </h3>
+                          <div className="space-y-1">
+                            {group.memories.map((memory) => {
+                              const isEditing = editingMemoryId === memory.id;
+                              const isPending = pendingMemoryId === memory.id;
 
-                      return (
-                        <div key={memory.id} className="py-4">
-                          {isEditing ? (
-                            <div className="space-y-3">
-                              <textarea
-                                value={editingMemoryContent}
-                                onChange={(event) => setEditingMemoryContent(event.target.value)}
-                                rows={4}
-                                maxLength={2000}
-                                disabled={isPending}
-                                className="w-full resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition focus:border-accent"
-                              />
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  onClick={cancelEditingMemory}
-                                  disabled={isPending}
-                                  className="rounded-xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                              return (
+                                <div
+                                  key={memory.id}
+                                  className="group rounded-xl px-3 py-2 transition hover:bg-surface-hover"
                                 >
-                                  Cancel
-                                </button>
-                                <button
-                                  onClick={() => void handleSaveMemory(memory.id)}
-                                  disabled={isPending || !editingMemoryContent.trim()}
-                                  className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                                >
-                                  {isPending ? 'Saving...' : 'Save'}
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-2">
-                              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-foreground-inactive">
-                                <span className="font-medium text-foreground-muted">
-                                  {MEMORY_KIND_LABELS[memory.kind]}
-                                </span>
-                              </div>
-                              <p className="text-sm leading-6 text-foreground">{memory.content}</p>
-                              <div className="flex items-center gap-2">
-                                <button
-                                  onClick={() => beginEditingMemory(memory)}
-                                  disabled={isPending}
-                                  className="rounded-lg px-2 py-1 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
-                                >
-                                  Edit
-                                </button>
-                                <button
-                                  onClick={() => void handleDeleteMemory(memory)}
-                                  disabled={isPending}
-                                  className="rounded-lg px-2 py-1 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
-                                >
-                                  {isPending ? 'Deleting...' : 'Delete'}
-                                </button>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })
+                                  {isEditing ? (
+                                    <div className="space-y-3">
+                                      <textarea
+                                        value={editingMemoryContent}
+                                        onChange={(event) =>
+                                          setEditingMemoryContent(event.target.value)
+                                        }
+                                        rows={4}
+                                        maxLength={2000}
+                                        disabled={isPending}
+                                        className="w-full resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition focus:border-accent"
+                                      />
+                                      <div className="flex items-center justify-end gap-2">
+                                        <button
+                                          onClick={cancelEditingMemory}
+                                          disabled={isPending}
+                                          className="rounded-xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                                        >
+                                          Cancel
+                                        </button>
+                                        <button
+                                          onClick={() => void handleSaveMemory(memory.id)}
+                                          disabled={isPending || !editingMemoryContent.trim()}
+                                          className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                        >
+                                          {isPending ? 'Saving...' : 'Save'}
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-start gap-2">
+                                      <p className="min-w-0 flex-1 text-sm leading-6 text-foreground">
+                                        {memory.content}
+                                      </p>
+                                      <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                                        <button
+                                          type="button"
+                                          onClick={() => beginEditingMemory(memory)}
+                                          disabled={isPending}
+                                          className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
+                                          title="Edit memory"
+                                          aria-label="Edit memory"
+                                        >
+                                          <EditIcon />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => void handleDeleteMemory(memory)}
+                                          disabled={isPending}
+                                          className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-error disabled:opacity-50"
+                                          title="Delete memory"
+                                          aria-label="Delete memory"
+                                        >
+                                          <TrashIcon />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </section>
+                      ))}
+                    </div>
                   )}
                 </div>
               </section>
@@ -424,6 +443,49 @@ function ChevronDownIcon() {
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function EditIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 20h9" />
+      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 6h18" />
+      <path d="M8 6V4h8v2" />
+      <path d="M19 6l-1 14H6L5 6" />
+      <path d="M10 11v6" />
+      <path d="M14 11v6" />
     </svg>
   );
 }

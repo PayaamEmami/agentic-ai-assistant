@@ -31,10 +31,10 @@ function appLabel(kind: string): string {
 
 function providerDescription(kind: AppSummary['kind']): string {
   if (kind === 'github') {
-    return 'Sync selected repositories for retrieval and use GitHub tools in chat.';
+    return 'Ask about your codebase, reference files, and make changes in selected repositories.';
   }
 
-  return 'Sync Google Docs for retrieval and use Google Drive and Docs tools in chat.';
+  return 'Ask about your files, reference documents, and make edits from chat.';
 }
 
 function formatTimestamp(value: string | null): string {
