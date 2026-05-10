@@ -117,7 +117,10 @@ export default function PersonalizationPage() {
 
   const [writingStyle, setWritingStyle] = useState('');
   const [tonePreference, setTonePreference] = useState('');
+  const [savedWritingStyle, setSavedWritingStyle] = useState('');
+  const [savedTonePreference, setSavedTonePreference] = useState('');
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveStatus, setProfileSaveStatus] = useState<string | null>(null);
 
   const [memories, setMemories] = useState<PersonalizationMemory[]>([]);
   const [newMemoryKind, setNewMemoryKind] = useState<PersonalizationMemoryKind>('fact');
@@ -134,6 +137,9 @@ export default function PersonalizationPage() {
       })).filter((group) => group.memories.length > 0),
     [memories],
   );
+  const hasProfileChanges =
+    writingStyle.trim() !== savedWritingStyle.trim() ||
+    tonePreference.trim() !== savedTonePreference.trim();
 
   const loadPersonalization = async () => {
     setError(null);
@@ -141,8 +147,12 @@ export default function PersonalizationPage() {
 
     try {
       const response = await api.personalization.get();
-      setWritingStyle(response.profile.writingStyle ?? '');
-      setTonePreference(response.profile.tonePreference ?? '');
+      const loadedWritingStyle = response.profile.writingStyle ?? '';
+      const loadedTonePreference = response.profile.tonePreference ?? '';
+      setWritingStyle(loadedWritingStyle);
+      setTonePreference(loadedTonePreference);
+      setSavedWritingStyle(loadedWritingStyle);
+      setSavedTonePreference(loadedTonePreference);
       setMemories(sortMemories(response.memories));
     } catch (requestError) {
       setError(
@@ -157,23 +167,56 @@ export default function PersonalizationPage() {
     void loadPersonalization();
   }, []);
 
-  const handleSaveProfile = async () => {
-    setError(null);
-    setIsSavingProfile(true);
-
-    try {
-      const response = await api.personalization.updateProfile({
-        writingStyle: writingStyle.trim() || null,
-        tonePreference: tonePreference.trim() || null,
-      });
-      setWritingStyle(response.profile.writingStyle ?? '');
-      setTonePreference(response.profile.tonePreference ?? '');
-    } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to save profile.');
-    } finally {
-      setIsSavingProfile(false);
+  useEffect(() => {
+    if (isLoading || isSavingProfile || !hasProfileChanges) {
+      return;
     }
-  };
+
+    setProfileSaveStatus(null);
+
+    const submittedWritingStyle = writingStyle.trim();
+    const submittedTonePreference = tonePreference.trim();
+    const timeout = window.setTimeout(() => {
+      void (async () => {
+        setError(null);
+        setIsSavingProfile(true);
+
+        try {
+          const response = await api.personalization.updateProfile({
+            writingStyle: submittedWritingStyle || null,
+            tonePreference: submittedTonePreference || null,
+          });
+          const savedWritingStyleValue = response.profile.writingStyle ?? '';
+          const savedTonePreferenceValue = response.profile.tonePreference ?? '';
+
+          setWritingStyle((current) =>
+            current.trim() === submittedWritingStyle ? savedWritingStyleValue : current,
+          );
+          setTonePreference((current) =>
+            current.trim() === submittedTonePreference ? savedTonePreferenceValue : current,
+          );
+          setSavedWritingStyle(savedWritingStyleValue);
+          setSavedTonePreference(savedTonePreferenceValue);
+          setProfileSaveStatus('Saved');
+        } catch (requestError) {
+          setError(requestError instanceof Error ? requestError.message : 'Failed to save profile.');
+        } finally {
+          setIsSavingProfile(false);
+        }
+      })();
+    }, 900);
+
+    return () => window.clearTimeout(timeout);
+  }, [hasProfileChanges, isLoading, isSavingProfile, tonePreference, writingStyle]);
+
+  useEffect(() => {
+    if (!profileSaveStatus) {
+      return;
+    }
+
+    const timeout = window.setTimeout(() => setProfileSaveStatus(null), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [profileSaveStatus]);
 
   const handleCreateMemory = async () => {
     const content = newMemoryContent.trim();
@@ -289,18 +332,7 @@ export default function PersonalizationPage() {
           ) : (
             <>
               <section className="space-y-5">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="text-base font-medium text-foreground">Profile</h2>
-                  </div>
-                  <button
-                    onClick={() => void handleSaveProfile()}
-                    disabled={isSavingProfile}
-                    className="self-start rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {isSavingProfile ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
+                <h2 className="text-base font-medium text-foreground">Profile</h2>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="flex flex-col gap-2">
@@ -327,38 +359,43 @@ export default function PersonalizationPage() {
                     />
                   </label>
                 </div>
+
+                {isSavingProfile || profileSaveStatus ? (
+                  <p className="text-right text-xs text-foreground-muted">
+                    {isSavingProfile ? 'Saving...' : profileSaveStatus}
+                  </p>
+                ) : null}
               </section>
 
               <section className="border-t border-border pt-6">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <h2 className="text-base font-medium text-foreground">Memories</h2>
-                  </div>
+                <h2 className="text-base font-medium text-foreground">Memories</h2>
 
-                  <div className="flex items-center gap-2">
+                <div className="mt-4 rounded-2xl border border-border bg-surface-elevated p-3 transition focus-within:border-accent">
+                  <label className="block">
+                    <span className="sr-only">New memory</span>
+                    <textarea
+                      value={newMemoryContent}
+                      onChange={(event) => setNewMemoryContent(event.target.value)}
+                      rows={3}
+                      maxLength={2000}
+                      placeholder="Add something the assistant should remember..."
+                      className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-foreground-inactive"
+                    />
+                  </label>
+                  <div className="mt-3 flex items-center justify-end gap-2">
                     <MemoryKindSelector value={newMemoryKind} onChange={setNewMemoryKind} />
-
                     <button
+                      type="button"
                       onClick={() => void handleCreateMemory()}
                       disabled={isCreatingMemory || !newMemoryContent.trim()}
-                      className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                      title={isCreatingMemory ? 'Adding memory' : 'Add memory'}
+                      aria-label={isCreatingMemory ? 'Adding memory' : 'Add memory'}
                     >
-                      {isCreatingMemory ? 'Saving...' : 'Add'}
+                      <PlusIcon />
                     </button>
                   </div>
                 </div>
-
-                <label className="mt-4 block">
-                  <span className="sr-only">New memory</span>
-                  <textarea
-                    value={newMemoryContent}
-                    onChange={(event) => setNewMemoryContent(event.target.value)}
-                    rows={3}
-                    maxLength={2000}
-                    placeholder="Add something the assistant should remember..."
-                    className="w-full resize-none rounded-xl border border-border bg-surface-elevated px-3 py-2.5 text-sm leading-6 text-foreground outline-none transition placeholder:text-foreground-inactive focus:border-accent"
-                  />
-                </label>
 
                 <div className="mt-6">
                   {memories.length === 0 ? (
@@ -403,11 +440,14 @@ export default function PersonalizationPage() {
                                           Cancel
                                         </button>
                                         <button
+                                          type="button"
                                           onClick={() => void handleSaveMemory(memory.id)}
                                           disabled={isPending || !editingMemoryContent.trim()}
-                                          className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                          className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                                          title={isPending ? 'Saving memory' : 'Save memory'}
+                                          aria-label={isPending ? 'Saving memory' : 'Save memory'}
                                         >
-                                          {isPending ? 'Saving...' : 'Save'}
+                                          <SaveIcon />
                                         </button>
                                       </div>
                                     </div>
@@ -493,6 +533,47 @@ function ChevronDownIcon() {
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2Z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 5v14" />
+      <path d="M5 12h14" />
     </svg>
   );
 }

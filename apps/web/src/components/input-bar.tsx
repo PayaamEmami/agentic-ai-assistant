@@ -6,6 +6,17 @@ import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
 
 const INDEXABLE_MIME_TYPES = new Set(['application/json', 'application/xml']);
+const MESSAGE_PLACEHOLDERS = [
+  'What, mortal?',
+  'What needs revealing?',
+  'Thy bidding, master?',
+  'What does the shadow will?',
+  'What you want?',
+  'Something need doing?',
+  'Yes, warchief?',
+  'Do you need my counsel?',
+  'What would you ask of me?',
+];
 
 function isIndexableDocument(file: File): boolean {
   return file.type.startsWith('text/') || INDEXABLE_MIME_TYPES.has(file.type);
@@ -32,6 +43,7 @@ export function InputBar() {
     loading,
   } = useChatContext();
   const [message, setMessage] = useState('');
+  const [messagePlaceholder, setMessagePlaceholder] = useState(MESSAGE_PLACEHOLDERS[0]);
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -43,6 +55,12 @@ export function InputBar() {
     syncConversation: syncConversationState,
     subscribeToolEvents,
   });
+
+  useEffect(() => {
+    setMessagePlaceholder(
+      MESSAGE_PLACEHOLDERS[Math.floor(Math.random() * MESSAGE_PLACEHOLDERS.length)],
+    );
+  }, []);
 
   useEffect(() => {
     if (focusRequestId === 0 || liveVoice.isActive) {
@@ -137,6 +155,7 @@ export function InputBar() {
     }
     return null;
   }, [loading.isSendingMessage, loading.isUploadingAttachment, pendingApprovals.length]);
+  const hasMessageContent = message.trim().length > 0 || attachments.length > 0;
 
   if (liveVoice.isActive) {
     return (
@@ -212,39 +231,32 @@ export function InputBar() {
         </div>
       )}
       <div className="flex items-end gap-2">
-        <button
-          type="button"
-          onClick={handleFilePicker}
-          disabled={loading.isUploadingAttachment}
-          className="rounded-lg p-2 text-foreground-muted hover:bg-surface-hover hover:text-foreground"
-          title="Upload file"
-        >
-          <AttachmentIcon />
-        </button>
-        <button
-          type="button"
-          onClick={() => void liveVoice.toggle()}
-          disabled={Boolean(micDisabledReason)}
-          className="rounded-lg p-2 text-foreground-muted transition-colors hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
-          title={micDisabledReason ?? 'Live voice mode'}
-          aria-label={micDisabledReason ?? 'Live voice mode'}
-        >
-          <MicIcon />
-        </button>
-        <textarea
-          ref={messageInputRef}
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
-              event.preventDefault();
-              event.currentTarget.form?.requestSubmit();
-            }
-          }}
-          rows={1}
-          placeholder="Type a message or attach files..."
-          className="min-h-10 flex-1 resize-none rounded-lg border border-border-subtle bg-surface-input px-4 py-2 text-sm text-foreground placeholder:text-foreground-inactive focus:border-accent focus:outline-none"
-        />
+        <div className="flex min-h-10 flex-1 items-end rounded-lg border border-border-subtle bg-surface-input transition focus-within:border-accent">
+          <button
+            type="button"
+            onClick={handleFilePicker}
+            disabled={loading.isUploadingAttachment}
+            className="m-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            title="Upload file"
+            aria-label="Upload file"
+          >
+            <AttachmentIcon />
+          </button>
+          <textarea
+            ref={messageInputRef}
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                event.preventDefault();
+                event.currentTarget.form?.requestSubmit();
+              }
+            }}
+            rows={1}
+            placeholder={messagePlaceholder}
+            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 pr-4 text-sm text-foreground placeholder:text-foreground-inactive focus:outline-none"
+          />
+        </div>
         {loading.isSendingMessage ? (
           <button
             type="button"
@@ -257,13 +269,29 @@ export function InputBar() {
             <StopIcon />
           </button>
         ) : (
-          <button
-            type="submit"
-            disabled={!message.trim() && attachments.length === 0}
-            className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-40"
-          >
-            Send
-          </button>
+          <>
+            {hasMessageContent ? (
+              <button
+                type="submit"
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+                title="Send message"
+                aria-label="Send message"
+              >
+                <SendIcon />
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void liveVoice.toggle()}
+                disabled={Boolean(micDisabledReason)}
+                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
+                title={micDisabledReason ?? 'Live voice mode'}
+                aria-label={micDisabledReason ?? 'Live voice mode'}
+              >
+                <MicIcon />
+              </button>
+            )}
+          </>
         )}
       </div>
       {liveVoice.error ? <p className="mt-3 text-xs text-error">{liveVoice.error}</p> : null}
@@ -352,6 +380,26 @@ function MicIcon() {
       <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
       <line x1="12" y1="19" x2="12" y2="23" />
       <line x1="8" y1="23" x2="16" y2="23" />
+    </svg>
+  );
+}
+
+function SendIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M22 2 11 13" />
+      <path d="m22 2-7 20-4-9-9-4Z" />
     </svg>
   );
 }

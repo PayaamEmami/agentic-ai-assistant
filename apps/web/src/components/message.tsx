@@ -291,10 +291,10 @@ export function Message({ role, content, presentation }: MessageProps) {
   };
 
   const bubbleClassName = isUser
-    ? 'max-w-[70%] rounded-lg bg-accent px-4 py-2 text-sm text-white'
+    ? 'max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground space-y-2'
     : isSystem
       ? 'max-w-[70%] rounded-lg border border-border-subtle bg-surface-input/70 px-4 py-2 text-sm text-foreground-muted space-y-2'
-      : 'max-w-[70%] rounded-lg border border-border bg-surface-overlay px-4 py-2 text-sm text-foreground space-y-2';
+      : 'max-w-[70%] rounded-lg border border-accent/50 bg-surface-elevated px-4 py-2 text-sm text-foreground space-y-2';
 
   return (
     <div

@@ -493,28 +493,45 @@ export function AppManager() {
                   <div className="flex flex-wrap gap-2">
                     {!isConnected ? (
                       <button
+                        type="button"
                         onClick={() => void connectApp(app.kind)}
-                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+                        title={`Connect ${app.displayName}`}
+                        aria-label={`Connect ${app.displayName}`}
                       >
-                        Connect
+                        <ConnectIcon />
                       </button>
                     ) : null}
                     {isConnected ? (
                       <button
+                        type="button"
                         onClick={() => void syncApp(app.kind)}
                         disabled={syncDisabled}
-                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                        title={`Sync ${app.displayName}`}
+                        aria-label={`Sync ${app.displayName}`}
                       >
-                        Sync
+                        <SyncIcon />
                       </button>
                     ) : null}
                     {isConnected ? (
                       <button
+                        type="button"
                         onClick={() => void disconnectApp(app.kind)}
                         disabled={disconnectingKind === app.kind}
-                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-error/40 hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+                        title={
+                          disconnectingKind === app.kind
+                            ? `Disconnecting ${app.displayName}`
+                            : `Disconnect ${app.displayName}`
+                        }
+                        aria-label={
+                          disconnectingKind === app.kind
+                            ? `Disconnecting ${app.displayName}`
+                            : `Disconnect ${app.displayName}`
+                        }
                       >
-                        {disconnectingKind === app.kind ? 'Disconnecting...' : 'Disconnect'}
+                        <DisconnectIcon />
                       </button>
                     ) : null}
                   </div>
@@ -541,5 +558,71 @@ export function AppManager() {
         </div>
       )}
     </div>
+  );
+}
+
+function ConnectIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M12 22v-5" />
+      <path d="M9 8V2" />
+      <path d="M15 8V2" />
+      <path d="M18 8a3 3 0 1 0-6 0" />
+      <path d="M12 17a5 5 0 0 0 5-5V8H7v4a5 5 0 0 0 5 5Z" />
+    </svg>
+  );
+}
+
+function SyncIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
+      <path d="M3 21v-5h5" />
+      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
+      <path d="M16 8h5V3" />
+    </svg>
+  );
+}
+
+function DisconnectIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="m2 2 20 20" />
+      <path d="M8.5 8.5 7 10a5 5 0 0 0 7.07 7.07l2.83-2.83" />
+      <path d="M12.76 5.1 15.5 2.36a5 5 0 0 1 7.07 7.07L20.5 11.5" />
+    </svg>
   );
 }
