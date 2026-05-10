@@ -139,8 +139,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
       >
         <span className="min-w-0">
           <span className="block break-words text-sm font-medium text-foreground">
-            Indexed Sources ({app.knowledge.searchableSourceCount}/
-            {app.knowledge.totalSourceCount})
+            Indexed Sources
           </span>
           <span className="mt-1 block text-xs text-foreground-muted">
             {indexedSourcesLabel(app.knowledge.searchableSourceCount)}
