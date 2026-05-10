@@ -44,13 +44,13 @@ export function ChatPanel() {
   }, [messages, loading.isInterruptingMessage]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
       {loading.isLoadingMessages && messages.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center h-full">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <p className="text-foreground-muted">Loading conversation...</p>
         </div>
       ) : messages.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center h-full">
+        <div className="flex min-h-0 flex-1 items-center justify-center">
           <p className="text-foreground-muted">
             {firstName
               ? `What can I help you with, ${firstName}?`
