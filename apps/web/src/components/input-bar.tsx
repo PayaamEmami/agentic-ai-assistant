@@ -244,7 +244,7 @@ export function InputBar() {
             type="button"
             onClick={() => void interruptMessage()}
             disabled={loading.isInterruptingMessage}
-            className="rounded-lg border border-error/30 bg-error/10 p-2 text-error transition-colors hover:bg-error/20 disabled:cursor-not-allowed disabled:opacity-40"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-error transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
             title={loading.isInterruptingMessage ? 'Stopping response...' : 'Stop response'}
             aria-label={loading.isInterruptingMessage ? 'Stopping response' : 'Stop response'}
           >
@@ -415,7 +415,7 @@ function StopIcon() {
       fill="currentColor"
       aria-hidden="true"
     >
-      <rect x="7" y="7" width="10" height="10" rx="2" />
+      <rect x="8" y="8" width="8" height="8" rx="1.5" />
     </svg>
   );
 }

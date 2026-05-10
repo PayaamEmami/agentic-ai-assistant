@@ -402,12 +402,8 @@ export default function PersonalizationPage() {
                   </div>
                 </div>
 
-                <div className="mt-6">
-                  {memories.length === 0 ? (
-                    <p className="py-8 text-sm text-foreground-muted">
-                      Add your first memory to help future conversations feel more tailored.
-                    </p>
-                  ) : (
+                {memories.length > 0 ? (
+                  <div className="mt-6">
                     <div className="space-y-6">
                       {memoryGroups.map((group) => (
                         <section key={group.kind} className="space-y-2">
@@ -492,8 +488,8 @@ export default function PersonalizationPage() {
                         </section>
                       ))}
                     </div>
-                  )}
-                </div>
+                  </div>
+                ) : null}
               </section>
             </>
           )}
