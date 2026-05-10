@@ -281,7 +281,7 @@ function GitHubRepositorySelector({
               type="button"
               onClick={() => void saveSelection()}
               disabled={saving}
-              className="rounded-xl bg-accent px-3 py-2 text-xs font-medium text-white transition hover:bg-accent-hover disabled:opacity-50"
+              className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? 'Saving...' : 'Save and sync'}
             </button>
@@ -506,7 +506,7 @@ export function AppManager() {
                     {!isConnected ? (
                       <button
                         onClick={() => void connectApp(app.kind)}
-                        className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
+                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground"
                       >
                         Connect
                       </button>

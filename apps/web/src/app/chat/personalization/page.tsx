@@ -220,7 +220,7 @@ export default function PersonalizationPage() {
                   <button
                     onClick={() => void handleSaveProfile()}
                     disabled={isSavingProfile}
-                    className="self-start rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                    className="self-start rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {isSavingProfile ? 'Saving...' : 'Save'}
                   </button>
@@ -291,7 +291,7 @@ export default function PersonalizationPage() {
                     <button
                       onClick={() => void handleCreateMemory()}
                       disabled={isCreatingMemory || !newMemoryContent.trim()}
-                      className="h-9 rounded-xl bg-accent px-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                      className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {isCreatingMemory ? 'Saving...' : 'Add'}
                     </button>
@@ -343,7 +343,7 @@ export default function PersonalizationPage() {
                                 <button
                                   onClick={() => void handleSaveMemory(memory.id)}
                                   disabled={isPending || !editingMemoryContent.trim()}
-                                  className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+                                  className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                   {isPending ? 'Saving...' : 'Save'}
                                 </button>
