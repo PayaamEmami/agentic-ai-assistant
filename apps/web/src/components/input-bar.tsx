@@ -1,6 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { AttachmentIcon, CloseIcon, MicIcon, SendIcon, StopIcon } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
+import { IconButton } from '@/components/ui/icon-button';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
 import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
@@ -151,8 +154,8 @@ export function InputBar() {
             volume={liveVoice.voiceVolume}
             phase={liveVoice.phase}
           />
-          <button
-            type="button"
+          <IconButton
+            size="lg"
             onClick={() => {
               const partial = liveVoice.userCaption.trim();
               void liveVoice.stop();
@@ -161,12 +164,12 @@ export function InputBar() {
               }
               setFocusRequestId((value) => value + 1);
             }}
-            className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-border-subtle bg-surface-input text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+            className="h-14 w-14 rounded-full border border-border-subtle bg-surface-input"
             aria-label="Switch to text mode"
             title="Switch to text mode"
           >
             <CloseIcon />
-          </button>
+          </IconButton>
         </div>
         <div>
           {liveVoice.error ? <p className="mt-2 text-xs text-error">{liveVoice.error}</p> : null}
@@ -196,9 +199,9 @@ export function InputBar() {
             >
               <span>{attachment.name}</span>
               {attachment.indexedForRag ? (
-                <span className="rounded-full bg-accent px-2 py-0.5 text-[10px] font-medium text-white">
+                <Badge variant="accent" className="text-[10px] text-white">
                   Indexed
-                </span>
+                </Badge>
               ) : null}
               <button
                 type="button"
@@ -214,16 +217,16 @@ export function InputBar() {
       )}
       <div className="flex items-end gap-2">
         <div className="flex min-h-10 flex-1 items-end rounded-lg border border-border-subtle bg-surface-input transition focus-within:border-accent">
-          <button
-            type="button"
+          <IconButton
+            size="sm"
             onClick={handleFilePicker}
             disabled={loading.isUploadingAttachment}
-            className="m-1 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            className="m-1 disabled:opacity-40"
             title="Upload file"
             aria-label="Upload file"
           >
             <AttachmentIcon />
-          </button>
+          </IconButton>
           <textarea
             ref={messageInputRef}
             value={message}
@@ -240,38 +243,39 @@ export function InputBar() {
           />
         </div>
         {loading.isSendingMessage ? (
-          <button
-            type="button"
+          <IconButton
+            size="lg"
+            variant="danger"
             onClick={() => void interruptMessage()}
             disabled={loading.isInterruptingMessage}
-            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-error transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
+            className="text-error hover:bg-surface-hover disabled:opacity-40"
             title={loading.isInterruptingMessage ? 'Stopping response...' : 'Stop response'}
             aria-label={loading.isInterruptingMessage ? 'Stopping response' : 'Stop response'}
           >
             <StopIcon />
-          </button>
+          </IconButton>
         ) : (
           <>
             {hasMessageContent ? (
-              <button
+              <IconButton
                 type="submit"
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+                size="lg"
                 title="Send message"
                 aria-label="Send message"
               >
                 <SendIcon />
-              </button>
+              </IconButton>
             ) : (
-              <button
-                type="button"
+              <IconButton
+                size="lg"
                 onClick={() => void liveVoice.toggle()}
                 disabled={Boolean(micDisabledReason)}
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
+                className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
                 title={micDisabledReason ?? 'Live voice mode'}
                 aria-label={micDisabledReason ?? 'Live voice mode'}
               >
                 <MicIcon />
-              </button>
+              </IconButton>
             )}
           </>
         )}
@@ -327,95 +331,3 @@ function VoiceActivityBar({
   );
 }
 
-function AttachmentIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M21.44 11.05 12.25 20.24a6 6 0 1 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.48-8.48" />
-    </svg>
-  );
-}
-
-function MicIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="23" />
-      <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
-  );
-}
-
-function SendIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M22 2 11 13" />
-      <path d="m22 2-7 20-4-9-9-4Z" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M18 6 6 18" />
-      <path d="m6 6 12 12" />
-    </svg>
-  );
-}
-
-function StopIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <rect x="8" y="8" width="8" height="8" rx="1.5" />
-    </svg>
-  );
-}

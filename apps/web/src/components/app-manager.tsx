@@ -1,20 +1,14 @@
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type Dispatch,
-  type SetStateAction,
-} from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import {
-  api,
-  type AppSummary,
-  type GitHubRepositorySummary,
-} from '@/lib/api-client';
+import { api, type AppSummary, type GitHubRepositorySummary } from '@/lib/api-client';
+import { GitHubRepositorySelector } from '@/components/apps/github-repository-selector';
+import { IndexedSourcesSection } from '@/components/apps/indexed-sources-section';
+import { ConnectIcon, DisconnectIcon, SyncIcon } from '@/components/icons';
+import { Alert } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { IconButton } from '@/components/ui/icon-button';
 import { reportClientError } from '@/lib/client-logging';
 
 function appLabel(kind: string): string {
@@ -35,302 +29,6 @@ function providerDescription(kind: AppSummary['kind']): string {
   }
 
   return 'Ask about your files, reference documents, and make edits from chat.';
-}
-
-function formatTimestamp(value: string | null): string {
-  if (!value) {
-    return 'Never';
-  }
-
-  const timestamp = new Date(value);
-  return Number.isNaN(timestamp.getTime()) ? 'Unknown time' : timestamp.toLocaleString().replace(',', '');
-}
-
-function selectedRepositoryLabel(count: number): string {
-  if (count === 0) {
-    return '0 repositories selected for indexing';
-  }
-
-  if (count === 1) {
-    return '1 repository selected for indexing';
-  }
-
-  return `${count} repositories selected for indexing`;
-}
-
-function indexedSourcesLabel(count: number): string {
-  if (count === 1) {
-    return '1 source indexed';
-  }
-
-  return `${count} sources indexed`;
-}
-
-function ChevronDownIcon({
-  animated = false,
-  collapsed = false,
-}: {
-  animated?: boolean;
-  collapsed?: boolean;
-}) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`shrink-0 text-foreground-muted ${animated ? 'transition-transform' : ''} ${
-        collapsed ? 'rotate-90' : ''
-      }`}
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
-  );
-}
-
-function IndexedSourcesSection({ app }: { app: AppSummary }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sourcesId = `${app.kind}-indexed-sources`;
-  const filteredSources = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return app.knowledge.recentSources;
-    }
-
-    return app.knowledge.recentSources.filter((source) =>
-      source.title.toLowerCase().includes(normalizedQuery),
-    );
-  }, [app.knowledge.recentSources, query]);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
-
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
-    };
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative mt-5 min-w-0">
-      <button
-        type="button"
-        onClick={() => setOpen((previous) => !previous)}
-        aria-expanded={open}
-        aria-controls={sourcesId}
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-surface-hover hover:text-foreground"
-      >
-        <span className="min-w-0">
-          <span className="block break-words text-sm font-medium text-foreground">
-            Indexed Sources
-          </span>
-          <span className="mt-1 block text-xs text-foreground-muted">
-            {indexedSourcesLabel(app.knowledge.searchableSourceCount)}
-          </span>
-        </span>
-        <ChevronDownIcon />
-      </button>
-
-      {open ? (
-        <div
-          id={sourcesId}
-          className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg"
-        >
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search indexed sources"
-            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-foreground-inactive focus:border-accent"
-          />
-          {app.knowledge.recentSources.length === 0 ? (
-            <p className="py-4 text-xs text-foreground-muted">No indexed sources yet.</p>
-          ) : filteredSources.length === 0 ? (
-            <p className="py-4 text-xs text-foreground-muted">No indexed sources match this search.</p>
-          ) : (
-            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
-              {filteredSources.map((source) => (
-                <div
-                  key={source.id}
-                  className="min-w-0 rounded-xl px-3 py-2 text-xs text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
-                >
-                  <p className="break-words font-medium text-foreground">{source.title}</p>
-                  <p className="mt-1 text-foreground-muted">{formatTimestamp(source.updatedAt)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function GitHubRepositorySelector({
-  repositories,
-  selectedRepoIds,
-  saving,
-  onSave,
-  onSelectedRepoIdsChange,
-}: {
-  repositories: GitHubRepositorySummary[];
-  selectedRepoIds: number[];
-  saving: boolean;
-  onSave: () => Promise<void>;
-  onSelectedRepoIdsChange: Dispatch<SetStateAction<number[]>>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const selectedRepoIdSet = useMemo(() => new Set(selectedRepoIds), [selectedRepoIds]);
-  const filteredRepositories = useMemo(() => {
-    const normalizedQuery = query.trim().toLowerCase();
-    if (!normalizedQuery) {
-      return repositories;
-    }
-
-    return repositories.filter((repository) =>
-      repository.fullName.toLowerCase().includes(normalizedQuery),
-    );
-  }, [query, repositories]);
-
-  const toggleRepository = (repositoryId: number, checked: boolean) => {
-    onSelectedRepoIdsChange((previous) => {
-      if (checked) {
-        return previous.includes(repositoryId) ? previous : [...previous, repositoryId];
-      }
-
-      return previous.filter((id) => id !== repositoryId);
-    });
-  };
-
-  const saveSelection = async () => {
-    await onSave();
-    setOpen(false);
-  };
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const closeOnOutsidePointerDown = (event: PointerEvent) => {
-      if (!containerRef.current?.contains(event.target as Node)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
-
-    return () => {
-      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
-    };
-  }, [open]);
-
-  return (
-    <div ref={containerRef} className="relative mt-4">
-      <button
-        type="button"
-        onClick={() => setOpen((previous) => !previous)}
-        disabled={repositories.length === 0}
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        <span className="min-w-0">
-          <span className="block break-words text-sm font-medium text-foreground">
-            Repositories
-          </span>
-          <span className="mt-1 block text-xs text-foreground-muted">
-            {selectedRepositoryLabel(selectedRepoIds.length)}
-          </span>
-        </span>
-        <ChevronDownIcon />
-      </button>
-
-      {repositories.length === 0 ? (
-        <p className="mt-2 px-3 text-xs text-foreground-muted">No repositories loaded yet.</p>
-      ) : null}
-
-      {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg">
-          <input
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search repositories"
-            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-foreground-inactive focus:border-accent"
-          />
-          {filteredRepositories.length === 0 ? (
-            <p className="py-4 text-xs text-foreground-muted">No repositories match this search.</p>
-          ) : (
-            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
-              {filteredRepositories.map((repository) => {
-                const selected = selectedRepoIdSet.has(repository.id);
-
-                return (
-                  <label
-                    key={repository.id}
-                    className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium transition ${
-                      selected
-                        ? 'bg-surface-accent text-foreground'
-                        : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={(event) => toggleRepository(repository.id, event.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span className="min-w-0">
-                      <span className="block truncate text-foreground">{repository.fullName}</span>
-                      <span className="block font-normal text-foreground-muted">
-                        {repository.private ? 'Private' : 'Public'} | {repository.defaultBranch}
-                      </span>
-                    </span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-          <div className="mt-3 flex items-center justify-end gap-2 pt-3">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-2 text-xs font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveSelection()}
-              disabled={saving}
-              className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save and sync'}
-            </button>
-          </div>
-        </div>
-      ) : null}
-    </div>
-  );
 }
 
 export function AppManager() {
@@ -480,22 +178,14 @@ export function AppManager() {
   return (
     <div className="space-y-6">
       {appKind && appStatus ? (
-        <p
-          className={`rounded-xl border px-3 py-2 text-sm ${
-            appStatus === 'connected'
-              ? 'border-success/30 bg-success/10 text-success'
-              : 'border-error/30 bg-error/10 text-error'
-          }`}
-        >
+        <Alert variant={appStatus === 'connected' ? 'success' : 'error'}>
           {appLabel(appKind)} {appStatus === 'connected' ? 'connected.' : 'failed.'}
           {appMessage ? ` ${appMessage}` : ''}
-        </p>
+        </Alert>
       ) : null}
 
       {actionError ? (
-        <p className="rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
-          {actionError}
-        </p>
+        <Alert>{actionError}</Alert>
       ) : null}
 
       {loading ? (
@@ -515,64 +205,51 @@ export function AppManager() {
                   <div className="max-w-2xl">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-base font-medium text-foreground">{app.displayName}</p>
-                      <span
-                        className={`rounded-full px-2 py-0.5 text-xs ${
-                          isConnected
-                            ? 'bg-success/10 text-success'
-                            : 'bg-surface-elevated text-foreground-muted'
-                        }`}
-                      >
+                      <Badge variant={isConnected ? 'success' : 'neutral'} className="font-normal">
                         {isConnected ? 'Connected' : 'Not connected'}
-                      </span>
+                      </Badge>
                     </div>
                     <p className="mt-1 text-sm text-foreground-muted">
                       {providerDescription(app.kind)}
                     </p>
                     {app.lastError ? (
-                      <p className="mt-3 rounded-xl border border-error/30 bg-error/10 px-3 py-2 text-sm text-error">
-                        {app.lastError}
-                      </p>
+                      <Alert className="mt-3">{app.lastError}</Alert>
                     ) : null}
                     {app.kind === 'github' &&
                     isConnected &&
                     app.knowledge.status === 'connected' &&
                     selectedRepoCount === 0 ? (
-                      <p className="mt-3 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
+                      <Alert variant="warning" className="mt-3">
                         Select at least one repository before syncing GitHub knowledge.
-                      </p>
+                      </Alert>
                     ) : null}
                   </div>
 
                   <div className="flex flex-wrap gap-2">
                     {!isConnected ? (
-                      <button
-                        type="button"
+                      <IconButton
                         onClick={() => void connectApp(app.kind)}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
                         title={`Connect ${app.displayName}`}
                         aria-label={`Connect ${app.displayName}`}
                       >
                         <ConnectIcon />
-                      </button>
+                      </IconButton>
                     ) : null}
                     {isConnected ? (
-                      <button
-                        type="button"
+                      <IconButton
                         onClick={() => void syncApp(app.kind)}
                         disabled={syncDisabled}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                         title={`Sync ${app.displayName}`}
                         aria-label={`Sync ${app.displayName}`}
                       >
                         <SyncIcon />
-                      </button>
+                      </IconButton>
                     ) : null}
                     {isConnected ? (
-                      <button
-                        type="button"
+                      <IconButton
+                        variant="danger"
                         onClick={() => void disconnectApp(app.kind)}
                         disabled={disconnectingKind === app.kind}
-                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
                         title={
                           disconnectingKind === app.kind
                             ? `Disconnecting ${app.displayName}`
@@ -585,7 +262,7 @@ export function AppManager() {
                         }
                       >
                         <DisconnectIcon />
-                      </button>
+                      </IconButton>
                     ) : null}
                   </div>
                 </div>
@@ -614,68 +291,3 @@ export function AppManager() {
   );
 }
 
-function ConnectIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 22v-5" />
-      <path d="M9 8V2" />
-      <path d="M15 8V2" />
-      <path d="M18 8a3 3 0 1 0-6 0" />
-      <path d="M12 17a5 5 0 0 0 5-5V8H7v4a5 5 0 0 0 5 5Z" />
-    </svg>
-  );
-}
-
-function SyncIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" />
-      <path d="M3 21v-5h5" />
-      <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" />
-      <path d="M16 8h5V3" />
-    </svg>
-  );
-}
-
-function DisconnectIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m2 2 20 20" />
-      <path d="M8.5 8.5 7 10a5 5 0 0 0 7.07 7.07l2.83-2.83" />
-      <path d="M12.76 5.1 15.5 2.36a5 5 0 0 1 7.07 7.07L20.5 11.5" />
-    </svg>
-  );
-}

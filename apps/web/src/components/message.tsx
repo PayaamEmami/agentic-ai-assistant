@@ -6,6 +6,7 @@ import {
   type MessageContentBlock,
   useChatContext,
 } from '@/lib/chat-context';
+import { Badge } from './ui/badge';
 import { CitationCard } from './citation-card';
 
 const WORD_FADE_MS = 380;
@@ -50,24 +51,24 @@ function getToolStatusLabel(status: string | undefined): string {
   }
 }
 
-function getToolStatusClass(status: string | undefined): string {
+function getToolStatusVariant(status: string | undefined): 'neutral' | 'accent' | 'success' | 'error' | 'warning' {
   switch (status) {
     case 'planned':
-      return 'bg-accent/20 text-accent';
+      return 'accent';
     case 'approved':
-      return 'bg-success/20 text-success';
+      return 'success';
     case 'rejected':
-      return 'bg-error/20 text-error';
+      return 'error';
     case 'running':
-      return 'bg-warning/20 text-warning';
+      return 'warning';
     case 'pending':
-      return 'bg-surface-input text-foreground-muted';
+      return 'neutral';
     case 'completed':
-      return 'bg-success/20 text-success';
+      return 'success';
     case 'failed':
-      return 'bg-error/20 text-error';
+      return 'error';
     default:
-      return 'bg-surface-input text-foreground-inactive';
+      return 'neutral';
   }
 }
 
@@ -214,11 +215,9 @@ export function Message({ role, content, presentation }: MessageProps) {
             <p className="text-xs font-medium text-foreground">
               Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
             </p>
-            <span
-              className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${getToolStatusClass(displayStatus)}`}
-            >
+            <Badge variant={getToolStatusVariant(displayStatus)} className="text-[11px]">
               {getToolStatusLabel(displayStatus)}
-            </span>
+            </Badge>
           </div>
           {displayStatus === 'pending' && approval ? (
             <div className="mt-2">

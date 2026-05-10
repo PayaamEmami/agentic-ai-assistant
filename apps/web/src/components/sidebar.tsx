@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { ChevronDownIcon, EditIcon, MoreIcon, PlusIcon, SidebarToggleIcon, TrashIcon } from '@/components/icons';
+import { AccountMenu } from '@/components/sidebar/account-menu';
+import { IconButton } from '@/components/ui/icon-button';
 import { useChatContext } from '@/lib/chat-context';
 import { useAuthContext } from '@/lib/auth-context';
+import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -14,20 +18,6 @@ interface SidebarProps {
 
 function conversationLabel(title: string | null) {
   return title?.trim() || 'Untitled conversation';
-}
-
-function getInitials(value: string | null | undefined) {
-  const normalized = value?.trim();
-  if (!normalized) {
-    return 'U';
-  }
-
-  const parts = normalized.split(/\s+/).filter(Boolean);
-  if (parts.length === 1) {
-    return parts[0].slice(0, 1).toUpperCase();
-  }
-
-  return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
 }
 
 export function Sidebar({
@@ -64,22 +54,7 @@ export function Sidebar({
     setIsAccountMenuOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
-    if (!isAccountMenuOpen) {
-      return;
-    }
-
-    const handlePointerDown = (event: MouseEvent) => {
-      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node)) {
-        setIsAccountMenuOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handlePointerDown);
-    return () => {
-      document.removeEventListener('mousedown', handlePointerDown);
-    };
-  }, [isAccountMenuOpen]);
+  useDismissOnOutsidePointerDown(accountMenuRef, isAccountMenuOpen, () => setIsAccountMenuOpen(false));
 
   const handleLogout = () => {
     setIsAccountMenuOpen(false);
@@ -187,25 +162,21 @@ export function Sidebar({
           )}
           <div className="flex items-center gap-2">
             {!collapsed ? (
-              <button
-                type="button"
+              <IconButton
                 onClick={() => void openChat(undefined)}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
                 title="New conversation"
                 aria-label="New conversation"
               >
                 <PlusIcon />
-              </button>
+              </IconButton>
             ) : null}
-            <button
-              type="button"
+            <IconButton
               onClick={onToggleDesktopCollapse ?? onCloseMobile}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               <SidebarToggleIcon />
-            </button>
+            </IconButton>
           </div>
         </div>
       </div>
@@ -298,41 +269,42 @@ export function Sidebar({
                       <p className="truncate">{label}</p>
                     </button>
                     <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
-                      <button
-                        type="button"
+                      <IconButton
+                        size="sm"
                         onClick={() => startEditing(conversation.id, conversation.title)}
                         disabled={isPending}
-                        className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-foreground disabled:opacity-50"
+                        className="h-auto w-auto rounded p-1 hover:bg-surface"
                         title="Rename conversation"
                         aria-label="Rename conversation"
                       >
                         <EditIcon />
-                      </button>
-                      <button
-                        type="button"
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        variant="danger"
                         onClick={() => void handleDelete(conversation.id, conversation.title)}
                         disabled={isPending}
-                        className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-error disabled:opacity-50"
+                        className="h-auto w-auto rounded p-1 hover:bg-surface"
                         title="Delete conversation"
                         aria-label="Delete conversation"
                       >
                         <TrashIcon />
-                      </button>
+                      </IconButton>
                     </div>
-                    <button
-                      type="button"
+                    <IconButton
+                      size="sm"
                       onClick={() =>
                         setMobileActionMenuConversationId((previous) =>
                           previous === conversation.id ? null : conversation.id,
                         )
                       }
                       disabled={isPending}
-                      className="rounded p-1 text-foreground-muted hover:bg-surface hover:text-foreground disabled:opacity-50 md:hidden"
+                      className="h-auto w-auto rounded p-1 hover:bg-surface md:hidden"
                       title="Conversation actions"
                       aria-label="Conversation actions"
                     >
                       <MoreIcon />
-                    </button>
+                    </IconButton>
                     {mobileActionMenuConversationId === conversation.id ? (
                       <div className="absolute right-0 top-full z-20 mt-1 flex w-40 flex-col rounded-xl border border-border bg-surface-elevated p-1 shadow-lg md:hidden">
                         <button
@@ -360,256 +332,17 @@ export function Sidebar({
           })
         )}
       </nav>
-      <div
-        ref={accountMenuRef}
-        className="relative flex min-h-[73px] shrink-0 items-center border-t border-border p-1"
-      >
-        {isAccountMenuOpen ? (
-          <div
-            className={`absolute bottom-full z-30 mb-2 rounded-2xl border border-border bg-surface-elevated p-2 shadow-lg ${
-              collapsed ? 'left-2 w-64' : 'left-2 right-2'
-            }`}
-          >
-            <button
-              type="button"
-              onClick={() => navigateTo('/chat/personalization')}
-              className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                isPersonalizationPage
-                  ? 'bg-surface-accent text-foreground'
-                  : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-              }`}
-            >
-              <PersonalizationIcon />
-              Personalization
-            </button>
-            <button
-              type="button"
-              onClick={() => navigateTo('/chat/apps')}
-              className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-                isAppsPage
-                  ? 'bg-surface-accent text-foreground'
-                  : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-              }`}
-            >
-              <AppsIcon />
-              Apps
-            </button>
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error"
-            >
-              <SignOutIcon />
-              Sign out
-            </button>
-          </div>
-        ) : null}
-        <button
-          type="button"
-          onClick={() => setIsAccountMenuOpen((previous) => !previous)}
-          className={`flex w-full items-center rounded-2xl border border-transparent transition hover:border-border hover:bg-surface-hover ${
-            collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-3'
-          }`}
-          title={user?.displayName ?? user?.email ?? 'Account'}
-          aria-label="Open account menu"
-        >
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-surface-input text-sm font-semibold text-foreground">
-            {getInitials(user?.displayName ?? user?.email)}
-          </span>
-          {collapsed ? null : (
-            <>
-              <span className="min-w-0 flex-1 text-left">
-                <span className="block truncate text-sm font-medium text-foreground">
-                  {user?.displayName ?? 'Signed in'}
-                </span>
-                <span className="block truncate text-xs text-foreground-muted">{user?.email}</span>
-              </span>
-            </>
-          )}
-        </button>
-      </div>
+      <AccountMenu
+        collapsed={collapsed}
+        isAppsPage={isAppsPage}
+        isOpen={isAccountMenuOpen}
+        isPersonalizationPage={isPersonalizationPage}
+        menuRef={accountMenuRef}
+        onLogout={handleLogout}
+        onNavigate={navigateTo}
+        onToggleOpen={() => setIsAccountMenuOpen((previous) => !previous)}
+        user={user}
+      />
     </aside>
-  );
-}
-
-function PlusIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <line x1="12" y1="5" x2="12" y2="19" />
-      <line x1="5" y1="12" x2="19" y2="12" />
-    </svg>
-  );
-}
-
-function PersonalizationIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 5H8a2 2 0 0 0-2 2v10" />
-      <path d="M12 5h4a2 2 0 0 1 2 2v10" />
-      <path d="M8 17h8" />
-      <path d="M8 21h8" />
-      <path d="M12 5v16" />
-    </svg>
-  );
-}
-
-function EditIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 20h9" />
-      <path d="M16.5 3.5a2.121 2.121 0 1 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M3 6h18" />
-      <path d="M8 6V4h8v2" />
-      <path d="M19 6l-1 14H6L5 6" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-    </svg>
-  );
-}
-
-function AppsIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22v-5" />
-      <path d="M9 8V2" />
-      <path d="M15 8V2" />
-      <path d="M18 8a3 3 0 1 0-6 0" />
-      <path d="M12 17a5 5 0 0 0 5-5V8H7v4a5 5 0 0 0 5 5Z" />
-    </svg>
-  );
-}
-
-function MoreIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="1" />
-      <circle cx="19" cy="12" r="1" />
-      <circle cx="5" cy="12" r="1" />
-    </svg>
-  );
-}
-
-function SignOutIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function SidebarToggleIcon() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="4" width="18" height="16" rx="2" />
-      <path d="M9 4v16" />
-    </svg>
-  );
-}
-
-function ChevronDownIcon({ collapsed = false }: { collapsed?: boolean }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`transition-transform ${collapsed ? 'rotate-90' : ''}`}
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
   );
 }
