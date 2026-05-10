@@ -442,7 +442,7 @@ export function AppManager() {
                       <button
                         onClick={() => void syncApp(app.kind)}
                         disabled={syncDisabled}
-                        className="rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
+                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         Sync
                       </button>
@@ -451,7 +451,7 @@ export function AppManager() {
                       <button
                         onClick={() => void disconnectApp(app.kind)}
                         disabled={disconnectingKind === app.kind}
-                        className="rounded-xl px-3 py-2 text-sm font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-error disabled:opacity-50"
+                        className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-error/40 hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {disconnectingKind === app.kind ? 'Disconnecting...' : 'Disconnect'}
                       </button>

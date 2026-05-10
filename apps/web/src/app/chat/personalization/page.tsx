@@ -353,7 +353,6 @@ export default function PersonalizationPage() {
                                 <span className="font-medium text-foreground-muted">
                                   {MEMORY_KIND_LABELS[memory.kind]}
                                 </span>
-                                <span>Updated {new Date(memory.updatedAt).toLocaleString()}</span>
                               </div>
                               <p className="text-sm leading-6 text-foreground">{memory.content}</p>
                               <div className="flex items-center gap-2">
