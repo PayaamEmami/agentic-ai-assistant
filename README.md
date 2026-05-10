@@ -7,15 +7,11 @@ The main idea behind the project is to make the assistant’s intelligence porta
 ## Features
 
 - Chat interface with persistent conversation history
+- Multi-agent orchestration for routing, research, tool use, coding tasks, and verification
 - Voice mode with live transcription and spoken responses
 - Retrieval-augmented answers over connected data sources
 - Persistent personalization, preferences, and long-term memory
 - Native tool execution with approval flow for sensitive actions
-- Connected app model for separating knowledge access from tool access
-- Multi-agent orchestration for routing, research, tool use, and verification
-- Self-hosted deployment with an owned database and local observability
-
-## Architecture Overview
 
 ### Multi-Agent System
 
@@ -27,6 +23,14 @@ The assistant uses a small multi-agent architecture around each assistant turn:
 - **Coding Agent** — Handles GitHub coding tasks through an isolated worker checkout
 - **Verifier Agent** — Checks the final output for safety, grounding, and approval requirements
 
+### Live Voice
+
+Live voice makes the assistant feel more natural to work with by letting users talk through ideas, ask follow-up questions, and keep a conversational flow without leaving the chat experience.
+
+### Personalization
+
+Personalization settings control both assistant behavior and long-term memory. Communication preferences, such as tone and writing style, and durable memories, such as facts, relationships, and important people, are stored in personal, portable context that carries across conversations.
+
 ### Connected Apps
 
 Provider apps connect once per external provider and expose separate internal capabilities:
@@ -34,30 +38,7 @@ Provider apps connect once per external provider and expose separate internal ca
 - **Knowledge** — Used for sync, indexing, and retrieval
 - **Tools** — Used for live tool access and side-effectful operations
 
-### Tool Execution
-
-The assistant exposes a unified native tool surface to the model:
-
-- **Built-in tools** — Local handlers such as time, sum, echo, and simulated external operations
-- **Provider-backed tools** — GitHub, Google Drive, Google Docs, and coding-task tools that execute through connected app credentials
-
-### Live Voice
-
-Voice mode supports an inline live conversation flow inside chat:
-
-1. Client opens a live voice session from the chat input
-2. Browser streams microphone audio to a realtime voice session over WebRTC
-3. The voice session streams spoken audio and captions back to the browser
-4. Finalized user and assistant turns are persisted into the existing conversation history
-
-Current live voice behavior:
-
-- Automatic turn detection and interruption are enabled
-- Live voice can invoke available tools during a spoken session
-- Tools that require approval pause until the user approves or rejects them in the UI
-- Retrieval context is prepared per voice turn and citations are attached when used
-
-## Tech Stack
+## Technology Stack
 
 | Layer          | Technology                                          |
 | -------------- | --------------------------------------------------- |
