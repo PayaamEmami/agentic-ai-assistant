@@ -6,17 +6,6 @@ import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
 
 const INDEXABLE_MIME_TYPES = new Set(['application/json', 'application/xml']);
-const MESSAGE_PLACEHOLDERS = [
-  'What, mortal?',
-  'What needs revealing?',
-  'Thy bidding, master?',
-  'What does the shadow will?',
-  'What you want?',
-  'Something need doing?',
-  'Yes, warchief?',
-  'Do you need my counsel?',
-  'What would you ask of me?',
-];
 
 function isIndexableDocument(file: File): boolean {
   return file.type.startsWith('text/') || INDEXABLE_MIME_TYPES.has(file.type);
@@ -43,7 +32,6 @@ export function InputBar() {
     loading,
   } = useChatContext();
   const [message, setMessage] = useState('');
-  const [messagePlaceholder, setMessagePlaceholder] = useState(MESSAGE_PLACEHOLDERS[0]);
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -55,12 +43,6 @@ export function InputBar() {
     syncConversation: syncConversationState,
     subscribeToolEvents,
   });
-
-  useEffect(() => {
-    setMessagePlaceholder(
-      MESSAGE_PLACEHOLDERS[Math.floor(Math.random() * MESSAGE_PLACEHOLDERS.length)],
-    );
-  }, []);
 
   useEffect(() => {
     if (focusRequestId === 0 || liveVoice.isActive) {
@@ -253,7 +235,7 @@ export function InputBar() {
               }
             }}
             rows={1}
-            placeholder={messagePlaceholder}
+            placeholder="Type like nobody's screenshotting..."
             className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 pr-4 text-sm text-foreground placeholder:text-foreground-inactive focus:outline-none"
           />
         </div>

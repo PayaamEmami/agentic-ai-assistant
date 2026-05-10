@@ -1,9 +1,20 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useChatContext } from '@/lib/chat-context';
-import { useAuthContext } from '@/lib/auth-context';
 import { Message } from './message';
+
+const EMPTY_CHAT_PROMPTS = [
+  'What, mortal?',
+  'What needs revealing?',
+  'Thy bidding, master?',
+  'What does the shadow will?',
+  'What you want?',
+  'Something need doing?',
+  'Yes, warchief?',
+  'Do you need my counsel?',
+  'What would you ask of me?',
+];
 
 function ThinkingIndicator() {
   return (
@@ -24,24 +35,18 @@ function ThinkingIndicator() {
   );
 }
 
-function getFirstName(displayName: string | undefined) {
-  const normalized = displayName?.trim();
-  if (!normalized) {
-    return null;
-  }
-
-  return normalized.split(/\s+/)[0] || null;
-}
-
 export function ChatPanel() {
   const { messages, loading } = useChatContext();
-  const { user } = useAuthContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
-  const firstName = getFirstName(user?.displayName);
+  const [emptyChatPrompt, setEmptyChatPrompt] = useState(EMPTY_CHAT_PROMPTS[0]);
 
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [messages, loading.isInterruptingMessage]);
+
+  useEffect(() => {
+    setEmptyChatPrompt(EMPTY_CHAT_PROMPTS[Math.floor(Math.random() * EMPTY_CHAT_PROMPTS.length)]);
+  }, []);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
@@ -51,11 +56,7 @@ export function ChatPanel() {
         </div>
       ) : messages.length === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center">
-          <p className="text-foreground-muted">
-            {firstName
-              ? `What can I help you with, ${firstName}?`
-              : 'What can I help you with today?'}
-          </p>
+          <p className="text-foreground-muted">{emptyChatPrompt}</p>
         </div>
       ) : (
         messages.map((message) => (
