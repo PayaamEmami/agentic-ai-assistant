@@ -154,7 +154,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-2xl bg-accent px-4 py-3 text-sm font-medium text-white transition hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? 'Working...' : 'Sign in'}
             </button>
