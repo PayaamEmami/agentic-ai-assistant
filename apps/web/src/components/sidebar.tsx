@@ -182,7 +182,7 @@ export function Sidebar({
               }
             >
               <span>Conversations</span>
-              {isConversationListCollapsed ? <ChevronLeftIcon /> : <ChevronDownIcon />}
+              <ChevronDownIcon collapsed={isConversationListCollapsed} />
             </button>
           )}
           <div className="flex items-center gap-2">
@@ -448,7 +448,6 @@ export function Sidebar({
                 </span>
                 <span className="block truncate text-xs text-foreground-muted">{user?.email}</span>
               </span>
-              <ChevronUpDownIcon open={isAccountMenuOpen} />
             </>
           )}
         </button>
@@ -601,26 +600,6 @@ function SignOutIcon() {
   );
 }
 
-function ChevronUpDownIcon({ open }: { open: boolean }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={`text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`}
-    >
-      <path d="m6 9 6-6 6 6" />
-      <path d="m18 15-6 6-6-6" />
-    </svg>
-  );
-}
-
 function ChevronLeftIcon() {
   return (
     <svg
@@ -657,7 +636,7 @@ function ChevronRightIcon() {
   );
 }
 
-function ChevronDownIcon() {
+function ChevronDownIcon({ collapsed = false }: { collapsed?: boolean }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -669,6 +648,7 @@ function ChevronDownIcon() {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
+      className={`transition-transform ${collapsed ? 'rotate-90' : ''}`}
     >
       <path d="m6 9 6 6 6-6" />
     </svg>

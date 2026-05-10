@@ -271,20 +271,25 @@ export default function PersonalizationPage() {
                     <label className="sr-only" htmlFor="new-memory-kind">
                       Category
                     </label>
-                    <select
-                      id="new-memory-kind"
-                      value={newMemoryKind}
-                      onChange={(event) =>
-                        setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
-                      }
-                      className="h-9 rounded-xl border border-border bg-surface-elevated px-3 text-sm text-foreground outline-none transition focus:border-accent"
-                    >
-                      {MEMORY_KIND_ORDER.map((kind) => (
-                        <option key={kind} value={kind}>
-                          {MEMORY_KIND_LABELS[kind]}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="relative">
+                      <select
+                        id="new-memory-kind"
+                        value={newMemoryKind}
+                        onChange={(event) =>
+                          setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
+                        }
+                        className="h-9 cursor-pointer appearance-none rounded-xl border border-border bg-surface-elevated px-3 pr-9 text-xs font-medium text-foreground outline-none transition hover:bg-surface-hover focus:border-accent"
+                      >
+                        {MEMORY_KIND_ORDER.map((kind) => (
+                          <option key={kind} value={kind}>
+                            {MEMORY_KIND_LABELS[kind]}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
+                        <ChevronDownIcon />
+                      </span>
+                    </div>
 
                     <button
                       onClick={() => void handleCreateMemory()}
@@ -402,6 +407,26 @@ function CloseIcon() {
     >
       <path d="M18 6 6 18" />
       <path d="m6 6 12 12" />
+    </svg>
+  );
+}
+
+function ChevronDownIcon() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="shrink-0 text-foreground-muted"
+      aria-hidden="true"
+    >
+      <path d="m6 9 6 6 6-6" />
     </svg>
   );
 }

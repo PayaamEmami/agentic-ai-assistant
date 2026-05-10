@@ -1,6 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction,
+} from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   api,
@@ -73,7 +81,13 @@ function selectedRepositoryLabel(count: number): string {
   return `${count} repositories selected`;
 }
 
-function ChevronDownIcon({ open = false }: { open?: boolean }) {
+function ChevronDownIcon({
+  animated = false,
+  collapsed = false,
+}: {
+  animated?: boolean;
+  collapsed?: boolean;
+}) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -85,7 +99,9 @@ function ChevronDownIcon({ open = false }: { open?: boolean }) {
       strokeWidth="2"
       strokeLinecap="round"
       strokeLinejoin="round"
-      className={`shrink-0 text-foreground-muted transition-transform ${open ? 'rotate-180' : ''}`}
+      className={`shrink-0 text-foreground-muted ${animated ? 'transition-transform' : ''} ${
+        collapsed ? 'rotate-90' : ''
+      }`}
       aria-hidden="true"
     >
       <path d="m6 9 6 6 6-6" />
@@ -98,7 +114,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
   const sourcesId = `${app.kind}-indexed-sources`;
 
   return (
-    <div className="mt-5 min-w-0 border-t border-border pt-5">
+    <div className="mt-5 min-w-0">
       <button
         type="button"
         onClick={() => setOpen((previous) => !previous)}
@@ -115,7 +131,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
             {open ? 'Hide indexed source details' : 'Show indexed source details'}
           </span>
         </span>
-        <ChevronDownIcon open={open} />
+        <ChevronDownIcon animated collapsed={!open} />
       </button>
 
       {open ? (
@@ -123,7 +139,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
           {app.knowledge.recentSources.length === 0 ? (
             <p className="mt-3 text-xs text-foreground-muted">No indexed sources yet.</p>
           ) : (
-            <div className="mt-3 divide-y divide-border">
+            <div className="mt-3">
               {app.knowledge.recentSources.map((source) => (
                 <div key={source.id} className="min-w-0 py-3 text-xs first:pt-0 last:pb-0">
                   <p className="break-words font-medium text-foreground">{source.title}</p>
@@ -159,6 +175,7 @@ function GitHubRepositorySelector({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const selectedRepoIdSet = useMemo(() => new Set(selectedRepoIds), [selectedRepoIds]);
   const filteredRepositories = useMemo(() => {
@@ -187,8 +204,26 @@ function GitHubRepositorySelector({
     setOpen(false);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+    };
+  }, [open]);
+
   return (
-    <div className="relative mt-4">
+    <div ref={containerRef} className="relative mt-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <p className="text-xs font-medium text-foreground">Repositories</p>
@@ -200,10 +235,10 @@ function GitHubRepositorySelector({
           disabled={repositories.length === 0}
           aria-expanded={open}
           aria-haspopup="listbox"
-          className="inline-flex items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
+          className="inline-flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
         >
           <span>{selectedRepositoryLabel(selectedRepoIds.length)}</span>
-          <ChevronDownIcon open={open} />
+          <ChevronDownIcon />
         </button>
       </div>
 
@@ -222,7 +257,7 @@ function GitHubRepositorySelector({
           {filteredRepositories.length === 0 ? (
             <p className="py-4 text-xs text-foreground-muted">No repositories match this search.</p>
           ) : (
-            <div className="mt-3 max-h-56 divide-y divide-border overflow-y-auto pr-1">
+            <div className="mt-3 max-h-56 overflow-y-auto pr-1">
               {filteredRepositories.map((repository) => (
                 <label
                   key={repository.id}
@@ -246,7 +281,7 @@ function GitHubRepositorySelector({
               ))}
             </div>
           )}
-          <div className="mt-3 flex items-center justify-end gap-2 border-t border-border pt-3">
+          <div className="mt-3 flex items-center justify-end gap-2 pt-3">
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -486,12 +521,14 @@ export function AppManager() {
                   </div>
 
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => void connectApp(app.kind)}
-                      className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
-                    >
-                      {isConnected ? 'Reconnect' : 'Connect'}
-                    </button>
+                    {!isConnected ? (
+                      <button
+                        onClick={() => void connectApp(app.kind)}
+                        className="rounded-xl bg-accent px-3 py-2 text-sm font-medium text-white transition hover:bg-accent-hover"
+                      >
+                        Connect
+                      </button>
+                    ) : null}
                     {isConnected ? (
                       <button
                         onClick={() => void syncApp(app.kind)}
@@ -519,7 +556,7 @@ export function AppManager() {
                       {[app.knowledge, app.tools].map((capability) => (
                         <div
                           key={capability.capability}
-                          className="border-t border-border pt-4"
+                          className="pt-4"
                         >
                           <p className="text-sm font-medium text-foreground">
                             {capability.capability === 'knowledge' ? 'Knowledge' : 'Tools'}
