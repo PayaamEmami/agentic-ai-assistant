@@ -187,9 +187,6 @@ export default function PersonalizationPage() {
                   Settings
                 </p>
                 <h1 className="text-2xl font-semibold text-foreground">Personalization</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground-muted">
-                  A few durable details the assistant can use across chats.
-                </p>
               </div>
               <Link
                 href="/chat"

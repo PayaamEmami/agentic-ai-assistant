@@ -13,9 +13,6 @@ export default function AppsPage() {
                   Settings
                 </p>
                 <h1 className="text-2xl font-semibold text-foreground">Apps</h1>
-                <p className="mt-2 max-w-2xl text-sm leading-6 text-foreground-muted">
-                  Connect providers for tools, retrieval, and workspace context.
-                </p>
               </div>
               <Link
                 href="/chat"
