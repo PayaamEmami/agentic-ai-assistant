@@ -76,11 +76,11 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
           <button
             type="button"
             onClick={handleToggleSidebar}
-            className="absolute left-4 top-4 z-20 inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-border-subtle bg-surface text-foreground-muted transition hover:border-border hover:bg-surface-hover hover:text-foreground md:hidden"
+            className="absolute left-4 top-4 z-20 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-surface text-foreground-muted transition hover:bg-surface-hover hover:text-foreground md:hidden"
             aria-label="Open sidebar"
             title="Open sidebar"
           >
-            <ChevronRightIcon />
+            <SidebarToggleIcon />
           </button>
         ) : null}
         <main
@@ -95,7 +95,7 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
   );
 }
 
-function ChevronRightIcon() {
+function SidebarToggleIcon() {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"
@@ -108,7 +108,8 @@ function ChevronRightIcon() {
       strokeLinecap="round"
       strokeLinejoin="round"
     >
-      <path d="m9 18 6-6-6-6" />
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <path d="M9 4v16" />
     </svg>
   );
 }

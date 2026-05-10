@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { api, type PersonalizationMemory, type PersonalizationMemoryKind } from '@/lib/api-client';
 
@@ -38,6 +38,77 @@ function sortMemories(memories: PersonalizationMemory[]) {
 
     return new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime();
   });
+}
+
+function MemoryKindSelector({
+  value,
+  onChange,
+}: {
+  value: PersonalizationMemoryKind;
+  onChange: (value: PersonalizationMemoryKind) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative sm:min-w-52">
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="inline-flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover"
+      >
+        <span>{MEMORY_KIND_LABELS[value]}</span>
+        <ChevronDownIcon />
+      </button>
+
+      {open ? (
+        <div
+          role="listbox"
+          className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-1 shadow-lg"
+        >
+          {MEMORY_KIND_ORDER.map((kind) => (
+            <button
+              key={kind}
+              type="button"
+              role="option"
+              aria-selected={kind === value}
+              onClick={() => {
+                onChange(kind);
+                setOpen(false);
+              }}
+              className={`w-full rounded-xl px-3 py-2 text-left text-xs font-medium transition ${
+                kind === value
+                  ? 'bg-surface-accent text-foreground'
+                  : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
+              }`}
+            >
+              {MEMORY_KIND_LABELS[kind]}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export default function PersonalizationPage() {
@@ -265,28 +336,7 @@ export default function PersonalizationPage() {
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <label className="sr-only" htmlFor="new-memory-kind">
-                      Category
-                    </label>
-                    <div className="relative">
-                      <select
-                        id="new-memory-kind"
-                        value={newMemoryKind}
-                        onChange={(event) =>
-                          setNewMemoryKind(event.target.value as PersonalizationMemoryKind)
-                        }
-                        className="h-9 cursor-pointer appearance-none rounded-xl border border-border bg-surface-elevated px-3 pr-9 text-xs font-medium text-foreground outline-none transition hover:bg-surface-hover focus:border-accent"
-                      >
-                        {MEMORY_KIND_ORDER.map((kind) => (
-                          <option key={kind} value={kind}>
-                            {MEMORY_KIND_LABELS[kind]}
-                          </option>
-                        ))}
-                      </select>
-                      <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center">
-                        <ChevronDownIcon />
-                      </span>
-                    </div>
+                    <MemoryKindSelector value={newMemoryKind} onChange={setNewMemoryKind} />
 
                     <button
                       onClick={() => void handleCreateMemory()}

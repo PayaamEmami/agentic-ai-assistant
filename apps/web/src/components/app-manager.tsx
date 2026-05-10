@@ -43,19 +43,7 @@ function formatTimestamp(value: string | null): string {
   }
 
   const timestamp = new Date(value);
-  return Number.isNaN(timestamp.getTime()) ? 'Unknown time' : timestamp.toLocaleString();
-}
-
-function sourceLabel(kind: string): string {
-  if (kind === 'code_repository') {
-    return 'Code';
-  }
-
-  if (kind === 'document') {
-    return 'Document';
-  }
-
-  return kind;
+  return Number.isNaN(timestamp.getTime()) ? 'Unknown time' : timestamp.toLocaleString().replace(',', '');
 }
 
 function selectedRepositoryLabel(count: number): string {
@@ -124,7 +112,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
       </button>
 
       {open ? (
-        <div id={sourcesId}>
+        <div id={sourcesId} className="pl-6 pr-3">
           {app.knowledge.recentSources.length === 0 ? (
             <p className="mt-3 text-xs text-foreground-muted">No indexed sources yet.</p>
           ) : (
@@ -132,13 +120,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
               {app.knowledge.recentSources.map((source) => (
                 <div key={source.id} className="min-w-0 py-3 text-xs first:pt-0 last:pb-0">
                   <p className="break-words font-medium text-foreground">{source.title}</p>
-                  <p className="mt-1 break-words text-foreground-muted">
-                    {sourceLabel(source.kind)}
-                    {source.mimeType ? ` | ${source.mimeType}` : ''}
-                  </p>
-                  <p className="mt-1 text-foreground-muted">
-                    Updated {formatTimestamp(source.updatedAt)}
-                  </p>
+                  <p className="mt-1 text-foreground-muted">{formatTimestamp(source.updatedAt)}</p>
                 </div>
               ))}
             </div>
@@ -245,28 +227,34 @@ function GitHubRepositorySelector({
           {filteredRepositories.length === 0 ? (
             <p className="py-4 text-xs text-foreground-muted">No repositories match this search.</p>
           ) : (
-            <div className="mt-3 max-h-56 overflow-y-auto pr-1">
-              {filteredRepositories.map((repository) => (
-                <label
-                  key={repository.id}
-                  className="flex items-start gap-2 py-3 text-xs first:pt-0 last:pb-0"
-                >
-                  <input
-                    type="checkbox"
-                    checked={selectedRepoIdSet.has(repository.id)}
-                    onChange={(event) => toggleRepository(repository.id, event.target.checked)}
-                    className="mt-0.5"
-                  />
-                  <span className="min-w-0">
-                    <span className="block truncate font-medium text-foreground">
-                      {repository.fullName}
+            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
+              {filteredRepositories.map((repository) => {
+                const selected = selectedRepoIdSet.has(repository.id);
+
+                return (
+                  <label
+                    key={repository.id}
+                    className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2 text-xs font-medium transition ${
+                      selected
+                        ? 'bg-surface-accent text-foreground'
+                        : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selected}
+                      onChange={(event) => toggleRepository(repository.id, event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span className="min-w-0">
+                      <span className="block truncate text-foreground">{repository.fullName}</span>
+                      <span className="block font-normal text-foreground-muted">
+                        {repository.private ? 'Private' : 'Public'} | {repository.defaultBranch}
+                      </span>
                     </span>
-                    <span className="block text-foreground-muted">
-                      {repository.private ? 'Private' : 'Public'} | {repository.defaultBranch}
-                    </span>
-                  </span>
-                </label>
-              ))}
+                  </label>
+                );
+              })}
             </div>
           )}
           <div className="mt-3 flex items-center justify-end gap-2 pt-3">
