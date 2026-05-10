@@ -48,14 +48,22 @@ function formatTimestamp(value: string | null): string {
 
 function selectedRepositoryLabel(count: number): string {
   if (count === 0) {
-    return 'Select repositories';
+    return '0 repositories selected for indexing';
   }
 
   if (count === 1) {
-    return '1 repository selected';
+    return '1 repository selected for indexing';
   }
 
-  return `${count} repositories selected`;
+  return `${count} repositories selected for indexing`;
+}
+
+function indexedSourcesLabel(count: number): string {
+  if (count === 1) {
+    return '1 source indexed';
+  }
+
+  return `${count} sources indexed`;
 }
 
 function ChevronDownIcon({
@@ -135,7 +143,7 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
             {app.knowledge.totalSourceCount})
           </span>
           <span className="mt-1 block text-xs text-foreground-muted">
-            {open ? 'Hide indexed sources' : 'Search indexed sources'}
+            {indexedSourcesLabel(app.knowledge.searchableSourceCount)}
           </span>
         </span>
         <ChevronDownIcon />
