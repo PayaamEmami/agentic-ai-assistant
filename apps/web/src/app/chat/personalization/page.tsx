@@ -44,7 +44,7 @@ function MemoryKindSelector({
   value,
   onChange,
 }: {
-  value: PersonalizationMemoryKind;
+  value: PersonalizationMemoryKind | null;
   onChange: (value: PersonalizationMemoryKind) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -77,7 +77,9 @@ function MemoryKindSelector({
         aria-haspopup="listbox"
         className="inline-flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover"
       >
-        <span>{MEMORY_KIND_LABELS[value]}</span>
+        <span className={value ? '' : 'text-foreground-muted'}>
+          {value ? MEMORY_KIND_LABELS[value] : 'Memory type'}
+        </span>
         <ChevronDownIcon />
       </button>
 
@@ -123,7 +125,7 @@ export default function PersonalizationPage() {
   const [profileSaveStatus, setProfileSaveStatus] = useState<string | null>(null);
 
   const [memories, setMemories] = useState<PersonalizationMemory[]>([]);
-  const [newMemoryKind, setNewMemoryKind] = useState<PersonalizationMemoryKind>('fact');
+  const [newMemoryKind, setNewMemoryKind] = useState<PersonalizationMemoryKind | null>(null);
   const [newMemoryContent, setNewMemoryContent] = useState('');
   const [isCreatingMemory, setIsCreatingMemory] = useState(false);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
@@ -223,6 +225,9 @@ export default function PersonalizationPage() {
     if (!content) {
       return;
     }
+    if (!newMemoryKind) {
+      return;
+    }
 
     setError(null);
     setIsCreatingMemory(true);
@@ -234,7 +239,7 @@ export default function PersonalizationPage() {
       });
       setMemories((previous) => sortMemories([...previous, response.memory]));
       setNewMemoryContent('');
-      setNewMemoryKind('fact');
+      setNewMemoryKind(null);
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : 'Failed to create memory.');
     } finally {
@@ -332,7 +337,7 @@ export default function PersonalizationPage() {
           ) : (
             <>
               <section className="space-y-5">
-                <h2 className="text-base font-medium text-foreground">Profile</h2>
+                <h2 className="text-base font-medium text-foreground">Communication</h2>
 
                 <div className="grid gap-4 sm:grid-cols-2">
                   <label className="flex flex-col gap-2">
@@ -378,7 +383,7 @@ export default function PersonalizationPage() {
                       onChange={(event) => setNewMemoryContent(event.target.value)}
                       rows={3}
                       maxLength={2000}
-                      placeholder="Add something the assistant should remember..."
+                      placeholder="Add something your assistant should remember..."
                       className="w-full resize-none bg-transparent text-sm leading-6 text-foreground outline-none placeholder:text-foreground-inactive"
                     />
                   </label>
@@ -387,7 +392,7 @@ export default function PersonalizationPage() {
                     <button
                       type="button"
                       onClick={() => void handleCreateMemory()}
-                      disabled={isCreatingMemory || !newMemoryContent.trim()}
+                      disabled={isCreatingMemory || !newMemoryKind || !newMemoryContent.trim()}
                       className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
                       title={isCreatingMemory ? 'Adding memory' : 'Add memory'}
                       aria-label={isCreatingMemory ? 'Adding memory' : 'Add memory'}

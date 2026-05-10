@@ -31,8 +31,8 @@ async function toRecentSyncRuns(userId: string, appKind: AppKind) {
   }));
 }
 
-async function toRecentSources(userId: string, appKind: AppKind) {
-  const sources = await sourceRepository.listIndexedByUserAndApp(userId, appKind, 8);
+async function toRecentSources(userId: string, appKind: AppKind, limit: number) {
+  const sources = await sourceRepository.listIndexedByUserAndApp(userId, appKind, limit);
   return sources.map((source) => ({
     id: source.id,
     kind: source.kind,
@@ -75,11 +75,11 @@ export async function listAppSummaries(userId: string): Promise<AppSummary[]> {
   const sourceStatsByApp = new Map<AppKind, Awaited<ReturnType<typeof sourceRepository.getAppSourceStats>>>();
 
   for (const appKind of ['github', 'google'] as const) {
-    const [recentRuns, recentSources, sourceStats] = await Promise.all([
+    const [recentRuns, sourceStats] = await Promise.all([
       toRecentSyncRuns(userId, appKind),
-      toRecentSources(userId, appKind),
       sourceRepository.getAppSourceStats(userId, appKind),
     ]);
+    const recentSources = await toRecentSources(userId, appKind, Math.max(sourceStats.totalSources, 8));
     recentRunsByApp.set(appKind, recentRuns);
     recentSourcesByApp.set(appKind, recentSources);
     sourceStatsByApp.set(appKind, sourceStats);

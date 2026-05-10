@@ -88,10 +88,40 @@ function ChevronDownIcon({
 
 function IndexedSourcesSection({ app }: { app: AppSummary }) {
   const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const containerRef = useRef<HTMLDivElement>(null);
   const sourcesId = `${app.kind}-indexed-sources`;
+  const filteredSources = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return app.knowledge.recentSources;
+    }
+
+    return app.knowledge.recentSources.filter((source) =>
+      source.title.toLowerCase().includes(normalizedQuery),
+    );
+  }, [app.knowledge.recentSources, query]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+
+    const closeOnOutsidePointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointerDown);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointerDown);
+    };
+  }, [open]);
 
   return (
-    <div className="mt-5 min-w-0">
+    <div ref={containerRef} className="relative mt-5 min-w-0">
       <button
         type="button"
         onClick={() => setOpen((previous) => !previous)}
@@ -105,20 +135,34 @@ function IndexedSourcesSection({ app }: { app: AppSummary }) {
             {app.knowledge.totalSourceCount})
           </span>
           <span className="mt-1 block text-xs text-foreground-muted">
-            {open ? 'Hide indexed source details' : 'Show indexed source details'}
+            {open ? 'Hide indexed sources' : 'Search indexed sources'}
           </span>
         </span>
-        <ChevronDownIcon animated collapsed={!open} />
+        <ChevronDownIcon />
       </button>
 
       {open ? (
-        <div id={sourcesId} className="pl-6 pr-3">
+        <div
+          id={sourcesId}
+          className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg"
+        >
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search indexed sources"
+            className="w-full rounded-xl border border-border bg-surface px-3 py-2 text-xs text-foreground outline-none placeholder:text-foreground-inactive focus:border-accent"
+          />
           {app.knowledge.recentSources.length === 0 ? (
-            <p className="mt-3 text-xs text-foreground-muted">No indexed sources yet.</p>
+            <p className="py-4 text-xs text-foreground-muted">No indexed sources yet.</p>
+          ) : filteredSources.length === 0 ? (
+            <p className="py-4 text-xs text-foreground-muted">No indexed sources match this search.</p>
           ) : (
-            <div className="mt-3">
-              {app.knowledge.recentSources.map((source) => (
-                <div key={source.id} className="min-w-0 py-3 text-xs first:pt-0 last:pb-0">
+            <div className="mt-3 max-h-56 space-y-1 overflow-y-auto pr-1">
+              {filteredSources.map((source) => (
+                <div
+                  key={source.id}
+                  className="min-w-0 rounded-xl px-3 py-2 text-xs text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
+                >
                   <p className="break-words font-medium text-foreground">{source.title}</p>
                   <p className="mt-1 text-foreground-muted">{formatTimestamp(source.updatedAt)}</p>
                 </div>
@@ -195,29 +239,31 @@ function GitHubRepositorySelector({
 
   return (
     <div ref={containerRef} className="relative mt-4">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-xs font-medium text-foreground">Repositories</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setOpen((previous) => !previous)}
-          disabled={repositories.length === 0}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-          className="inline-flex items-center justify-between gap-3 rounded-xl border border-border bg-surface-elevated px-3 py-2 text-left text-xs font-medium text-foreground transition hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60 sm:min-w-52"
-        >
-          <span>{selectedRepositoryLabel(selectedRepoIds.length)}</span>
-          <ChevronDownIcon />
-        </button>
-      </div>
+      <button
+        type="button"
+        onClick={() => setOpen((previous) => !previous)}
+        disabled={repositories.length === 0}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className="flex w-full items-center justify-between gap-3 rounded-xl px-3 py-2 text-left transition hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        <span className="min-w-0">
+          <span className="block break-words text-sm font-medium text-foreground">
+            Repositories
+          </span>
+          <span className="mt-1 block text-xs text-foreground-muted">
+            {selectedRepositoryLabel(selectedRepoIds.length)}
+          </span>
+        </span>
+        <ChevronDownIcon />
+      </button>
 
       {repositories.length === 0 ? (
-        <p className="mt-2 text-xs text-foreground-muted">No repositories loaded yet.</p>
+        <p className="mt-2 px-3 text-xs text-foreground-muted">No repositories loaded yet.</p>
       ) : null}
 
       {open ? (
-        <div className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg sm:w-96">
+        <div className="absolute right-0 z-20 mt-2 w-full rounded-2xl border border-border bg-surface-elevated p-3 shadow-lg">
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
