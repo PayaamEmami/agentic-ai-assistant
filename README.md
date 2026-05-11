@@ -35,8 +35,8 @@ Personalization settings control both assistant behavior and long-term memory. C
 
 Provider apps connect once per external provider and expose separate internal capabilities:
 
-- **Knowledge** — Used for sync, indexing, and retrieval
-- **Tools** — Used for live tool access and side-effectful operations
+- **Knowledge** — Used for sync, indexing, and retrieval, such as using docs or repository context for RAG
+- **Tools** — Used for live tool access and side-effectful operations, such as editing docs in Google Drive or making code changes in a GitHub repository
 
 ## Technology Stack
 
