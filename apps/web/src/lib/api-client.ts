@@ -125,6 +125,31 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+async function requestText(path: string, options?: RequestInit): Promise<string> {
+  const token = await getAuthToken();
+  const url = `${API_BASE}${path}`;
+  const correlationId = createCorrelationId('http');
+  const headers = buildHeaders(options, token);
+  headers.set('x-correlation-id', correlationId);
+  const res = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (!res.ok) {
+    const body = await res.json().catch(() => ({}));
+    throw new ApiError(
+      res.status,
+      body?.error?.message ?? 'Request failed',
+      body?.error?.code,
+      res.headers.get('x-request-id') ?? undefined,
+      res.headers.get('x-correlation-id') ?? correlationId,
+    );
+  }
+
+  return res.text();
+}
+
 export class ApiError extends Error {
   constructor(
     public status: number,
@@ -331,6 +356,12 @@ export const api = {
       }>('/api/voice/session', {
         method: 'POST',
         body: JSON.stringify({ conversationId }),
+      });
+    },
+    exchangeSdpAnswer(sessionId: string, conversationId: string, sdp: string) {
+      return requestText('/api/voice/session/answer', {
+        method: 'POST',
+        body: JSON.stringify({ conversationId, sdp, sessionId }),
       });
     },
     startTurn(conversationId: string | undefined, userTranscript: string) {

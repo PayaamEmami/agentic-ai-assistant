@@ -10,25 +10,31 @@ import {
   useState,
 } from 'react';
 import { useAuthContext } from './auth-context';
-import { api, buildWebSocketUrl } from './api-client';
+import { api } from './api-client';
 import { reportClientError } from './client-logging';
 import {
   buildConversationTitle,
+  createErrorAssistantMessage,
   createFallbackAssistantMessage,
   createOptimisticUserMessage,
-  createOptimisticVoiceMessage,
   extractCitations,
   mergeConversations,
   normalizeConversationSummary,
   normalizeMessage,
   parseApprovalStatus,
   patchMessagesToolResult,
+  upsertVoiceMessageInList,
   upsertConversation,
   type ChatMessage,
   type CitationItem,
   type ConversationSummary,
   type UploadedAttachment,
 } from './chat-message-model';
+import {
+  useToolEventBus,
+  type ToolEventListener,
+} from './chat-tool-events';
+import { useChatWebSocket } from './use-chat-websocket';
 import { createClientId } from './uuid';
 
 export type {
@@ -66,15 +72,7 @@ export interface ChatLoadingState {
   isLoadingApprovals: boolean;
 }
 
-export interface ToolEventPayload {
-  type: 'tool.done' | 'approval.resolved';
-  conversationId?: string;
-  toolExecutionId?: string;
-  output?: unknown;
-  status?: string;
-}
-
-export type ToolEventListener = (event: ToolEventPayload) => void;
+export type { ToolEventListener, ToolEventPayload } from './chat-tool-events';
 
 interface ChatContextValue {
   conversations: ConversationSummary[];
@@ -125,7 +123,6 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [pendingApprovals, setPendingApprovals] = useState<PendingApproval[]>([]);
   const [approvalStatusesByToolExecution, setApprovalStatusesByToolExecution] =
     useState<ApprovalStatusByToolExecution>({});
-  const [citations, setCitations] = useState<CitationItem[]>([]);
 
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
@@ -134,37 +131,14 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const [isLoadingApprovals, setIsLoadingApprovals] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const socketRef = useRef<WebSocket | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunConversationIdRef = useRef<string | undefined>(undefined);
-  const toolEventListenersRef = useRef<Set<ToolEventListener>>(new Set());
   const messagesRef = useRef<ChatMessage[]>([]);
+  const toolEvents = useToolEventBus();
 
   useEffect(() => {
     messagesRef.current = messages;
   }, [messages]);
-
-  const subscribeToolEvents = useCallback((listener: ToolEventListener) => {
-    toolEventListenersRef.current.add(listener);
-    return () => {
-      toolEventListenersRef.current.delete(listener);
-    };
-  }, []);
-
-  const emitToolEvent = useCallback((payload: ToolEventPayload) => {
-    for (const listener of toolEventListenersRef.current) {
-      try {
-        listener(payload);
-      } catch (listenerError) {
-        void reportClientError({
-          event: 'client.chat.tool_listener_failed',
-          component: 'chat-context',
-          message: 'Tool event listener threw an error',
-          error: listenerError,
-        });
-      }
-    }
-  }, []);
 
   const loadPendingApprovals = useCallback(async () => {
     setIsLoadingApprovals(true);
@@ -337,13 +311,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
         setError(message);
         setMessages((previous) => [
           ...previous,
-          {
-            id: `local-error-${createClientId()}`,
-            role: 'assistant',
-            content: [{ type: 'text', text: `Error: ${message}` }],
-            createdAt: new Date().toISOString(),
-            presentation: { animateText: true },
-          },
+          createErrorAssistantMessage(message, { animateText: true }),
         ]);
       } finally {
         activeRunIdRef.current = null;
@@ -460,37 +428,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       }
 
       setCurrentConversationId(conversationId);
-      setMessages((previous) => {
-        const message = createOptimisticVoiceMessage(role, trimmed, {
-          id: messageId,
-          animateText: role === 'assistant',
-        });
-        const textBlock = message.content[0];
-        const existingIndex = previous.findIndex((item) => item.id === messageId);
-
-        if (!textBlock) {
-          return previous;
-        }
-
-        if (existingIndex === -1) {
-          return [...previous, message];
-        }
-
-        return previous.map((item, index) =>
-          index === existingIndex
-            ? {
-                ...item,
-                role,
-                content: item.content.some((block) => block.type === 'text')
-                  ? item.content.map((block) =>
-                      block.type === 'text' ? textBlock : block,
-                    )
-                  : [textBlock, ...item.content],
-                presentation: message.presentation,
-              }
-            : item,
-        );
-      });
+      setMessages((previous) => upsertVoiceMessageInList(previous, messageId, role, trimmed));
       setConversations((previous) => {
         const existing = previous.find((conversation) => conversation.id === conversationId);
         const timestamp = new Date().toISOString();
@@ -567,152 +505,56 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [conversations, currentConversationId, loadPendingApprovals, refreshConversation],
   );
 
+  const patchToolResult = useCallback(
+    (
+      toolExecutionId: string | undefined,
+      patch: Parameters<typeof patchMessagesToolResult>[2],
+    ) => {
+      setMessages((previous) => patchMessagesToolResult(previous, toolExecutionId, patch));
+    },
+    [],
+  );
+
+  const resolveApprovalFromSocket = useCallback(
+    (toolExecutionId: string | undefined, status: 'approved' | 'rejected' | undefined) => {
+      if (!toolExecutionId || !status) {
+        return;
+      }
+
+      setApprovalStatusesByToolExecution((previous) => ({
+        ...previous,
+        [toolExecutionId]: status,
+      }));
+      patchToolResult(toolExecutionId, {
+        status,
+        detail: undefined,
+        output: undefined,
+      });
+    },
+    [patchToolResult],
+  );
+
+  const reportRealtimeError = useCallback((message: string) => {
+    setError(message);
+  }, []);
+
   useEffect(() => {
     void loadConversations();
     void loadPendingApprovals();
   }, [loadConversations, loadPendingApprovals]);
 
-  useEffect(() => {
-    if (!token || !currentConversationId) {
-      socketRef.current?.close();
-      socketRef.current = null;
-      return;
-    }
+  useChatWebSocket({
+    token,
+    conversationId: currentConversationId,
+    refreshConversation,
+    loadPendingApprovals,
+    patchToolResult,
+    resolveApproval: resolveApprovalFromSocket,
+    emitToolEvent: toolEvents.emit,
+    reportRealtimeError,
+  });
 
-    const socket = new WebSocket(buildWebSocketUrl(token));
-    socketRef.current = socket;
-
-    socket.addEventListener('open', () => {
-      socket.send(
-        JSON.stringify({
-          type: 'subscribe',
-          conversationId: currentConversationId,
-        }),
-      );
-    });
-
-    socket.addEventListener('message', (event) => {
-      let parsed: { type?: string; conversationId?: string };
-      try {
-        parsed = JSON.parse(event.data as string) as { type?: string; conversationId?: string };
-      } catch {
-        return;
-      }
-
-      switch (parsed.type) {
-        case 'assistant.text.done':
-        case 'assistant.interrupted':
-          void refreshConversation(currentConversationId);
-          return;
-        case 'tool.start':
-          setMessages((previous) =>
-            patchMessagesToolResult(
-              previous,
-              (parsed as { toolExecutionId?: string }).toolExecutionId,
-              {
-                status: 'running',
-                detail: undefined,
-                output: undefined,
-              },
-            ),
-          );
-          return;
-        case 'tool.progress': {
-          const progress = parsed as {
-            toolExecutionId?: string;
-            message?: string;
-          };
-          setMessages((previous) =>
-            patchMessagesToolResult(previous, progress.toolExecutionId, {
-              status: 'running',
-              detail: progress.message,
-            }),
-          );
-          return;
-        }
-        case 'tool.done': {
-          const done = parsed as {
-            toolExecutionId?: string;
-            output?: unknown;
-            status?: 'completed' | 'failed';
-            conversationId?: string;
-          };
-          setMessages((previous) =>
-            patchMessagesToolResult(previous, done.toolExecutionId, {
-              status: done.status,
-              output: done.output,
-              detail: undefined,
-            }),
-          );
-          emitToolEvent({
-            type: 'tool.done',
-            conversationId: done.conversationId,
-            toolExecutionId: done.toolExecutionId,
-            output: done.output,
-            status: done.status,
-          });
-          return;
-        }
-        case 'approval.requested':
-          void loadPendingApprovals();
-          void refreshConversation(currentConversationId);
-          return;
-        case 'approval.resolved': {
-          const resolved = parsed as {
-            toolExecutionId?: string;
-            status?: 'approved' | 'rejected';
-            conversationId?: string;
-          };
-          if (
-            resolved.toolExecutionId &&
-            (resolved.status === 'approved' || resolved.status === 'rejected')
-          ) {
-            setApprovalStatusesByToolExecution((previous) => ({
-              ...previous,
-              [resolved.toolExecutionId as string]: resolved.status as 'approved' | 'rejected',
-            }));
-            setMessages((previous) =>
-              patchMessagesToolResult(previous, resolved.toolExecutionId, {
-                status: resolved.status,
-                detail: undefined,
-                output: undefined,
-              }),
-            );
-          }
-          emitToolEvent({
-            type: 'approval.resolved',
-            conversationId: resolved.conversationId,
-            toolExecutionId: resolved.toolExecutionId,
-            status: resolved.status,
-          });
-          void loadPendingApprovals();
-          return;
-        }
-        case 'error':
-          setError('Realtime connection was rejected.');
-          return;
-        default:
-          return;
-      }
-    });
-
-    socket.addEventListener('close', () => {
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
-    });
-
-    return () => {
-      socket.close();
-      if (socketRef.current === socket) {
-        socketRef.current = null;
-      }
-    };
-  }, [currentConversationId, emitToolEvent, loadPendingApprovals, refreshConversation, token]);
-
-  useEffect(() => {
-    setCitations(extractCitations(messages));
-  }, [messages]);
+  const citations = useMemo<CitationItem[]>(() => extractCitations(messages), [messages]);
 
   const loading = useMemo<ChatLoadingState>(
     () => ({
@@ -755,7 +597,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       startLiveVoiceSession,
       upsertVoiceMessage,
       syncConversationState,
-      subscribeToolEvents,
+      subscribeToolEvents: toolEvents.subscribe,
     }),
     [
       approveAction,
@@ -777,7 +619,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       startLiveVoiceSession,
       upsertVoiceMessage,
       syncConversationState,
-      subscribeToolEvents,
+      toolEvents,
       uploadAttachment,
     ],
   );

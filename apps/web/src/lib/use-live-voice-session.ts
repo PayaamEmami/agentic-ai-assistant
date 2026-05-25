@@ -1,28 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { API_BASE, ApiError, getStoredAuthToken, api } from './api-client';
-import type { ToolEventListener, ToolEventPayload } from './chat-context';
+import { ApiError, api } from './api-client';
+import type { ToolEventListener, ToolEventPayload } from './chat-tool-events';
 import { reportClientError } from './client-logging';
-
-type VoicePhase = 'idle' | 'connecting' | 'listening' | 'thinking' | 'speaking' | 'error';
-const VOICE_LEVEL_BAND_COUNT = 24;
-
-interface SessionInit {
-  sessionId: string;
-  clientSecret: string;
-  expiresAt: string;
-  conversationId: string;
-  model: string;
-  voice: string;
-}
-
-interface VoicePendingToolCall {
-  callId: string;
-  toolExecutionId: string;
-  toolName: string;
-  status: 'running' | 'requires_approval';
-}
+import {
+  chooseAssistantCaptionSource,
+  type AssistantCaptionSource,
+} from './voice/assistant-caption';
+import type { SessionInit, VoicePendingToolCall, VoicePhase } from './voice/types';
+import { getBrowserVoiceSupport } from './voice/utils';
+import { useVoiceMeter } from './voice/use-voice-meter';
+import { connectWebRtcVoiceSession } from './voice/webrtc-voice-connection';
+import { VoiceToolRegistry } from './voice/voice-tool-registry';
 
 interface UseLiveVoiceSessionOptions {
   startSession: () => Promise<SessionInit>;
@@ -34,56 +24,6 @@ interface UseLiveVoiceSessionOptions {
   ) => void;
   syncConversation: (conversationId: string) => Promise<void>;
   subscribeToolEvents?: (listener: ToolEventListener) => () => void;
-}
-
-function createEmptyVoiceLevels() {
-  return Array.from({ length: VOICE_LEVEL_BAND_COUNT }, () => 0);
-}
-
-function clampVoiceLevel(value: number) {
-  return Math.max(0, Math.min(1, value));
-}
-
-function parseEvent(raw: string): { type?: string; [key: string]: unknown } | null {
-  try {
-    return JSON.parse(raw) as { type?: string; [key: string]: unknown };
-  } catch {
-    return null;
-  }
-}
-
-async function requestSdpAnswerFallback(
-  sessionId: string,
-  conversationId: string,
-  sdp: string,
-): Promise<string> {
-  const token = getStoredAuthToken();
-  if (!token) {
-    throw new Error('Authentication required');
-  }
-
-  const response = await fetch(`${API_BASE}/api/voice/session/answer`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({ conversationId, sdp, sessionId }),
-  });
-
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new ApiError(
-      response.status,
-      typeof body?.error?.message === 'string'
-        ? body.error.message
-        : 'Failed to connect live voice session.',
-      typeof body?.error?.code === 'string' ? body.error.code : undefined,
-      response.headers.get('x-request-id') ?? undefined,
-    );
-  }
-
-  return response.text();
 }
 
 export function useLiveVoiceSession({
@@ -98,15 +38,12 @@ export function useLiveVoiceSession({
   const [assistantCaption, setAssistantCaption] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pendingToolCalls, setPendingToolCalls] = useState<VoicePendingToolCall[]>([]);
-  const [voiceLevels, setVoiceLevels] = useState<number[]>(() => createEmptyVoiceLevels());
-  const [voiceVolume, setVoiceVolume] = useState(0);
+  const { voiceLevels, voiceVolume, startVoiceMeter, stopVoiceMeter } = useVoiceMeter();
 
   const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
   const dataChannelRef = useRef<RTCDataChannel | null>(null);
   const microphoneStreamRef = useRef<MediaStream | null>(null);
   const remoteAudioRef = useRef<HTMLAudioElement | null>(null);
-  const voiceMeterAudioContextRef = useRef<AudioContext | null>(null);
-  const voiceMeterAnimationRef = useRef<number | null>(null);
   const conversationIdRef = useRef<string | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const activeUserMessageIdRef = useRef<string | null>(null);
@@ -118,68 +55,10 @@ export function useLiveVoiceSession({
   const phaseRef = useRef<VoicePhase>('idle');
   const userMessageAddedRef = useRef(false);
   const assistantMessageAddedRef = useRef(false);
-  const assistantCaptionSourceRef = useRef<'audio_transcript' | 'output_text' | null>(null);
+  const assistantCaptionSourceRef = useRef<AssistantCaptionSource | null>(null);
   const activeVoiceTurnIdRef = useRef<string | null>(null);
   const pendingTurnStartPromiseRef = useRef<Promise<string | null> | null>(null);
-  const toolCallsByExecutionIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
-  const toolCallsByCallIdRef = useRef<Map<string, VoicePendingToolCall>>(new Map());
-
-  const stopVoiceMeter = useCallback(() => {
-    if (voiceMeterAnimationRef.current !== null) {
-      window.cancelAnimationFrame(voiceMeterAnimationRef.current);
-      voiceMeterAnimationRef.current = null;
-    }
-
-    void voiceMeterAudioContextRef.current?.close();
-    voiceMeterAudioContextRef.current = null;
-    setVoiceLevels(createEmptyVoiceLevels());
-    setVoiceVolume(0);
-  }, []);
-
-  const startVoiceMeter = useCallback(
-    (stream: MediaStream) => {
-      stopVoiceMeter();
-
-      try {
-        const audioContext = new AudioContext();
-        const source = audioContext.createMediaStreamSource(stream);
-        const analyser = audioContext.createAnalyser();
-        analyser.fftSize = 256;
-        analyser.smoothingTimeConstant = 0.82;
-        source.connect(analyser);
-
-        const data = new Uint8Array(analyser.frequencyBinCount);
-        voiceMeterAudioContextRef.current = audioContext;
-
-        const animate = () => {
-          analyser.getByteFrequencyData(data);
-          const bucketSize = Math.max(1, Math.floor(data.length / VOICE_LEVEL_BAND_COUNT));
-          const nextLevels = Array.from({ length: VOICE_LEVEL_BAND_COUNT }, (_, index) => {
-            const start = index * bucketSize;
-            const end = Math.min(data.length, start + bucketSize);
-            let total = 0;
-
-            for (let cursor = start; cursor < end; cursor += 1) {
-              total += data[cursor] ?? 0;
-            }
-
-            const average = total / Math.max(1, end - start) / 255;
-            return clampVoiceLevel(Math.sqrt(average) * 1.25);
-          });
-
-          setVoiceLevels(nextLevels);
-          setVoiceVolume(nextLevels.reduce((sum, level) => sum + level, 0) / nextLevels.length);
-          voiceMeterAnimationRef.current = window.requestAnimationFrame(animate);
-        };
-
-        voiceMeterAnimationRef.current = window.requestAnimationFrame(animate);
-      } catch {
-        setVoiceLevels(createEmptyVoiceLevels());
-        setVoiceVolume(0);
-      }
-    },
-    [stopVoiceMeter],
-  );
+  const toolRegistryRef = useRef(new VoiceToolRegistry());
 
   const setVoicePhase = (nextPhase: VoicePhase) => {
     phaseRef.current = nextPhase;
@@ -200,18 +79,16 @@ export function useLiveVoiceSession({
   };
 
   const resetToolCalls = () => {
-    toolCallsByExecutionIdRef.current.clear();
-    toolCallsByCallIdRef.current.clear();
+    toolRegistryRef.current.clear();
     setPendingToolCalls([]);
   };
 
   const syncPendingToolCallsState = () => {
-    setPendingToolCalls(Array.from(toolCallsByCallIdRef.current.values()));
+    setPendingToolCalls(toolRegistryRef.current.values());
   };
 
   const registerToolCall = (call: VoicePendingToolCall) => {
-    toolCallsByCallIdRef.current.set(call.callId, call);
-    toolCallsByExecutionIdRef.current.set(call.toolExecutionId, call);
+    toolRegistryRef.current.register(call);
     syncPendingToolCallsState();
   };
 
@@ -219,25 +96,17 @@ export function useLiveVoiceSession({
     toolExecutionId: string,
     status: VoicePendingToolCall['status'],
   ) => {
-    const existing = toolCallsByExecutionIdRef.current.get(toolExecutionId);
-    if (!existing) {
-      return;
+    if (toolRegistryRef.current.updateStatus(toolExecutionId, status)) {
+      syncPendingToolCallsState();
     }
-    const updated = { ...existing, status };
-    toolCallsByExecutionIdRef.current.set(toolExecutionId, updated);
-    toolCallsByCallIdRef.current.set(updated.callId, updated);
-    syncPendingToolCallsState();
   };
 
   const removeToolCallByExecutionId = (toolExecutionId: string): VoicePendingToolCall | null => {
-    const existing = toolCallsByExecutionIdRef.current.get(toolExecutionId);
-    if (!existing) {
-      return null;
+    const removed = toolRegistryRef.current.removeByExecutionId(toolExecutionId);
+    if (removed) {
+      syncPendingToolCallsState();
     }
-    toolCallsByExecutionIdRef.current.delete(toolExecutionId);
-    toolCallsByCallIdRef.current.delete(existing.callId);
-    syncPendingToolCallsState();
-    return existing;
+    return removed;
   };
 
   const withRetry = async <T>(label: string, fn: () => Promise<T>, maxAttempts = 3): Promise<T> => {
@@ -357,29 +226,20 @@ export function useLiveVoiceSession({
     }
   };
 
-  const selectAssistantCaptionSource = (source: 'audio_transcript' | 'output_text') => {
-    const current = assistantCaptionSourceRef.current;
-    if (current === source) {
-      return true;
-    }
+  const selectAssistantCaptionSource = (source: AssistantCaptionSource) => {
+    const decision = chooseAssistantCaptionSource(assistantCaptionSourceRef.current, source);
+    assistantCaptionSourceRef.current = decision.source;
 
-    if (current === null) {
-      assistantCaptionSourceRef.current = source;
-      return true;
-    }
-
-    if (current === 'output_text' && source === 'audio_transcript') {
-      assistantCaptionSourceRef.current = source;
+    if (decision.resetTranscript) {
       pendingAssistantTranscriptRef.current = '';
       setAssistantCaption('');
-      return true;
     }
 
-    return false;
+    return decision.accepted;
   };
 
   const updateAssistantCaption = (
-    source: 'audio_transcript' | 'output_text',
+    source: AssistantCaptionSource,
     value: string,
     mode: 'append' | 'replace',
   ) => {
@@ -411,7 +271,7 @@ export function useLiveVoiceSession({
       return;
     }
 
-    if (toolCallsByCallIdRef.current.size > 0) {
+    if (toolRegistryRef.current.hasPendingCalls()) {
       return;
     }
 
@@ -791,20 +651,17 @@ export function useLiveVoiceSession({
       return;
     }
 
-    if (
-      typeof window === 'undefined' ||
-      typeof navigator === 'undefined' ||
-      typeof RTCPeerConnection === 'undefined' ||
-      !navigator.mediaDevices?.getUserMedia
-    ) {
+    const browserSupport = getBrowserVoiceSupport();
+    if (!browserSupport.supported) {
+      const message = browserSupport.reason ?? 'Live voice mode is not supported in this browser.';
       void reportClientError({
         event: 'client.voice.unsupported',
         component: 'use-live-voice-session',
-        message: 'Live voice mode is not supported in this browser.',
+        message,
       });
-      setError('Live voice mode is not supported in this browser.');
+      setError(message);
       setVoicePhase('error');
-      setConnectionLabel('Live voice mode is not supported in this browser.');
+      setConnectionLabel(message);
       return;
     }
 
@@ -819,47 +676,19 @@ export function useLiveVoiceSession({
       conversationIdRef.current = session.conversationId;
       sessionIdRef.current = session.sessionId;
 
-      const pc = new RTCPeerConnection();
-      peerConnectionRef.current = pc;
-
-      const remoteAudio = new Audio();
-      remoteAudio.autoplay = true;
-      remoteAudioRef.current = remoteAudio;
-
-      pc.ontrack = (event) => {
-        remoteAudio.srcObject = event.streams[0] ?? null;
-      };
-
-      const microphoneStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      microphoneStreamRef.current = microphoneStream;
-      startVoiceMeter(microphoneStream);
-      for (const track of microphoneStream.getTracks()) {
-        pc.addTrack(track, microphoneStream);
-      }
-
-      const dc = pc.createDataChannel('oai-events');
-      dataChannelRef.current = dc;
-      dc.addEventListener('message', (messageEvent) => {
-        const event = parseEvent(String(messageEvent.data));
-        if (!event) {
-          return;
-        }
-        void handleRealtimeEvent(event);
+      const connection = await connectWebRtcVoiceSession({
+        sessionId: session.sessionId,
+        conversationId: session.conversationId,
+        exchangeSdpAnswer: api.voice.exchangeSdpAnswer,
+        onRealtimeEvent: (event) => {
+          void handleRealtimeEvent(event);
+        },
       });
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-
-      const answerSdp = await requestSdpAnswerFallback(
-        session.sessionId,
-        session.conversationId,
-        offer.sdp ?? '',
-      );
-
-      await pc.setRemoteDescription({
-        type: 'answer',
-        sdp: answerSdp,
-      });
+      peerConnectionRef.current = connection.peerConnection;
+      dataChannelRef.current = connection.dataChannel;
+      microphoneStreamRef.current = connection.microphoneStream;
+      remoteAudioRef.current = connection.remoteAudio;
+      startVoiceMeter(connection.microphoneStream);
 
       setVoicePhase('listening');
       setConnectionLabel('Connected. Start speaking when you are ready.');
