@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import { ChevronDownIcon } from '@/components/icons';
-import { MEMORY_KIND_LABELS, MEMORY_KIND_ORDER } from './personalization-model';
+import { MEMORY_KIND_LABELS, MEMORY_KIND_ORDER } from './model';
 import { type PersonalizationMemoryKind } from '@/lib/api-client';
 import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
 
