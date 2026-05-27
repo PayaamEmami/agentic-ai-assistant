@@ -1,4 +1,4 @@
-import type { ChatMessage, CitationItem } from './chat-message-types';
+import type { ChatMessage, CitationItem } from './message-types';
 
 export function extractCitations(messages: ChatMessage[]): CitationItem[] {
   const citations: CitationItem[] = [];

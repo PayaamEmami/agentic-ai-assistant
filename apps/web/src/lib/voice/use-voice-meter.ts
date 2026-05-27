@@ -5,7 +5,7 @@ import {
   calculateVoiceLevels,
   calculateVoiceVolume,
   createEmptyVoiceLevels,
-} from './utils';
+} from './audio-levels';
 
 export function useVoiceMeter() {
   const [voiceLevels, setVoiceLevels] = useState<number[]>(() => createEmptyVoiceLevels());

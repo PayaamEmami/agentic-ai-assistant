@@ -1,6 +1,6 @@
 'use client';
 
-import { useChatContext } from '@/lib/chat-context';
+import { useChatContext } from '@/lib/chat';
 
 interface ApprovalCardProps {
   id: string;

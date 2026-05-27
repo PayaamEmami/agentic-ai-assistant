@@ -1,4 +1,4 @@
-import { AppManager } from '@/components/app-manager';
+import { AppManager } from '@/components/apps/manager';
 import { SettingsPageShell } from '@/components/ui/settings-page-shell';
 
 export default function AppsPage() {

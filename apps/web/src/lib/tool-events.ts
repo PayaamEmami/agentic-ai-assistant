@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useMemo, useRef } from 'react';
-import { reportClientError } from '../client-logging';
+import { reportClientError } from './client-logging';
 
 export interface ToolEventPayload {
   type: 'tool.done' | 'approval.resolved';

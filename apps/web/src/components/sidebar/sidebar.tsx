@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ChevronDownIcon, EditIcon, MoreIcon, PlusIcon, SidebarToggleIcon, TrashIcon } from '@/components/icons';
 import { AccountMenu } from '@/components/sidebar/account-menu';
 import { IconButton } from '@/components/ui/icon-button';
-import { useChatContext } from '@/lib/chat-context';
+import { useChatContext } from '@/lib/chat';
 import { useAuthContext } from '@/lib/auth-context';
 import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
 

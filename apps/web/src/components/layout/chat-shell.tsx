@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SidebarToggleIcon } from '@/components/icons';
-import { Sidebar } from './sidebar';
+import { Sidebar } from '@/components/sidebar/sidebar';
 
 const SIDEBAR_STORAGE_KEY = 'agentic-ai-assistant.sidebar-collapsed';
 const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';

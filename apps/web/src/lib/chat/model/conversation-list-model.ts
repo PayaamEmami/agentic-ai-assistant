@@ -1,5 +1,5 @@
 import type { ConversationListItem } from '@aaa/shared';
-import type { ConversationSummary } from './chat-message-types';
+import type { ConversationSummary } from './message-types';
 
 export function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
   return [...items].sort((a, b) => {

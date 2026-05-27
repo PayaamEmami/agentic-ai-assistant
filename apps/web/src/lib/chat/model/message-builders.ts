@@ -3,7 +3,7 @@ import type {
   AttachmentRefContentBlock,
   ChatMessage,
   UploadedAttachment,
-} from './chat-message-types';
+} from './message-types';
 
 export function createOptimisticUserMessage(
   content: string,

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { buildWebSocketUrl } from '../api-client';
 import type { ToolResultContentBlock } from './model/index';
-import type { ToolEventPayload } from './tool-events';
+import type { ToolEventPayload } from '../tool-events';
 
 type ToolResultPatch = Partial<Pick<ToolResultContentBlock, 'status' | 'detail' | 'output'>>;
 

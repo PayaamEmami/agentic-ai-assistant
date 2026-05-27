@@ -1,4 +1,4 @@
-import type { ChatMessage, ChatRole, MessageContentBlock } from './chat-message-types';
+import type { ChatMessage, ChatRole, MessageContentBlock } from './message-types';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;

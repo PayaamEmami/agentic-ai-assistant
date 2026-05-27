@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { useChatContext } from '@/lib/chat-context';
+import { useChatContext } from '@/lib/chat';
 import { Message } from './message';
 
 const EMPTY_CHAT_PROMPTS = [

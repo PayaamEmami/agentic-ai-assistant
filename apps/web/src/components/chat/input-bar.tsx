@@ -4,9 +4,9 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { AttachmentIcon, CloseIcon, MicIcon, SendIcon, StopIcon } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
-import { type UploadedAttachment, useChatContext } from '@/lib/chat-context';
+import { type UploadedAttachment, useChatContext } from '@/lib/chat';
 import { reportClientError } from '@/lib/client-logging';
-import { useLiveVoiceSession } from '@/lib/use-live-voice-session';
+import { useLiveVoiceSession } from '@/lib/voice';
 
 const INDEXABLE_MIME_TYPES = new Set(['application/json', 'application/xml']);
 

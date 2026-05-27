@@ -11,7 +11,7 @@ import {
 import { ChevronDownIcon } from '@/components/icons';
 import { type GitHubRepositorySummary } from '@/lib/api-client';
 import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
-import { selectedRepositoryLabel } from './app-manager-labels';
+import { selectedRepositoryLabel } from './labels';
 
 interface GitHubRepositorySelectorProps {
   repositories: GitHubRepositorySummary[];

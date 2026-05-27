@@ -1,6 +1,6 @@
 'use client';
 
-import { ChatPanel } from './chat-panel';
+import { ChatPanel } from './panel';
 import { InputBar } from './input-bar';
 
 export function ChatWorkspace() {

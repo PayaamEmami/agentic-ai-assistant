@@ -1,5 +1,5 @@
 import { createOptimisticVoiceMessage } from './message-builders';
-import type { ChatMessage, ToolResultContentBlock } from './chat-message-types';
+import type { ChatMessage, ToolResultContentBlock } from './message-types';
 
 export function patchMessagesToolResult(
   messages: ChatMessage[],

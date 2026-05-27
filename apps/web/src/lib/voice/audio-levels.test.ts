@@ -4,15 +4,9 @@ import {
   calculateVoiceVolume,
   clampVoiceLevel,
   createEmptyVoiceLevels,
-  parseEvent,
-} from './utils';
+} from './audio-levels';
 
-describe('voice utils', () => {
-  it('parses realtime events defensively', () => {
-    expect(parseEvent('{"type":"response.done"}')).toEqual({ type: 'response.done' });
-    expect(parseEvent('not json')).toBeNull();
-  });
-
+describe('voice audio levels', () => {
   it('clamps and buckets voice levels', () => {
     expect(clampVoiceLevel(-1)).toBe(0);
     expect(clampVoiceLevel(2)).toBe(1);

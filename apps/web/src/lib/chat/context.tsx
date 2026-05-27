@@ -17,12 +17,12 @@ import {
   type ChatMessage,
   type CitationItem,
 } from './model/index';
-import { useToolEventBus } from './tool-events';
-import { useChatWebSocket } from './use-chat-websocket';
-import { useChatActions } from './use-chat-actions';
-import { useChatApprovals } from './use-chat-approvals';
-import { useChatAttachments } from './use-chat-attachments';
-import { useChatConversations } from './use-chat-conversations';
+import { useToolEventBus } from '../tool-events';
+import { useChatWebSocket } from './use-websocket';
+import { useChatActions } from './use-actions';
+import { useChatApprovals } from './use-approvals';
+import { useChatAttachments } from './use-attachments';
+import { useChatConversations } from './use-conversations';
 import type { ChatContextValue, ChatLoadingState } from './types';
 
 export type {
@@ -44,7 +44,7 @@ export type {
   ChatLoadingState,
   PendingApproval,
 } from './types';
-export type { ToolEventListener, ToolEventPayload } from './tool-events';
+export type { ToolEventListener, ToolEventPayload } from '../tool-events';
 
 const ChatContext = createContext<ChatContextValue | null>(null);
 

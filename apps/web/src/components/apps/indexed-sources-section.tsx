@@ -4,7 +4,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ChevronDownIcon } from '@/components/icons';
 import { type AppSummary } from '@/lib/api-client';
 import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
-import { formatTimestamp, indexedSourcesLabel } from './app-manager-labels';
+import { formatTimestamp, indexedSourcesLabel } from './labels';
 
 export function IndexedSourcesSection({ app }: { app: AppSummary }) {
   const [open, setOpen] = useState(false);

@@ -2,17 +2,17 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, api } from '../api-client';
-import type { ToolEventListener, ToolEventPayload } from '../chat/tool-events';
+import type { ToolEventListener, ToolEventPayload } from '../tool-events';
 import { reportClientError } from '../client-logging';
 import {
   chooseAssistantCaptionSource,
   type AssistantCaptionSource,
 } from './assistant-caption';
 import type { SessionInit, VoicePendingToolCall, VoicePhase } from './types';
-import { getBrowserVoiceSupport } from './utils';
+import { getBrowserVoiceSupport } from './browser-support';
 import { useVoiceMeter } from './use-voice-meter';
-import { connectWebRtcVoiceSession } from './webrtc-voice-connection';
-import { VoiceToolRegistry } from './voice-tool-registry';
+import { connectWebRtcVoiceSession } from './webrtc-connection';
+import { VoiceToolRegistry } from './tool-registry';
 
 interface UseLiveVoiceSessionOptions {
   startSession: () => Promise<SessionInit>;

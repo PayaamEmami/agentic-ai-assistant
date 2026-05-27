@@ -5,8 +5,8 @@ import {
   type CitationContentBlock,
   type MessageContentBlock,
   useChatContext,
-} from '@/lib/chat-context';
-import { Badge } from './ui/badge';
+} from '@/lib/chat';
+import { Badge } from '@/components/ui/badge';
 import { CitationCard } from './citation-card';
 
 const WORD_FADE_MS = 380;

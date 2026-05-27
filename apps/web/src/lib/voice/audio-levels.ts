@@ -1,5 +1,3 @@
-import type { BrowserVoiceSupport } from './types';
-
 export const VOICE_LEVEL_BAND_COUNT = 24;
 
 export function createEmptyVoiceLevels(bandCount = VOICE_LEVEL_BAND_COUNT) {
@@ -32,28 +30,4 @@ export function calculateVoiceLevels(
 
 export function calculateVoiceVolume(levels: number[]) {
   return levels.reduce((sum, level) => sum + level, 0) / Math.max(1, levels.length);
-}
-
-export function parseEvent(raw: string): { type?: string; [key: string]: unknown } | null {
-  try {
-    return JSON.parse(raw) as { type?: string; [key: string]: unknown };
-  } catch {
-    return null;
-  }
-}
-
-export function getBrowserVoiceSupport(): BrowserVoiceSupport {
-  if (
-    typeof window === 'undefined' ||
-    typeof navigator === 'undefined' ||
-    typeof RTCPeerConnection === 'undefined' ||
-    !navigator.mediaDevices?.getUserMedia
-  ) {
-    return {
-      supported: false,
-      reason: 'Live voice mode is not supported in this browser.',
-    };
-  }
-
-  return { supported: true };
 }

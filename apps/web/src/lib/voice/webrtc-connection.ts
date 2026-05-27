@@ -1,4 +1,4 @@
-import { parseEvent } from './utils';
+import { parseEvent } from './realtime-events';
 
 export interface WebRtcVoiceConnection {
   peerConnection: RTCPeerConnection;

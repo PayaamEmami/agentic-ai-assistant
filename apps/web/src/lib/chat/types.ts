@@ -1,4 +1,4 @@
-import type { ToolEventListener } from './tool-events';
+import type { ToolEventListener } from '../tool-events';
 import type {
   ChatMessage,
   CitationItem,

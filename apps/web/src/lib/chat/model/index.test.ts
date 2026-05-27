@@ -8,9 +8,9 @@ import {
   upsertVoiceMessageInList,
   type ChatMessage,
   type ConversationSummary,
-} from './chat-message-model';
+} from './index';
 
-describe('chat-message-model', () => {
+describe('chat model', () => {
   it('normalizes malformed message content into displayable blocks', () => {
     const message = normalizeMessage({
       id: 'message-1',

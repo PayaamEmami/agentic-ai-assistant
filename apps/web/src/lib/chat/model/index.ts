@@ -1,4 +1,4 @@
-export * from './chat-message-types';
+export * from './message-types';
 export * from './citation-model';
 export * from './conversation-list-model';
 export * from './message-builders';

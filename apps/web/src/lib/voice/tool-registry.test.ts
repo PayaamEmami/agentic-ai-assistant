@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VoiceToolRegistry } from './voice-tool-registry';
+import { VoiceToolRegistry } from './tool-registry';
 
 describe('VoiceToolRegistry', () => {
   it('tracks calls by call id and tool execution id', () => {

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { ClientLogBootstrap } from '@/components/client-log-bootstrap';
+import { ClientLogBootstrap } from '@/components/layout/client-log-bootstrap';
 import { AuthProvider } from '@/lib/auth-context';
 
 export const metadata: Metadata = {
