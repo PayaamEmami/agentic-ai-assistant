@@ -5,11 +5,13 @@ import { useSearchParams } from 'next/navigation';
 import { api, type AppSummary, type GitHubRepositorySummary } from '@/lib/api-client';
 import { GitHubRepositorySelector } from '@/components/apps/github-repository-selector';
 import { IndexedSourcesSection } from '@/components/apps/indexed-sources-section';
-import { ConnectIcon, DisconnectIcon, SyncIcon } from '@/components/icons';
+import { AppSyncButton } from '@/components/apps/app-sync-button';
+import { ConnectIcon, DisconnectIcon } from '@/components/icons';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { reportClientError } from '@/lib/client-logging';
+import { useAppSync } from '@/lib/apps/use-app-sync';
 
 function appLabel(kind: string): string {
   if (kind === 'github') {
@@ -81,6 +83,8 @@ export function AppManager() {
     }
   }, []);
 
+  const { syncingKind, syncApp: runAppSync } = useAppSync(() => load(false));
+
   useEffect(() => {
     void load();
   }, [appKind, appMessage, appStatus, load]);
@@ -110,12 +114,14 @@ export function AppManager() {
     }
   };
 
-  const syncApp = async (kind: AppSummary['kind']) => {
+  const handleSyncApp = async (kind: AppSummary['kind']) => {
     setActionError(null);
 
+    const app = apps.find((candidate) => candidate.kind === kind);
+    const displayName = app?.displayName ?? appLabel(kind);
+
     try {
-      await api.apps.sync(kind);
-      await load(false);
+      await runAppSync(kind, displayName);
     } catch (error) {
       void reportClientError({
         event: 'client.apps.sync_failed',
@@ -133,8 +139,8 @@ export function AppManager() {
 
     try {
       await api.apps.saveGitHubRepositories(selectedRepoIds);
-      await api.apps.sync('github');
-      await load(false);
+      const githubApp = apps.find((candidate) => candidate.kind === 'github');
+      await runAppSync('github', githubApp?.displayName ?? 'GitHub');
     } catch (error) {
       void reportClientError({
         event: 'client.apps.save_repositories_failed',
@@ -195,9 +201,6 @@ export function AppManager() {
           {apps.map((app) => {
             const selectedRepoCount = app.selectedRepoCount ?? 0;
             const isConnected = app.hasCredentials;
-            const syncDisabled =
-              app.knowledge.status !== 'connected' ||
-              (app.kind === 'github' && selectedRepoCount === 0);
 
             return (
               <section key={app.kind} className="py-6 first:pt-0">
@@ -215,10 +218,7 @@ export function AppManager() {
                     {app.lastError ? (
                       <Alert className="mt-3">{app.lastError}</Alert>
                     ) : null}
-                    {app.kind === 'github' &&
-                    isConnected &&
-                    app.knowledge.status === 'connected' &&
-                    selectedRepoCount === 0 ? (
+                    {app.kind === 'github' && isConnected && selectedRepoCount === 0 ? (
                       <Alert variant="warning" className="mt-3">
                         Select at least one repository before syncing GitHub knowledge.
                       </Alert>
@@ -236,14 +236,11 @@ export function AppManager() {
                       </IconButton>
                     ) : null}
                     {isConnected ? (
-                      <IconButton
-                        onClick={() => void syncApp(app.kind)}
-                        disabled={syncDisabled}
-                        title={`Sync ${app.displayName}`}
-                        aria-label={`Sync ${app.displayName}`}
-                      >
-                        <SyncIcon />
-                      </IconButton>
+                      <AppSyncButton
+                        app={app}
+                        syncingKind={syncingKind}
+                        onSync={(kind) => void handleSyncApp(kind)}
+                      />
                     ) : null}
                     {isConnected ? (
                       <IconButton

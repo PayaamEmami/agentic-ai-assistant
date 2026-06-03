@@ -66,9 +66,25 @@ label:has(input:not(:disabled)),
   animation: assistant-followup-reveal 240ms ease-out both;
 }
 
+@keyframes toast-enter {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.toast-enter {
+  animation: toast-enter 220ms ease-out both;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .voice-word-fade,
-  .assistant-followup-reveal {
+  .assistant-followup-reveal,
+  .toast-enter {
     animation: none;
   }
 }

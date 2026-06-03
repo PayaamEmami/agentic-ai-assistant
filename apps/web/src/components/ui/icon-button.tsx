@@ -7,6 +7,7 @@ type IconButtonVariant = 'ghost' | 'danger' | 'success' | 'primary';
 interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   size?: IconButtonSize;
   variant?: IconButtonVariant;
+  loading?: boolean;
 }
 
 const sizeClasses: Record<IconButtonSize, string> = {
@@ -23,20 +24,34 @@ const variantClasses: Record<IconButtonVariant, string> = {
 };
 
 export const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { className, size = 'md', type = 'button', variant = 'ghost', ...props },
+  {
+    className,
+    size = 'md',
+    type = 'button',
+    variant = 'ghost',
+    loading = false,
+    disabled,
+    children,
+    ...props
+  },
   ref,
 ) {
   return (
     <button
       ref={ref}
       type={type}
+      disabled={disabled || loading}
+      aria-busy={loading || undefined}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center transition disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center transition disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-foreground-muted',
+        loading && 'cursor-wait',
         sizeClasses[size],
         variantClasses[variant],
         className,
       )}
       {...props}
-    />
+    >
+      <span className={cn('inline-flex', loading && 'animate-spin')}>{children}</span>
+    </button>
   );
 });
