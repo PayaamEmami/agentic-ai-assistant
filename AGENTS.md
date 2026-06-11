@@ -1,27 +1,10 @@
-# CONTEXT
+# AGENTS.md
 
-This file is a quick working guide for coding agents in this repository. Use `README.md` for full setup and infrastructure details; use this file for where code lives, how to verify changes, and the guardrails that matter during implementation.
+This file orients AI coding agents and human readers to this repository. It explains what the project is, how it is organized, and the guidance to follow when working here.
 
-If your change makes any part of this file inaccurate, incomplete, or misleading, update `CONTEXT.md` in the same work.
+## Overview
 
-## Project Summary
-
-Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with:
-
-- `apps/web`: Next.js web app
-- `apps/api`: Fastify API and WebSocket backend
-- `apps/worker`: BullMQ background processing
-- `packages/*`: shared logic for AI orchestration, retrieval, DB, observability, config, and tool providers
-
-Primary stack:
-
-- Node.js 20+
-- TypeScript
-- pnpm workspaces
-- Next.js 15 + React 19
-- Fastify 5
-- PostgreSQL 16 + pgvector
-- Redis 7 + BullMQ
+Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a Next.js web app, Fastify API, and BullMQ worker. Shared TypeScript packages handle orchestration, retrieval, tools, database access, and observability on top of PostgreSQL and Redis.
 
 ## Repo Shape
 
