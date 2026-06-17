@@ -14,9 +14,8 @@ import { createClientId } from '../uuid';
 import {
   buildConversationTitle,
   createErrorAssistantMessage,
-  createFallbackAssistantMessage,
   createOptimisticUserMessage,
-  normalizeMessage,
+  createStreamingAssistantMessage,
   upsertConversation,
   type ChatMessage,
   type ConversationSummary,
@@ -37,7 +36,6 @@ interface UseChatActionsOptions {
 
 export function useChatActions({
   currentConversationId,
-  messagesRef,
   setError,
   setConversations,
   setCurrentConversationId,
@@ -51,6 +49,16 @@ export function useChatActions({
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunConversationIdRef = useRef<string | undefined>(undefined);
 
+  // Clears the active run state. Called when the socket reports the turn is
+  // settled (done / interrupted / error), since the HTTP request now returns
+  // before generation completes.
+  const settleActiveRun = useCallback(() => {
+    activeRunIdRef.current = null;
+    activeRunConversationIdRef.current = undefined;
+    setIsSendingMessage(false);
+    setIsInterruptingMessage(false);
+  }, []);
+
   const sendMessage = useCallback(
     async (content: string, attachments: UploadedAttachment[] = []) => {
       const trimmedContent = content.trim();
@@ -63,7 +71,6 @@ export function useChatActions({
       setIsInterruptingMessage(false);
 
       const clientRunId = createClientId();
-      const existingMessageIds = new Set(messagesRef.current.map((message) => message.id));
       activeRunIdRef.current = clientRunId;
       activeRunConversationIdRef.current = currentConversationId;
 
@@ -91,65 +98,41 @@ export function useChatActions({
           }),
         );
 
-        let hasAssistantMessage = false;
-        try {
-          const detail = await api.chat.getConversation(response.conversationId);
-          const nextMessages = detail.messages.map((message) => {
-            const normalized = normalizeMessage(message);
-            if (normalized.role === 'assistant' && !existingMessageIds.has(normalized.id)) {
-              return {
-                ...normalized,
-                presentation: { animateText: true },
-              };
-            }
-            return normalized;
-          });
-          if (nextMessages.length > 0) {
-            hasAssistantMessage = nextMessages.some((message) => message.role !== 'user');
-            setMessages(nextMessages);
+        // Add a streaming placeholder keyed by the server-assigned message id so
+        // socket deltas can be appended live. The turn stays "sending" until the
+        // socket reports it settled.
+        setMessages((previous) => {
+          if (previous.some((message) => message.id === response.messageId)) {
+            return previous;
           }
-        } catch (detailError) {
-          void reportClientError({
-            event: 'client.chat.refresh_failed',
-            component: 'chat-context',
-            message: 'Failed to refresh conversation after send',
-            error: detailError,
-            conversationId: response.conversationId,
-          });
-        }
-
-        if (!hasAssistantMessage) {
-          setMessages((previous) => [
-            ...previous,
-            createFallbackAssistantMessage(response.messageId, { animateText: true }),
-          ]);
-        }
+          return [...previous, createStreamingAssistantMessage(response.messageId)];
+        });
 
         await Promise.all([loadConversations(), loadPendingApprovals()]);
       } catch (requestError) {
         const message =
           requestError instanceof Error ? requestError.message : 'Failed to send message';
         setError(message);
-        setMessages((previous) => [
-          ...previous,
-          createErrorAssistantMessage(message, { animateText: true }),
-        ]);
-      } finally {
-        activeRunIdRef.current = null;
-        activeRunConversationIdRef.current = undefined;
-        setIsSendingMessage(false);
-        setIsInterruptingMessage(false);
+        setMessages((previous) => [...previous, createErrorAssistantMessage(message)]);
+        void reportClientError({
+          event: 'client.chat.send_failed',
+          component: 'chat-context',
+          message: 'Failed to send chat message',
+          error: requestError,
+          conversationId: currentConversationId,
+        });
+        settleActiveRun();
       }
     },
     [
       currentConversationId,
       loadConversations,
       loadPendingApprovals,
-      messagesRef,
       setConversations,
       setCurrentConversationId,
       setError,
       setMessages,
+      settleActiveRun,
     ],
   );
 
@@ -183,5 +166,6 @@ export function useChatActions({
     isInterruptingMessage,
     sendMessage,
     interruptMessage,
+    settleActiveRun,
   };
 }

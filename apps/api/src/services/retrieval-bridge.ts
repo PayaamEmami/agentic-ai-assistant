@@ -233,15 +233,33 @@ export class RetrievalBridge {
         return { results: [], citations: [] };
       }
 
-      const hydratedResults = await Promise.all(
-        vectorMatches.map(async (match, index) =>
-          this.buildResultFromMatch(
-            match.chunkId,
-            index,
-            vectorMatches.length,
-            trimmedQuery,
-            userId,
-          ),
+      // Batch-hydrate chunks -> documents -> sources to avoid an N+1 query
+      // pattern (previously up to 3 queries per candidate match).
+      const chunks = await chunkRepository.listByIds(vectorMatches.map((match) => match.chunkId));
+      const chunkById = new Map(chunks.map((chunk) => [chunk.id, chunk]));
+
+      const documentIds = Array.from(new Set(chunks.map((chunk) => chunk.documentId)));
+      const documents = await documentRepository.listByIds(documentIds);
+      const documentById = new Map(documents.map((document) => [document.id, document]));
+
+      const sourceIds = Array.from(
+        new Set(
+          documents
+            .map((document) => document.sourceId)
+            .filter((sourceId): sourceId is string => Boolean(sourceId)),
+        ),
+      );
+      const sources = await sourceRepository.listByIds(sourceIds);
+      const sourceById = new Map(sources.map((source) => [source.id, source]));
+
+      const hydratedResults = vectorMatches.map((match, index) =>
+        this.buildResultFromMatch(
+          match.chunkId,
+          index,
+          vectorMatches.length,
+          trimmedQuery,
+          userId,
+          { chunkById, documentById, sourceById },
         ),
       );
 
@@ -274,24 +292,31 @@ export class RetrievalBridge {
     }
   }
 
-  private async buildResultFromMatch(
+  private buildResultFromMatch(
     chunkId: string,
     index: number,
     totalCandidates: number,
     query: string,
     userId: string,
-  ): Promise<RetrievalSearchResult | null> {
-    const chunk = await chunkRepository.findById(chunkId);
+    hydrationMaps: {
+      chunkById: Map<string, { id: string; documentId: string; content: string; metadata: Record<string, unknown> }>;
+      documentById: Map<string, { id: string; userId: string | null; sourceId: string | null; title: string }>;
+      sourceById: Map<string, { id: string; userId: string | null; appKind: string | null; uri: string | null }>;
+    },
+  ): RetrievalSearchResult | null {
+    const chunk = hydrationMaps.chunkById.get(chunkId);
     if (!chunk) {
       return null;
     }
 
-    const document = await documentRepository.findById(chunk.documentId);
+    const document = hydrationMaps.documentById.get(chunk.documentId);
     if (!document) {
       return null;
     }
 
-    const source = document.sourceId ? await sourceRepository.findById(document.sourceId) : null;
+    const source = document.sourceId
+      ? hydrationMaps.sourceById.get(document.sourceId) ?? null
+      : null;
     const belongsToUser =
       document.userId === userId || (document.userId === null && source?.userId === userId);
     if (!belongsToUser) {

@@ -1,6 +1,67 @@
-import type { ChatMessage, ToolCall, ToolDefinition } from '../types.js';
+import type {
+  ChatMessage,
+  CompletionRequest,
+  CompletionResponse,
+  ToolCall,
+  ToolDefinition,
+} from '../types.js';
+import type { ModelProvider } from '../model-provider.js';
 import type { SystemPromptContext } from '../prompts.js';
 import type { AgentContext, AgentHistoryMessage, AgentResult, AgentToolContext } from './types.js';
+
+/**
+ * Runs a completion either streaming (when `onTextDelta` is provided) or in a
+ * single shot. When streaming, text deltas are forwarded to `onTextDelta` as
+ * they arrive and the accumulated result is returned in the same shape as
+ * `ModelProvider.complete`, so callers can stay agnostic to the transport.
+ */
+export async function completeOrStream(
+  modelProvider: ModelProvider,
+  request: CompletionRequest,
+  onTextDelta?: (delta: string) => void,
+): Promise<CompletionResponse> {
+  if (!onTextDelta) {
+    return modelProvider.complete(request);
+  }
+
+  let content = '';
+  let finishReason: CompletionResponse['finishReason'] = 'stop';
+  let usage: CompletionResponse['usage'] = {
+    promptTokens: 0,
+    completionTokens: 0,
+    totalTokens: 0,
+  };
+  const toolCallsById = new Map<string, ToolCall>();
+
+  for await (const delta of modelProvider.streamComplete(request)) {
+    if (delta.type === 'text' && delta.text) {
+      content += delta.text;
+      onTextDelta(delta.text);
+    } else if (delta.type === 'tool_call' && delta.toolCall) {
+      toolCallsById.set(delta.toolCall.id, delta.toolCall);
+    } else if (delta.type === 'done') {
+      if (delta.usage) {
+        usage = delta.usage;
+      }
+      if (
+        delta.finishReason === 'stop' ||
+        delta.finishReason === 'tool_calls' ||
+        delta.finishReason === 'length' ||
+        delta.finishReason === 'content_filter'
+      ) {
+        finishReason = delta.finishReason;
+      }
+    }
+  }
+
+  return {
+    messageId: '',
+    content: content.length > 0 ? content : null,
+    toolCalls: Array.from(toolCallsById.values()),
+    finishReason,
+    usage,
+  };
+}
 
 const RESEARCH_HINTS = [
   '?',

@@ -32,6 +32,8 @@ export type {
   ToolResultContent,
   CitationContent,
   StatusContent,
+  ThinkingContent,
+  ThinkingSegment,
   Attachment,
   Source,
   Citation,
@@ -65,6 +67,7 @@ export {
   ToolResultContentDto,
   CitationContentDto,
   StatusContentDto,
+  ThinkingContentDto,
   MessageDto,
   ConversationDetailResponse,
   UpdateConversationRequest,
@@ -126,7 +129,10 @@ export {
 
 export type { RealtimeEvent } from './events.js';
 export type {
+  AssistantStage,
   AssistantTextEvent,
+  AssistantStatusEvent,
+  AssistantThinkingDeltaEvent,
   AssistantTextDoneEvent,
   AssistantInterruptedEvent,
   ToolStartEvent,

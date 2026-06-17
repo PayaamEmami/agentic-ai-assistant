@@ -2,6 +2,7 @@ import type { ModelProvider } from '../model-provider.js';
 import { buildAgentSystemPrompt } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
+  completeOrStream,
   parseToolCalls,
   requiresApprovalForCalls,
   toChatMessages,
@@ -24,12 +25,16 @@ export class CodingAgent implements Agent {
       ...toChatMessages(context.messageHistory),
     ];
 
-    const completion = await this.modelProvider.complete({
-      messages,
-      model: this.model,
-      tools: toToolDefinitions(context.availableTools),
-      signal: context.signal,
-    });
+    const completion = await completeOrStream(
+      this.modelProvider,
+      {
+        messages,
+        model: this.model,
+        tools: toToolDefinitions(context.availableTools),
+        signal: context.signal,
+      },
+      context.emitAnswerDelta,
+    );
 
     const toolCalls = parseToolCalls(completion.toolCalls);
 

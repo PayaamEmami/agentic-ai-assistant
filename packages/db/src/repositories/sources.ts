@@ -30,6 +30,7 @@ export interface AppSourceStats {
 
 export interface SourceRepository {
   findById(id: string): Promise<Source | null>;
+  listByIds(ids: string[]): Promise<Source[]>;
   findByExternalId(userId: string, appKind: string, externalId: string): Promise<Source | null>;
   create(
     userId: string,
@@ -70,6 +71,22 @@ export const sourceRepository: SourceRepository = {
       [id],
     );
     return result.rows[0] ?? null;
+  },
+
+  async listByIds(ids: string[]): Promise<Source[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const pool = getPool();
+    const result = await pool.query<SourceRow>(
+      `SELECT id, user_id AS "userId", kind, app_kind AS "appKind",
+              external_id AS "externalId", title, uri,
+              created_at AS "createdAt"
+       FROM sources
+       WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return result.rows;
   },
 
   async findByExternalId(

@@ -1,9 +1,11 @@
 'use client';
 
 import {
+  type AssistantStage,
   type ChatMessage,
   type CitationContentBlock,
   type MessageContentBlock,
+  type ThinkingContentBlock,
   useChatContext,
 } from '@/lib/chat';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +14,72 @@ import { CitationCard } from './citation-card';
 const WORD_FADE_MS = 380;
 const WORD_STAGGER_MS = 34;
 const MAX_FOLLOWUP_DELAY_MS = 2400;
+
+const STAGE_LABELS: Record<AssistantStage, string> = {
+  routing: 'Routing the request',
+  retrieving: 'Searching your knowledge',
+  research: 'Researching',
+  tool: 'Planning tools',
+  coding: 'Working through code',
+  answering: 'Writing the answer',
+  verifying: 'Verifying the answer',
+  done: 'Done',
+};
+
+function stageLabel(stage: string): string {
+  return STAGE_LABELS[stage as AssistantStage] ?? stage;
+}
+
+function ThinkingPanel({
+  block,
+  activeStage,
+  streaming,
+}: {
+  block?: ThinkingContentBlock;
+  activeStage?: AssistantStage;
+  streaming?: boolean;
+}) {
+  const segments = block?.segments ?? [];
+  const hasSegments = segments.length > 0;
+
+  if (!hasSegments && !streaming) {
+    return null;
+  }
+
+  const summary =
+    streaming && activeStage && activeStage !== 'done'
+      ? `Thinking - ${stageLabel(activeStage)}`
+      : 'Thoughts';
+
+  return (
+    <details className="rounded-lg border border-border-subtle bg-surface-input/60">
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-foreground-muted">
+        {streaming && activeStage !== 'done' ? (
+          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+        ) : (
+          <span className="h-2 w-2 rounded-full bg-border" />
+        )}
+        <span>{summary}</span>
+      </summary>
+      <div className="space-y-2 px-3 pb-3">
+        {hasSegments ? (
+          segments.map((segment, index) => (
+            <div key={`${segment.stage}-${index}`} className="space-y-1">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground-muted/80">
+                {stageLabel(segment.stage)}
+              </p>
+              <p className="whitespace-pre-wrap text-xs leading-relaxed text-foreground-muted">
+                {segment.text}
+              </p>
+            </div>
+          ))
+        ) : (
+          <p className="text-xs italic text-foreground-muted">Working on it...</p>
+        )}
+      </div>
+    </details>
+  );
+}
 
 interface MessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
@@ -146,12 +214,23 @@ export function Message({ role, content, presentation }: MessageProps) {
     useChatContext();
   const isUser = role === 'user';
   const isSystem = role === 'system';
-  const shouldAnimateAssistantOutput = role === 'assistant' && Boolean(presentation?.animateText);
-  const visibleContent = content.filter((block) => block.type !== 'citation');
+  const isStreaming = role === 'assistant' && Boolean(presentation?.streaming);
+  const shouldAnimateAssistantOutput =
+    role === 'assistant' && Boolean(presentation?.animateText) && !isStreaming;
+  const thinkingBlock = content.find(
+    (block): block is ThinkingContentBlock => block.type === 'thinking',
+  );
+  const visibleContent = content.filter(
+    (block) => block.type !== 'citation' && block.type !== 'thinking',
+  );
   const statusBlocks = visibleContent.filter(
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
   );
   const primaryContent = visibleContent.filter((block) => block.type !== 'status');
+  const hasRenderedText = primaryContent.some(
+    (block) => block.type === 'text' && block.text.trim().length > 0,
+  );
+  const showStreamingPlaceholder = isStreaming && !hasRenderedText;
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
@@ -300,6 +379,23 @@ export function Message({ role, content, presentation }: MessageProps) {
       className={`flex ${isUser ? 'justify-end' : isSystem ? 'justify-center' : 'justify-start'}`}
     >
       <div className={bubbleClassName}>
+        {role === 'assistant' ? (
+          <ThinkingPanel
+            block={thinkingBlock}
+            activeStage={presentation?.activeStage}
+            streaming={isStreaming}
+          />
+        ) : null}
+        {showStreamingPlaceholder ? (
+          <div className="inline-flex items-center gap-2 text-xs text-foreground-muted">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
+            <span>
+              {presentation?.activeStage
+                ? stageLabel(presentation.activeStage)
+                : 'Thinking'}
+            </span>
+          </div>
+        ) : null}
         {primaryContent.length > 0 ? (
           primaryContent.map((block, index) => {
             const renderedBlock = renderContentBlock(block, index);

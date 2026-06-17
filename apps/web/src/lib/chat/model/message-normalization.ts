@@ -125,6 +125,24 @@ export function normalizeContentBlock(raw: unknown): MessageContentBlock {
     };
   }
 
+  if (type === 'thinking') {
+    const rawSegments = Array.isArray(raw.segments) ? raw.segments : [];
+    return {
+      type,
+      segments: rawSegments
+        .map((segment) => {
+          if (!isRecord(segment)) {
+            return { stage: '', text: '' };
+          }
+          return {
+            stage: asString(segment.stage) ?? '',
+            text: asString(segment.text) ?? '',
+          };
+        })
+        .filter((segment) => segment.text.length > 0),
+    };
+  }
+
   return { type: 'text', text: stringify(raw) };
 }
 

@@ -157,6 +157,7 @@ export class OpenAIProvider implements ModelProvider {
               max_tokens: request.maxTokens,
               tools: preparedTools.tools,
               stream: true,
+              stream_options: { include_usage: true },
             },
             request.signal ? { signal: request.signal } : undefined,
           ),
@@ -164,8 +165,16 @@ export class OpenAIProvider implements ModelProvider {
 
       const toolCallState = new Map<number, ToolCall>();
       let finishReason: CompletionResponse['finishReason'] | undefined;
+      let usage: CompletionResponse['usage'] | undefined;
 
       for await (const chunk of stream) {
+        if (chunk.usage) {
+          usage = {
+            promptTokens: chunk.usage.prompt_tokens ?? 0,
+            completionTokens: chunk.usage.completion_tokens ?? 0,
+            totalTokens: chunk.usage.total_tokens ?? 0,
+          };
+        }
         for (const choice of chunk.choices) {
           if (choice.delta.content) {
             yield { type: 'text', text: choice.delta.content };
@@ -212,6 +221,7 @@ export class OpenAIProvider implements ModelProvider {
           outcome: 'success',
           model,
           durationMs: Date.now() - startedAt,
+          totalTokens: usage?.totalTokens,
         },
         'OpenAI streaming completion finished',
       );
@@ -220,8 +230,26 @@ export class OpenAIProvider implements ModelProvider {
         { operation: 'chat_stream', model, outcome: 'success' },
         Date.now() - startedAt,
       );
+      if (usage) {
+        openAiTokens.inc(
+          { operation: 'chat_stream', model, token_type: 'prompt' },
+          usage.promptTokens,
+        );
+        openAiTokens.inc(
+          { operation: 'chat_stream', model, token_type: 'completion' },
+          usage.completionTokens,
+        );
+        openAiEstimatedCostUsd.inc(
+          { operation: 'chat_stream', model },
+          estimateOpenAiCost({
+            model,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+          }),
+        );
+      }
 
-      yield { type: 'done', finishReason: finishReason ?? 'stop' };
+      yield { type: 'done', finishReason: finishReason ?? 'stop', usage };
     } catch (error) {
       openAiRequestCounter.inc({ operation: 'chat_stream', model, outcome: 'failure' });
       openAiDurationMs.observe(

@@ -51,6 +51,16 @@ export function createErrorAssistantMessage(
   return createAssistantTextMessage(`local-error-${createClientId()}`, `Error: ${message}`, options);
 }
 
+export function createStreamingAssistantMessage(messageId: string): ChatMessage {
+  return {
+    id: messageId,
+    role: 'assistant',
+    content: [{ type: 'text', text: '' }],
+    createdAt: new Date().toISOString(),
+    presentation: { streaming: true },
+  };
+}
+
 export function createOptimisticVoiceMessage(
   role: 'user' | 'assistant',
   text: string,

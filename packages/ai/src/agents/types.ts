@@ -16,6 +16,22 @@ export interface AgentToolContext {
   requiresApproval?: boolean;
 }
 
+export type AgentStage =
+  | 'routing'
+  | 'retrieving'
+  | 'research'
+  | 'tool'
+  | 'coding'
+  | 'answering'
+  | 'verifying'
+  | 'done';
+
+export interface AgentStreamHooks {
+  onStage?: (stage: AgentStage) => void;
+  onReasoningDelta?: (stage: AgentStage, delta: string) => void;
+  onAnswerDelta?: (delta: string) => void;
+}
+
 export interface AgentContext {
   conversationId: string;
   userId: string;
@@ -26,6 +42,17 @@ export interface AgentContext {
   activeApps?: string[];
   previousResult?: AgentResult;
   signal?: AbortSignal;
+  // When present, retrieved context is resolved lazily so retrieval can run
+  // concurrently with the orchestrator's routing pass. Agents that consume
+  // retrieved context (research, verifier) await this instead of `retrievedContext`.
+  retrievedContextProvider?: () => Promise<string[]>;
+  // Streaming hooks provided by the caller (chat service). The orchestrator
+  // reads these to wire per-agent sinks and emit stage transitions.
+  stream?: AgentStreamHooks;
+  // Streaming sinks wired by the orchestrator on a per-agent basis. An agent
+  // streams its model output to whichever sink is set for it.
+  emitReasoningDelta?: (delta: string) => void;
+  emitAnswerDelta?: (delta: string) => void;
 }
 
 export interface AgentVerificationResult {

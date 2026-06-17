@@ -2,7 +2,7 @@ import type { ChatMessage } from '../types.js';
 import type { ModelProvider } from '../model-provider.js';
 import { buildAgentSystemPrompt, buildRetrievalAugmentedMessages } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
-import { toChatMessages, toSystemPromptContext } from './helpers.js';
+import { completeOrStream, toChatMessages, toSystemPromptContext } from './helpers.js';
 
 export class ResearchAgent implements Agent {
   readonly role = 'research' as const;
@@ -19,12 +19,19 @@ export class ResearchAgent implements Agent {
       ...toChatMessages(context.messageHistory),
     ];
 
-    const messages = buildRetrievalAugmentedMessages(baseMessages, context.retrievedContext);
-    const completion = await this.modelProvider.complete({
-      messages,
-      model: this.model,
-      signal: context.signal,
-    });
+    const retrievedContext = context.retrievedContextProvider
+      ? await context.retrievedContextProvider()
+      : context.retrievedContext;
+    const messages = buildRetrievalAugmentedMessages(baseMessages, retrievedContext);
+    const completion = await completeOrStream(
+      this.modelProvider,
+      {
+        messages,
+        model: this.model,
+        signal: context.signal,
+      },
+      context.emitAnswerDelta,
+    );
 
     return {
       response: completion.content,

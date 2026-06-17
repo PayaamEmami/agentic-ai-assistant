@@ -49,6 +49,7 @@ export interface StreamDelta {
   text?: string;
   toolCall?: ToolCall;
   finishReason?: string;
+  usage?: { promptTokens: number; completionTokens: number; totalTokens: number };
 }
 
 export interface ToolDefinition {

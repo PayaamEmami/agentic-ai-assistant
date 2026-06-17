@@ -1,5 +1,6 @@
 import {
   AgentOrchestrator,
+  type AgentStreamHooks,
   CodingAgent,
   OpenAIProvider,
   OrchestratorAgent,
@@ -18,6 +19,7 @@ import {
 import {
   type ApprovalRequestedEvent,
   type AssistantInterruptedEvent,
+  type AssistantStage,
   type AssistantTextDoneEvent,
   type InterruptChatRunResponse,
 } from '@aaa/shared';
@@ -104,6 +106,18 @@ interface AssistantTurnOptions {
   requestContent: string;
   signal?: AbortSignal;
   initialConversationTitle?: string;
+  assistantMessageId?: string;
+}
+
+interface PreparedTurn {
+  conversation: {
+    id: string;
+    title: string | null;
+    userId: string;
+  };
+  signal?: AbortSignal;
+  assistantMessageId: string;
+  initialConversationTitle?: string;
 }
 
 interface SendMessageResult {
@@ -172,22 +186,60 @@ export class ChatService {
       this.runRegistry.start(clientRunId, userId, conversationId);
     }
 
-    let result: SendMessageResult;
+    // Synchronous preparation (conversation, user message, assistant
+    // placeholder) must succeed before responding so the client receives a
+    // valid conversation/message id. Failures here surface as HTTP errors.
+    let prepared: PreparedTurn;
     try {
-      result = await this.processMessage(userId, content, {
+      prepared = await this.prepareTurn(userId, content, {
         conversationId,
         attachmentIds,
         clientRunId,
       });
-    } finally {
+    } catch (error) {
       if (clientRunId) {
         this.runRegistry.finish(clientRunId);
       }
+      throw error;
     }
 
+    // Generate the assistant turn asynchronously and stream the result over the
+    // WebSocket. The HTTP request returns immediately so the client can render
+    // streamed tokens instead of blocking on the full multi-agent pipeline.
+    void this.generateAssistantTurn({
+      conversation: prepared.conversation,
+      userId,
+      requestContent: content,
+      signal: prepared.signal,
+      assistantMessageId: prepared.assistantMessageId,
+      initialConversationTitle: prepared.initialConversationTitle,
+    })
+      .catch((error) => {
+        logger.error(
+          {
+            event: 'chat.turn_failed',
+            outcome: 'failure',
+            conversationId: prepared.conversation.id,
+            error,
+          },
+          'Assistant turn failed after response was sent',
+        );
+        this.eventPublisher.error({
+          type: 'error',
+          conversationId: prepared.conversation.id,
+          code: 'ASSISTANT_TURN_FAILED',
+          message: 'The assistant ran into an error generating a response.',
+        });
+      })
+      .finally(() => {
+        if (clientRunId) {
+          this.runRegistry.finish(clientRunId);
+        }
+      });
+
     return {
-      conversationId: result.conversationId,
-      messageId: result.messageId,
+      conversationId: prepared.conversation.id,
+      messageId: prepared.assistantMessageId,
     };
   }
 
@@ -271,7 +323,11 @@ export class ChatService {
     requestContent,
     signal,
     initialConversationTitle,
+    assistantMessageId: providedAssistantMessageId,
   }: AssistantTurnOptions): Promise<SendMessageResult> {
+    const assistantMessageId =
+      providedAssistantMessageId ?? (await this.createAssistantPlaceholder(conversation.id));
+
     try {
       throwIfAborted(signal);
 
@@ -279,15 +335,17 @@ export class ChatService {
         conversation.id,
         HISTORY_LIMIT,
       );
+      // The assistant placeholder is the streaming target and must not be fed
+      // back into the model as history.
+      const priorMessages = recentMessages.filter(
+        (message) => message.id !== assistantMessageId,
+      );
 
-      if (conversation.title === null && recentMessages.length === 1 && initialConversationTitle) {
+      if (conversation.title === null && priorMessages.length === 1 && initialConversationTitle) {
         await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
       }
 
-      const messageHistory = await toAgentHistoryMessages(recentMessages, userId);
-      throwIfAborted(signal);
-
-      const retrievalDecision = decideRetrieval(requestContent, recentMessages);
+      const retrievalDecision = decideRetrieval(requestContent, priorMessages);
       logger.debug(
         {
           event: 'chat.retrieval_decided',
@@ -299,27 +357,93 @@ export class ChatService {
         'Retrieval decision evaluated',
       );
 
-      const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
-        ? await this.retrievalBridge.search(requestContent, userId, MAX_RETRIEVAL_CONTEXT, signal)
-        : { results: [], citations: [] };
-      throwIfAborted(signal);
+      // Kick off retrieval concurrently with orchestrator routing. The
+      // orchestrator does not consume retrieved context; only research/verifier
+      // do, and they await the provider below.
+      const emptyRetrieval: RetrievalResponse = { results: [], citations: [] };
+      const retrievalPromise: Promise<RetrievalResponse> = retrievalDecision.shouldRetrieve
+        ? this.retrievalBridge.search(requestContent, userId, MAX_RETRIEVAL_CONTEXT, signal)
+        : Promise.resolve(emptyRetrieval);
+      // Prevent unhandled rejection warnings if retrieval rejects before it is awaited.
+      retrievalPromise.catch(() => undefined);
 
-      const retrievalContext = buildRetrievalContextSections(retrieval);
+      let cachedRetrieval: RetrievalResponse | undefined;
+      const getRetrieval = async (): Promise<RetrievalResponse> => {
+        if (!cachedRetrieval) {
+          cachedRetrieval = await retrievalPromise;
+        }
+        return cachedRetrieval;
+      };
+      const retrievedContextProvider = async (): Promise<string[]> =>
+        buildRetrievalContextSections(await getRetrieval());
 
-      const personalContext = await this.personalizationService.getPersonalContext(userId);
+      // Pre-work that doesn't depend on each other runs in parallel.
+      const [messageHistory, personalContext, appConfigs, availableTools] = await Promise.all([
+        toAgentHistoryMessages(priorMessages, userId),
+        this.personalizationService.getPersonalContext(userId),
+        appCapabilityConfigRepository.listByUser(userId),
+        loadAvailableTools(userId),
+      ]);
       throwIfAborted(signal);
 
       const activeApps = Array.from(
         new Set(
-          (await appCapabilityConfigRepository.listByUser(userId))
+          appConfigs
             .filter((app) => app.status === 'connected')
             .map((app) => appLabel(app.appKind)),
         ),
       );
-      throwIfAborted(signal);
 
-      const availableTools = await loadAvailableTools(userId);
-      throwIfAborted(signal);
+      // Accumulate per-stage reasoning so the "thinking" trace can be persisted
+      // on the message after streaming completes.
+      const thinkingByStage = new Map<AssistantStage, string>();
+      const thinkingStageOrder: AssistantStage[] = [];
+      const streamHooks: AgentStreamHooks = {
+        onStage: (stage) => {
+          this.eventPublisher.assistantStatus({
+            type: 'assistant.status',
+            conversationId: conversation.id,
+            messageId: assistantMessageId,
+            stage,
+          });
+        },
+        onReasoningDelta: (stage, delta) => {
+          if (!delta) {
+            return;
+          }
+          if (!thinkingByStage.has(stage)) {
+            thinkingByStage.set(stage, '');
+            thinkingStageOrder.push(stage);
+          }
+          thinkingByStage.set(stage, (thinkingByStage.get(stage) ?? '') + delta);
+          this.eventPublisher.assistantThinkingDelta({
+            type: 'assistant.thinking.delta',
+            conversationId: conversation.id,
+            messageId: assistantMessageId,
+            stage,
+            delta,
+          });
+        },
+        onAnswerDelta: (delta) => {
+          if (!delta) {
+            return;
+          }
+          this.eventPublisher.assistantTextDelta({
+            type: 'assistant.text.delta',
+            conversationId: conversation.id,
+            messageId: assistantMessageId,
+            delta,
+          });
+        },
+      };
+      const collectThinkingSegments = () =>
+        thinkingStageOrder
+          .map((stage) => ({ stage, text: (thinkingByStage.get(stage) ?? '').trim() }))
+          .filter((segment) => segment.text.length > 0);
+
+      if (retrievalDecision.shouldRetrieve) {
+        streamHooks.onStage?.('retrieving');
+      }
 
       let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
       let toolCalls: AgentToolCall[] = [];
@@ -332,10 +456,12 @@ export class ChatService {
           userId,
           messageHistory,
           availableTools: toAgentToolContexts(availableTools),
-          retrievedContext: retrievalContext,
+          retrievedContext: [],
+          retrievedContextProvider,
           personalContext,
           activeApps,
           signal,
+          stream: streamHooks,
         });
         toolCalls = result.toolCalls;
         requiresApproval = result.requiresApproval;
@@ -433,23 +559,36 @@ export class ChatService {
         assistantTextBlock['verificationIssues'] = verificationIssues;
       }
 
+      // Retrieval ran concurrently with the orchestrator; resolve it now for
+      // citation display. It already swallows non-abort failures internally.
+      let retrieval: RetrievalResponse = emptyRetrieval;
+      try {
+        retrieval = await getRetrieval();
+      } catch (error) {
+        if (signal?.aborted || isAbortError(error)) {
+          throw error;
+        }
+      }
+
       const displayedCitations = selectDisplayedCitations(assistantResponse, retrieval);
       const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
+
+      const thinkingSegments = collectThinkingSegments();
+      if (thinkingSegments.length > 0) {
+        assistantContent.push({ type: 'thinking', segments: thinkingSegments });
+      }
+
       if (toolResultBlocks.length > 0) {
         assistantContent.push(...toolResultBlocks);
       } else {
         assistantContent.push(...toCitationContentBlocks(displayedCitations));
       }
 
-      const assistantMessage = await messageRepository.create(
-        conversation.id,
-        'assistant',
-        assistantContent,
-      );
+      await messageRepository.setContent(assistantMessageId, assistantContent);
       if (toolExecutionIds.length > 0) {
         await Promise.all(
           toolExecutionIds.map((nextToolExecutionId) =>
-            toolExecutionRepository.setMessage(nextToolExecutionId, assistantMessage.id),
+            toolExecutionRepository.setMessage(nextToolExecutionId, assistantMessageId),
           ),
         );
       }
@@ -460,7 +599,7 @@ export class ChatService {
       const event: AssistantTextDoneEvent = {
         type: 'assistant.text.done',
         conversationId: conversation.id,
-        messageId: assistantMessage.id,
+        messageId: assistantMessageId,
         fullText: assistantResponse,
       };
 
@@ -496,7 +635,7 @@ export class ChatService {
           event: 'chat.message_processed',
           outcome: 'success',
           conversationId: conversation.id,
-          historySize: recentMessages.length,
+          historySize: priorMessages.length,
           retrievalResultCount: retrieval.results.length,
           retrievalCitationCount: retrieval.citations.length,
           displayedCitationCount: displayedCitations.length,
@@ -511,7 +650,7 @@ export class ChatService {
 
       return {
         conversationId: conversation.id,
-        messageId: assistantMessage.id,
+        messageId: assistantMessageId,
         assistantText: assistantResponse,
       };
     } catch (error) {
@@ -519,15 +658,15 @@ export class ChatService {
         throw error;
       }
 
-      return this.createInterruptedMessage(conversation.id, userId);
+      return this.createInterruptedMessage(conversation.id, userId, assistantMessageId);
     }
   }
 
-  private async processMessage(
+  private async prepareTurn(
     userId: string,
     content: string,
     options: SendMessageOptions,
-  ): Promise<SendMessageResult> {
+  ): Promise<PreparedTurn> {
     getPool();
     const initialConversationTitle = buildConversationTitle(content);
     const activeRun =
@@ -594,31 +733,56 @@ export class ChatService {
       }),
     );
 
-    return this.generateAssistantTurn({
+    // Allocate the assistant message up front so streamed deltas have a target.
+    const assistantMessageId = await this.createAssistantPlaceholder(conversation.id);
+
+    return {
       conversation,
-      userId,
-      requestContent: content,
       signal,
+      assistantMessageId,
       initialConversationTitle,
-    });
+    };
+  }
+
+  private async createAssistantPlaceholder(conversationId: string): Promise<string> {
+    const placeholder = await messageRepository.create(conversationId, 'assistant', [
+      { type: 'text', text: '' },
+    ]);
+    return placeholder.id;
   }
 
   private async createInterruptedMessage(
     conversationId: string,
     userId: string,
+    assistantMessageId?: string,
   ): Promise<SendMessageResult> {
-    const interruptedMessage = await messageRepository.create(conversationId, 'assistant', [
+    const interruptedContent = [
       {
         type: 'status',
         status: 'interrupted',
         label: INTERRUPTED_STATUS_LABEL,
       },
-    ]);
+    ];
+
+    // Finalize the streaming placeholder in place when one exists; otherwise
+    // create a fresh status message (continuation path without a placeholder).
+    let messageId: string;
+    if (assistantMessageId) {
+      await messageRepository.setContent(assistantMessageId, interruptedContent);
+      messageId = assistantMessageId;
+    } else {
+      const interruptedMessage = await messageRepository.create(
+        conversationId,
+        'assistant',
+        interruptedContent,
+      );
+      messageId = interruptedMessage.id;
+    }
 
     const event: AssistantInterruptedEvent = {
       type: 'assistant.interrupted',
       conversationId,
-      messageId: interruptedMessage.id,
+      messageId,
       reason: USER_CANCELLED_REASON,
     };
 
@@ -635,7 +799,7 @@ export class ChatService {
 
     return {
       conversationId,
-      messageId: interruptedMessage.id,
+      messageId,
       assistantText: '',
     };
   }

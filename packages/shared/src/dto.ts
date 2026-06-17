@@ -82,6 +82,17 @@ export const StatusContentDto = z.object({
 });
 export type StatusContentDto = z.infer<typeof StatusContentDto>;
 
+export const ThinkingContentDto = z.object({
+  type: z.literal('thinking'),
+  segments: z.array(
+    z.object({
+      stage: z.string(),
+      text: z.string(),
+    }),
+  ),
+});
+export type ThinkingContentDto = z.infer<typeof ThinkingContentDto>;
+
 export const MessageContentDto = z.discriminatedUnion('type', [
   TextContentDto,
   AttachmentRefContentDto,
@@ -89,6 +100,7 @@ export const MessageContentDto = z.discriminatedUnion('type', [
   ToolResultContentDto,
   CitationContentDto,
   StatusContentDto,
+  ThinkingContentDto,
 ]);
 export type MessageContentDto = z.infer<typeof MessageContentDto>;
 

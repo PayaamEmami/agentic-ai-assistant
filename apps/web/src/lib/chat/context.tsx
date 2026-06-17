@@ -12,8 +12,12 @@ import {
 import { api } from '../api-client';
 import { useAuthContext } from '../auth-context';
 import {
+  appendAssistantTextDelta,
+  appendAssistantThinkingDelta,
   extractCitations,
   patchMessagesToolResult,
+  setAssistantStage as setAssistantStageInList,
+  type AssistantStage,
   type ChatMessage,
   type CitationItem,
 } from './model/index';
@@ -26,6 +30,7 @@ import { useChatConversations } from './use-conversations';
 import type { ChatContextValue, ChatLoadingState } from './types';
 
 export type {
+  AssistantStage,
   ChatMessage,
   ChatRole,
   CitationContentBlock,
@@ -34,6 +39,7 @@ export type {
   MessageContentBlock,
   StatusContentBlock,
   TextContentBlock,
+  ThinkingContentBlock,
   ToolResultContentBlock,
   TranscriptContentBlock,
   UploadedAttachment,
@@ -114,6 +120,33 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setError(message);
   }, []);
 
+  const appendAssistantDelta = useCallback(
+    (messageId: string, delta: string) => {
+      conversationsState.setMessages((previous) =>
+        appendAssistantTextDelta(previous, messageId, delta),
+      );
+    },
+    [conversationsState.setMessages],
+  );
+
+  const appendThinkingDelta = useCallback(
+    (messageId: string, stage: AssistantStage, delta: string) => {
+      conversationsState.setMessages((previous) =>
+        appendAssistantThinkingDelta(previous, messageId, stage, delta),
+      );
+    },
+    [conversationsState.setMessages],
+  );
+
+  const setAssistantStage = useCallback(
+    (messageId: string, stage: AssistantStage) => {
+      conversationsState.setMessages((previous) =>
+        setAssistantStageInList(previous, messageId, stage),
+      );
+    },
+    [conversationsState.setMessages],
+  );
+
   useEffect(() => {
     void conversationsState.loadConversations();
     void approvals.loadPendingApprovals();
@@ -128,6 +161,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     resolveApproval: resolveApprovalFromSocket,
     emitToolEvent: toolEvents.emit,
     reportRealtimeError,
+    appendAssistantDelta,
+    appendThinkingDelta,
+    setAssistantStage,
+    onTurnSettled: actions.settleActiveRun,
   });
 
   const citations = useMemo<CitationItem[]>(

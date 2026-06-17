@@ -24,6 +24,7 @@ export interface MessageRepository {
   ): Promise<void>;
   replaceAssistantText(id: string, text: string): Promise<void>;
   appendContentBlocks(id: string, blocks: unknown[]): Promise<void>;
+  setContent(id: string, content: unknown[]): Promise<void>;
 }
 
 function hasOwn(object: object, key: string): boolean {
@@ -207,6 +208,16 @@ export const messageRepository: MessageRepository = {
     } finally {
       client.release();
     }
+  },
+
+  async setContent(id: string, content: unknown[]): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE messages
+       SET content = $1
+       WHERE id = $2`,
+      [JSON.stringify(content), id],
+    );
   },
 
   async appendContentBlocks(id: string, blocks: unknown[]): Promise<void> {

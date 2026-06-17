@@ -33,6 +33,8 @@ export type {
   AgentHistoryMessage,
   AgentResult,
   AgentRole,
+  AgentStage,
+  AgentStreamHooks,
   AgentToolContext,
 } from './agents/index.js';
 export {

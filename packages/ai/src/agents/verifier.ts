@@ -41,7 +41,10 @@ export class VerifierAgent implements Agent {
       ...toChatMessages(context.messageHistory),
       buildPreviousResultMessage(context),
     ];
-    const verifierMessages = buildRetrievalAugmentedMessages(messages, context.retrievedContext);
+    const retrievedContext = context.retrievedContextProvider
+      ? await context.retrievedContextProvider()
+      : context.retrievedContext;
+    const verifierMessages = buildRetrievalAugmentedMessages(messages, retrievedContext);
 
     const completion = await this.modelProvider.complete({
       messages: verifierMessages,

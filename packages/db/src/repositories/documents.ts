@@ -16,6 +16,7 @@ export interface Document extends DocumentRow {}
 
 export interface DocumentRepository {
   findById(id: string): Promise<Document | null>;
+  listByIds(ids: string[]): Promise<Document[]>;
   findBySourceId(sourceId: string): Promise<Document[]>;
   listByUser(userId: string, limit?: number, offset?: number): Promise<Document[]>;
   create(
@@ -52,6 +53,21 @@ export const documentRepository: DocumentRepository = {
       [id],
     );
     return result.rows[0] ?? null;
+  },
+
+  async listByIds(ids: string[]): Promise<Document[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    const pool = getPool();
+    const result = await pool.query<DocumentRow>(
+      `SELECT id, user_id AS "userId", source_id AS "sourceId", title, content, mime_type AS "mimeType",
+              created_at AS "createdAt", updated_at AS "updatedAt"
+       FROM documents
+       WHERE id = ANY($1::uuid[])`,
+      [ids],
+    );
+    return result.rows;
   },
 
   async findBySourceId(sourceId: string): Promise<Document[]> {

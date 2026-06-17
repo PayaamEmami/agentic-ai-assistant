@@ -70,13 +70,24 @@ export interface StatusContent {
   label?: string;
 }
 
+export interface ThinkingSegment {
+  stage: string;
+  text: string;
+}
+
+export interface ThinkingContent {
+  type: 'thinking';
+  segments: ThinkingSegment[];
+}
+
 export type MessageContent =
   | TextContent
   | AttachmentRefContent
   | TranscriptContent
   | ToolResultContent
   | CitationContent
-  | StatusContent;
+  | StatusContent
+  | ThinkingContent;
 
 export interface Message {
   id: string;

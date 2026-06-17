@@ -3,6 +3,7 @@ import { buildAgentSystemPrompt } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
   buildExplicitToolCallForRequest,
+  completeOrStream,
   parseToolCalls,
   requiresApprovalForCalls,
   toChatMessages,
@@ -25,12 +26,16 @@ export class ToolAgent implements Agent {
       ...toChatMessages(context.messageHistory),
     ];
 
-    const completion = await this.modelProvider.complete({
-      messages,
-      model: this.model,
-      tools: toToolDefinitions(context.availableTools),
-      signal: context.signal,
-    });
+    const completion = await completeOrStream(
+      this.modelProvider,
+      {
+        messages,
+        model: this.model,
+        tools: toToolDefinitions(context.availableTools),
+        signal: context.signal,
+      },
+      context.emitReasoningDelta,
+    );
 
     let toolCalls = parseToolCalls(completion.toolCalls);
     let response = completion.content;

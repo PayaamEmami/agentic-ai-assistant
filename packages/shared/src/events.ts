@@ -1,7 +1,32 @@
+export type AssistantStage =
+  | 'routing'
+  | 'retrieving'
+  | 'research'
+  | 'tool'
+  | 'coding'
+  | 'answering'
+  | 'verifying'
+  | 'done';
+
 export interface AssistantTextEvent {
   type: 'assistant.text.delta';
   conversationId: string;
   messageId: string;
+  delta: string;
+}
+
+export interface AssistantStatusEvent {
+  type: 'assistant.status';
+  conversationId: string;
+  messageId: string;
+  stage: AssistantStage;
+}
+
+export interface AssistantThinkingDeltaEvent {
+  type: 'assistant.thinking.delta';
+  conversationId: string;
+  messageId: string;
+  stage: AssistantStage;
   delta: string;
 }
 
@@ -79,6 +104,8 @@ export interface ErrorEvent {
 
 export type RealtimeEvent =
   | AssistantTextEvent
+  | AssistantStatusEvent
+  | AssistantThinkingDeltaEvent
   | AssistantTextDoneEvent
   | AssistantInterruptedEvent
   | ToolStartEvent

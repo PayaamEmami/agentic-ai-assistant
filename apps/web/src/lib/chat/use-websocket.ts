@@ -2,10 +2,27 @@
 
 import { useEffect, useRef } from 'react';
 import { buildWebSocketUrl } from '../api-client';
-import type { ToolResultContentBlock } from './model/index';
+import type { AssistantStage, ToolResultContentBlock } from './model/index';
 import type { ToolEventPayload } from '../tool-events';
 
 type ToolResultPatch = Partial<Pick<ToolResultContentBlock, 'status' | 'detail' | 'output'>>;
+
+const ASSISTANT_STAGES: ReadonlySet<string> = new Set([
+  'routing',
+  'retrieving',
+  'research',
+  'tool',
+  'coding',
+  'answering',
+  'verifying',
+  'done',
+]);
+
+function asStage(value: unknown): AssistantStage | undefined {
+  return typeof value === 'string' && ASSISTANT_STAGES.has(value)
+    ? (value as AssistantStage)
+    : undefined;
+}
 
 interface UseChatWebSocketOptions {
   token: string | null;
@@ -19,6 +36,10 @@ interface UseChatWebSocketOptions {
   ) => void;
   emitToolEvent: (payload: ToolEventPayload) => void;
   reportRealtimeError: (message: string) => void;
+  appendAssistantDelta: (messageId: string, delta: string) => void;
+  appendThinkingDelta: (messageId: string, stage: AssistantStage, delta: string) => void;
+  setAssistantStage: (messageId: string, stage: AssistantStage) => void;
+  onTurnSettled: () => void;
 }
 
 export function useChatWebSocket({
@@ -30,6 +51,10 @@ export function useChatWebSocket({
   resolveApproval,
   emitToolEvent,
   reportRealtimeError,
+  appendAssistantDelta,
+  appendThinkingDelta,
+  setAssistantStage,
+  onTurnSettled,
 }: UseChatWebSocketOptions) {
   const socketRef = useRef<WebSocket | null>(null);
 
@@ -59,9 +84,35 @@ export function useChatWebSocket({
       }
 
       switch (parsed.type) {
+        case 'assistant.text.delta': {
+          const messageId = asString(parsed.messageId);
+          const delta = asString(parsed.delta);
+          if (messageId && delta) {
+            appendAssistantDelta(messageId, delta);
+          }
+          return;
+        }
+        case 'assistant.thinking.delta': {
+          const messageId = asString(parsed.messageId);
+          const stage = asStage(parsed.stage);
+          const delta = asString(parsed.delta);
+          if (messageId && stage && delta) {
+            appendThinkingDelta(messageId, stage, delta);
+          }
+          return;
+        }
+        case 'assistant.status': {
+          const messageId = asString(parsed.messageId);
+          const stage = asStage(parsed.stage);
+          if (messageId && stage) {
+            setAssistantStage(messageId, stage);
+          }
+          return;
+        }
         case 'assistant.text.done':
         case 'assistant.interrupted':
           void refreshConversation(conversationId);
+          onTurnSettled();
           return;
         case 'tool.start': {
           const toolExecutionId = asString(parsed.toolExecutionId);
@@ -116,9 +167,12 @@ export function useChatWebSocket({
           void loadPendingApprovals();
           return;
         }
-        case 'error':
-          reportRealtimeError('Realtime connection was rejected.');
+        case 'error': {
+          const message = asString(parsed.message) ?? 'Realtime connection was rejected.';
+          reportRealtimeError(message);
+          onTurnSettled();
           return;
+        }
         default:
           return;
       }
@@ -137,13 +191,17 @@ export function useChatWebSocket({
       }
     };
   }, [
+    appendAssistantDelta,
+    appendThinkingDelta,
     conversationId,
     emitToolEvent,
     loadPendingApprovals,
+    onTurnSettled,
     patchToolResult,
     refreshConversation,
     reportRealtimeError,
     resolveApproval,
+    setAssistantStage,
     token,
   ]);
 }

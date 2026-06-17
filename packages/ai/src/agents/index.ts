@@ -4,6 +4,8 @@ export type {
   AgentHistoryMessage,
   AgentResult,
   AgentRole,
+  AgentStage,
+  AgentStreamHooks,
   AgentToolContext,
 } from './types.js';
 export { OrchestratorAgent } from './orchestrator.js';
