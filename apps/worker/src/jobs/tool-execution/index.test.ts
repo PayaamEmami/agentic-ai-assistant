@@ -1,13 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { finalizeToolExecution } from './index.js';
 
-const mocks = vi.hoisted(() => ({
-  updateStatus: vi.fn(),
-  publishToolEvent: vi.fn(),
-  updateInlineToolResult: vi.fn(),
-  enqueueChatContinuationJob: vi.fn(),
-  loggerInfo: vi.fn(),
-  loggerWarn: vi.fn(),
+const { mocks, local } = vi.hoisted(() => ({
+  local: (relativePath: string) =>
+    new URL(relativePath, import.meta.url).pathname.replace(
+      /^\/(\w):/,
+      (_match, drive: string) => `${drive.toLowerCase()}:`,
+    ),
+  mocks: {
+    updateStatus: vi.fn(),
+    publishToolEvent: vi.fn(),
+    updateInlineToolResult: vi.fn(),
+    enqueueChatContinuationJob: vi.fn(),
+    loggerInfo: vi.fn(),
+    loggerWarn: vi.fn(),
+  },
 }));
 
 vi.mock('@aaa/db', () => ({
@@ -20,16 +27,16 @@ vi.mock('@aaa/db', () => ({
   },
 }));
 
-vi.mock('./events.js', () => ({
+vi.mock(local('./events.ts'), () => ({
   publishToolEvent: mocks.publishToolEvent,
   updateInlineToolResult: mocks.updateInlineToolResult,
 }));
 
-vi.mock('../../lib/chat-continuation-queue.js', () => ({
+vi.mock(local('../../lib/chat-continuation-queue.ts'), () => ({
   enqueueChatContinuationJob: mocks.enqueueChatContinuationJob,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+vi.mock(local('../../lib/logger.ts'), () => ({
   logger: {
     info: mocks.loggerInfo,
     warn: mocks.loggerWarn,

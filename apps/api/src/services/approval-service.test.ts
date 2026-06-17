@@ -1,14 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalService } from './approval-service.js';
 
-const mocks = vi.hoisted(() => ({
-  findApprovalById: vi.fn(),
-  decideApproval: vi.fn(),
-  findToolExecutionById: vi.fn(),
-  updateToolExecutionStatus: vi.fn(),
-  updateToolResultBlock: vi.fn(),
-  enqueueToolExecutionJob: vi.fn(),
-  broadcast: vi.fn(),
+const { mocks, local } = vi.hoisted(() => ({
+  local: (relativePath: string) =>
+    new URL(relativePath, import.meta.url).pathname.replace(
+      /^\/(\w):/,
+      (_match, drive: string) => `${drive.toLowerCase()}:`,
+    ),
+  mocks: {
+    findApprovalById: vi.fn(),
+    decideApproval: vi.fn(),
+    findToolExecutionById: vi.fn(),
+    updateToolExecutionStatus: vi.fn(),
+    updateToolResultBlock: vi.fn(),
+    enqueueToolExecutionJob: vi.fn(),
+    broadcast: vi.fn(),
+  },
 }));
 
 vi.mock('@aaa/db', () => ({
@@ -33,11 +40,11 @@ vi.mock('@aaa/observability', () => ({
   }),
 }));
 
-vi.mock('./tool-execution-queue.js', () => ({
+vi.mock(local('./tool-execution-queue.ts'), () => ({
   enqueueToolExecutionJob: mocks.enqueueToolExecutionJob,
 }));
 
-vi.mock('../ws/connections.js', () => ({
+vi.mock(local('../ws/connections.ts'), () => ({
   broadcast: mocks.broadcast,
 }));
 

@@ -2,7 +2,15 @@ import { describe, expect, it, vi } from 'vitest';
 import { api } from '@/lib/api-client';
 import { pollAppSyncOutcome } from './poll-app-sync';
 
-vi.mock('@/lib/api-client', () => ({
+const { local } = vi.hoisted(() => ({
+  local: (relativePath: string) =>
+    new URL(relativePath, import.meta.url).pathname.replace(
+      /^\/(\w):/,
+      (_match, drive: string) => `${drive.toLowerCase()}:`,
+    ),
+}));
+
+vi.mock(local('../api-client.ts'), () => ({
   api: {
     apps: {
       list: vi.fn(),
