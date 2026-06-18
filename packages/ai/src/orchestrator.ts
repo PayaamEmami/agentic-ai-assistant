@@ -76,7 +76,6 @@ export class AgentOrchestrator {
             emitAnswerDelta: undefined,
             emitReasoningDelta: undefined,
           });
-          hooks.onReasoningDelta?.('verifying', summarizeVerification(verified.verification));
           hooks.onStage?.('done');
           const finalUsage = mergeUsage(accumulatedUsage, verified.usage);
           return {
@@ -156,17 +155,6 @@ function wrapAnswerSink(hooks: AgentStreamHooks): ((delta: string) => void) | un
     }
     hooks.onAnswerDelta?.(delta);
   };
-}
-
-function summarizeVerification(verification: AgentResult['verification']): string {
-  if (!verification) {
-    return 'Verification complete.';
-  }
-  if (verification.status === 'approved') {
-    return 'Verified the response: approved.';
-  }
-  const issues = verification.issues.length > 0 ? ` Issues: ${verification.issues.join('; ')}` : '';
-  return `Verification flagged the response for revision.${issues}`;
 }
 
 function mergeUsage(

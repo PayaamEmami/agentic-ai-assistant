@@ -16,25 +16,6 @@ const EMPTY_CHAT_PROMPTS = [
   'What would you ask of me?',
 ];
 
-function ThinkingIndicator() {
-  return (
-    <div className="flex justify-start">
-      <div
-        className="rounded-lg border border-border bg-surface-overlay px-4 py-3 text-sm text-foreground"
-        aria-label="Agent is thinking"
-      >
-        <div className="flex items-center gap-1.5">
-          <span className="inline-flex gap-1" aria-hidden="true">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted [animation-delay:150ms]" />
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-foreground-muted [animation-delay:300ms]" />
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export function ChatPanel() {
   const { messages, loading } = useChatContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -68,7 +49,6 @@ export function ChatPanel() {
           />
         ))
       )}
-      {loading.isSendingMessage ? <ThinkingIndicator /> : null}
       <div ref={scrollRef} />
     </div>
   );

@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import {
   type AssistantStage,
   type ChatMessage,
@@ -34,36 +35,77 @@ function ThinkingPanel({
   block,
   activeStage,
   streaming,
+  hasRenderedText,
 }: {
   block?: ThinkingContentBlock;
   activeStage?: AssistantStage;
   streaming?: boolean;
+  hasRenderedText?: boolean;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const segments = block?.segments ?? [];
   const hasSegments = segments.length > 0;
 
-  if (!hasSegments && !streaming) {
+  // Live stream: a single muted, borderless indicator. Once the answer is
+  // flowing and there is nothing to reveal, drop it so it doesn't linger.
+  if (streaming) {
+    if (!hasSegments && hasRenderedText) {
+      return null;
+    }
+
+    const label = activeStage && activeStage !== 'done' ? stageLabel(activeStage) : 'Thinking';
+
+    return (
+      <div className="space-y-1.5 text-foreground-muted">
+        <div className="flex items-center gap-2 text-xs font-medium">
+          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-accent" />
+          <span>{label}</span>
+        </div>
+        {hasSegments ? (
+          <div className="space-y-1.5 text-xs leading-relaxed text-foreground-muted/80">
+            {segments.map((segment, index) => (
+              <p key={`${segment.stage}-${index}`} className="whitespace-pre-wrap">
+                {segment.text}
+              </p>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
+  // Settled: only show the toggle when there were real thoughts to reveal.
+  if (!hasSegments) {
     return null;
   }
 
-  const summary =
-    streaming && activeStage && activeStage !== 'done'
-      ? `Thinking - ${stageLabel(activeStage)}`
-      : 'Thoughts';
-
   return (
-    <details className="rounded-lg border border-border-subtle bg-surface-input/60">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2 text-xs font-medium text-foreground-muted">
-        {streaming && activeStage !== 'done' ? (
-          <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-        ) : (
-          <span className="h-2 w-2 rounded-full bg-border" />
-        )}
-        <span>{summary}</span>
-      </summary>
-      <div className="space-y-2 px-3 pb-3">
-        {hasSegments ? (
-          segments.map((segment, index) => (
+    <div className="space-y-2">
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        className="flex items-center gap-1.5 text-xs font-medium text-foreground-muted transition-colors hover:text-foreground"
+        aria-expanded={expanded}
+      >
+        <svg
+          viewBox="0 0 12 12"
+          aria-hidden="true"
+          className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`}
+        >
+          <path
+            d="M4 2l4 4-4 4"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+        <span>Thoughts</span>
+      </button>
+      {expanded ? (
+        <div className="space-y-2 border-b border-border-subtle pb-2">
+          {segments.map((segment, index) => (
             <div key={`${segment.stage}-${index}`} className="space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground-muted/80">
                 {stageLabel(segment.stage)}
@@ -72,12 +114,10 @@ function ThinkingPanel({
                 {segment.text}
               </p>
             </div>
-          ))
-        ) : (
-          <p className="text-xs italic text-foreground-muted">Working on it...</p>
-        )}
-      </div>
-    </details>
+          ))}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -230,7 +270,6 @@ export function Message({ role, content, presentation }: MessageProps) {
   const hasRenderedText = primaryContent.some(
     (block) => block.type === 'text' && block.text.trim().length > 0,
   );
-  const showStreamingPlaceholder = isStreaming && !hasRenderedText;
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
   );
@@ -384,17 +423,8 @@ export function Message({ role, content, presentation }: MessageProps) {
             block={thinkingBlock}
             activeStage={presentation?.activeStage}
             streaming={isStreaming}
+            hasRenderedText={hasRenderedText}
           />
-        ) : null}
-        {showStreamingPlaceholder ? (
-          <div className="inline-flex items-center gap-2 text-xs text-foreground-muted">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-accent" />
-            <span>
-              {presentation?.activeStage
-                ? stageLabel(presentation.activeStage)
-                : 'Thinking'}
-            </span>
-          </div>
         ) : null}
         {primaryContent.length > 0 ? (
           primaryContent.map((block, index) => {
