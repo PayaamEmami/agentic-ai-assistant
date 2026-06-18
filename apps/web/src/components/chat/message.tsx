@@ -84,24 +84,10 @@ function ThinkingPanel({
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
-        className="flex items-center gap-1.5 text-xs font-medium text-foreground-muted transition-colors hover:text-foreground"
+        className="text-left text-xs font-medium text-foreground-muted transition-colors hover:text-foreground"
         aria-expanded={expanded}
       >
-        <svg
-          viewBox="0 0 12 12"
-          aria-hidden="true"
-          className={`h-3 w-3 transition-transform ${expanded ? 'rotate-90' : ''}`}
-        >
-          <path
-            d="M4 2l4 4-4 4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-        <span>Thoughts</span>
+        Thoughts
       </button>
       {expanded ? (
         <div className="space-y-2 border-b border-border-subtle pb-2">
