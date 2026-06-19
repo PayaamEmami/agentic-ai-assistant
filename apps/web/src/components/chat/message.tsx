@@ -11,6 +11,7 @@ import {
 } from '@/lib/chat';
 import { Badge } from '@/components/ui/badge';
 import { CitationCard } from './citation-card';
+import { Markdown } from './markdown';
 
 const WORD_FADE_MS = 380;
 const WORD_STAGGER_MS = 34;
@@ -276,9 +277,21 @@ export function Message({ role, content, presentation }: MessageProps) {
 
   const renderContentBlock = (block: MessageContentBlock, index: number) => {
     if (block.type === 'text') {
+      if (shouldAnimateAssistantOutput) {
+        return (
+          <p key={index} className="whitespace-pre-wrap leading-relaxed">
+            <WordFadeText text={block.text} />
+          </p>
+        );
+      }
+
+      if (role === 'assistant') {
+        return <Markdown key={index}>{block.text}</Markdown>;
+      }
+
       return (
         <p key={index} className="whitespace-pre-wrap leading-relaxed">
-          {shouldAnimateAssistantOutput ? <WordFadeText text={block.text} /> : block.text}
+          {block.text}
         </p>
       );
     }
