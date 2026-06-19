@@ -38,6 +38,7 @@ export function MemoryItem({
             rows={4}
             maxLength={2000}
             disabled={isPending}
+            className="w-full"
           />
           <div className="flex items-center justify-end gap-2">
             <button
