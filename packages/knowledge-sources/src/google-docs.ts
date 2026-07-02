@@ -1,4 +1,4 @@
-import { refreshGoogleAccessToken } from '@aaa/observability';
+import { GoogleCredentialSession } from '@aaa/observability';
 import type {
   KnowledgeSource,
   KnowledgeSourceAuth,
@@ -30,8 +30,7 @@ function asString(value: unknown): string | undefined {
 
 export class GoogleKnowledgeSource implements KnowledgeSource {
   kind = 'google' as const;
-  private credentials: GoogleDocsCredentials | null = null;
-  private onRefresh?: (credentials: Record<string, unknown>) => Promise<void>;
+  private session: GoogleCredentialSession<GoogleDocsCredentials> | null = null;
 
   async initialize(auth: KnowledgeSourceAuth): Promise<void> {
     const accessToken = asString(auth.credentials.accessToken);
@@ -39,12 +38,18 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
       throw new Error('Google access token is required');
     }
 
-    this.credentials = {
-      accessToken,
-      refreshToken: asString(auth.credentials.refreshToken),
-      expiresAt: asString(auth.credentials.expiresAt),
-    };
-    this.onRefresh = auth.onRefresh;
+    const onRefresh = auth.onRefresh;
+    this.session = new GoogleCredentialSession<GoogleDocsCredentials>(
+      {
+        accessToken,
+        refreshToken: asString(auth.credentials.refreshToken),
+        expiresAt: asString(auth.credentials.expiresAt),
+      },
+      onRefresh
+        ? async (nextCredentials) =>
+            onRefresh(nextCredentials as unknown as Record<string, unknown>)
+        : undefined,
+    );
   }
 
   async list(
@@ -189,22 +194,10 @@ export class GoogleKnowledgeSource implements KnowledgeSource {
   }
 
   private async buildHeaders(): Promise<Record<string, string>> {
-    const token = await this.getAccessToken();
-    return {
-      Authorization: `Bearer ${token}`,
-    };
-  }
-
-  private async getAccessToken(): Promise<string> {
-    if (!this.credentials) {
+    if (!this.session) {
       throw new Error('Google knowledge source is not initialized');
     }
-
-    this.credentials = await refreshGoogleAccessToken(this.credentials, async (nextCredentials) => {
-      this.credentials = nextCredentials;
-      await this.onRefresh?.(nextCredentials as unknown as Record<string, unknown>);
-    });
-    return this.credentials.accessToken;
+    return this.session.authorizationHeaders();
   }
 
   private async listGoogleDocs(limit: number, pageToken?: string): Promise<GoogleFile[]> {
