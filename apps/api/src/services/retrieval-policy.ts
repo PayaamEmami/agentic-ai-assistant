@@ -1,3 +1,5 @@
+import { isRecord } from '@aaa/shared';
+
 interface RetrievalDecisionMessage {
   role: string;
   content: unknown[];
@@ -35,10 +37,6 @@ const SMALL_TALK_PATTERNS = [
   /\bwhat'?s up\b/i,
   /\bnice to meet you\b/i,
 ];
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function countMeaningfulTokens(text: string): number {
   return text

@@ -1,4 +1,5 @@
 import { GoogleCredentialSession } from '@aaa/observability';
+import { asString } from '@aaa/shared';
 import type {
   KnowledgeSource,
   KnowledgeSourceAuth,
@@ -22,10 +23,6 @@ interface GoogleFile {
   trashed?: boolean;
   ownedByMe?: boolean;
   driveId?: string;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }
 
 export class GoogleKnowledgeSource implements KnowledgeSource {

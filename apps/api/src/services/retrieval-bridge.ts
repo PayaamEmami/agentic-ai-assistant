@@ -6,9 +6,9 @@ import {
   embeddingRepository,
   sourceRepository,
 } from '@aaa/db';
+import { isAbortError } from '@aaa/shared';
 import type { AppConfig } from '../config.js';
 import { logger } from '../lib/logger.js';
-import { isAbortError } from './chat-service-helpers.js';
 
 const DEFAULT_RESULT_LIMIT = 6;
 const MAX_RESULT_LIMIT = 20;

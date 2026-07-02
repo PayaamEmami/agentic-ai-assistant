@@ -22,6 +22,7 @@ import {
   type AssistantStage,
   type AssistantTextDoneEvent,
   type InterruptChatRunResponse,
+  isAbortError,
 } from '@aaa/shared';
 import type { AppConfig } from '../config.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
@@ -46,7 +47,7 @@ import {
 import { ChatRunRegistry } from './chat-run-registry.js';
 import { ChatEventPublisher } from './chat-event-publisher.js';
 import { getLatestUserRequestText, toAgentHistoryMessages } from './chat-history.js';
-import { buildConversationTitle, isAbortError } from './chat-service-helpers.js';
+import { buildConversationTitle } from './chat-service-helpers.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';

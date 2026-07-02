@@ -272,6 +272,9 @@ importers:
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
+      '@aaa/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

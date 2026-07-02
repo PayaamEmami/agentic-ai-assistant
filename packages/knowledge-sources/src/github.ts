@@ -1,4 +1,5 @@
 import { GitHubApiClient, buildGitHubHeaders } from '@aaa/integrations';
+import { asNumber, asString } from '@aaa/shared';
 import type {
   KnowledgeSource,
   KnowledgeSourceAuth,
@@ -126,14 +127,6 @@ interface GitHubCursorRepoState {
   owner?: string;
   defaultBranch?: string;
   private?: boolean;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
 }
 
 function getFileExtension(path: string): string {

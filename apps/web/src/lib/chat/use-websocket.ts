@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import { asString } from '@aaa/shared';
 import { buildWebSocketUrl } from '../api-client';
 import type { AssistantStage, ToolResultContentBlock } from './model/index';
 import type { ToolEventPayload } from '../tool-events';
@@ -212,8 +213,4 @@ function parseSocketEvent(raw: unknown): { type?: string; [key: string]: unknown
   } catch {
     return null;
   }
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
 }

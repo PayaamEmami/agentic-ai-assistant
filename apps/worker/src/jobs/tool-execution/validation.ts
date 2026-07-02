@@ -1,3 +1,11 @@
+import { asNonEmptyString, asNumber, requireString } from '@aaa/shared';
+
+// Re-exported so worker tool handlers keep a single validation import surface.
+// `asString` here intentionally means "non-empty string" (the worker's original
+// semantics).
+export { asNumber, requireString };
+export const asString = asNonEmptyString;
+
 export function toNumberArray(value: unknown): number[] {
   if (!Array.isArray(value)) {
     return [];
@@ -7,28 +15,12 @@ export function toNumberArray(value: unknown): number[] {
     .filter((entry) => Number.isFinite(entry));
 }
 
-export function asString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim().length > 0 ? value : undefined;
-}
-
-export function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
-}
-
 export function toStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
   }
 
   return value.filter((entry): entry is string => typeof entry === 'string');
-}
-
-export function requireString(source: Record<string, unknown>, key: string): string {
-  const value = asString(source[key]);
-  if (!value) {
-    throw new Error(`Expected "${key}" to be a non-empty string`);
-  }
-  return value;
 }
 
 export function requireNumber(source: Record<string, unknown>, key: string): number {

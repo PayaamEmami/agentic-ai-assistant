@@ -144,6 +144,15 @@ export type {
   ErrorEvent,
 } from './events.js';
 
+export {
+  isRecord,
+  asString,
+  asNonEmptyString,
+  asNumber,
+  requireString,
+  isAbortError,
+} from './guards.js';
+
 export type { NativeToolDefinition } from './tools.js';
 export { NATIVE_TOOL_DEFINITIONS } from './tools.js';
 export type {

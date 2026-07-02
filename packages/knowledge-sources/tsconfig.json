@@ -9,6 +9,7 @@
   "references": [
     { "path": "../config" },
     { "path": "../integrations" },
-    { "path": "../observability" }
+    { "path": "../observability" },
+    { "path": "../shared" }
   ]
 }
