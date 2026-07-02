@@ -6,5 +6,9 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["**/*.test.ts", "**/*.spec.ts"],
-  "references": [{ "path": "../config" }, { "path": "../observability" }]
+  "references": [
+    { "path": "../config" },
+    { "path": "../integrations" },
+    { "path": "../observability" }
+  ]
 }

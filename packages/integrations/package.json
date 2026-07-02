@@ -1,21 +1,19 @@
 {
-  "name": "@aaa/knowledge-sources",
+  "name": "@aaa/integrations",
   "version": "0.0.1",
   "private": true,
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
+    "test": "vitest run --config ../../vitest.config.mts packages/integrations/src",
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist"
   },
-  "dependencies": {
-    "@aaa/config": "workspace:*",
-    "@aaa/integrations": "workspace:*",
-    "@aaa/observability": "workspace:*"
-  },
+  "dependencies": {},
   "devDependencies": {
+    "@types/node": "^20.0.0",
     "typescript": "^5.5.0",
-    "@types/node": "^20.0.0"
+    "vitest": "^4.1.5"
   }
 }

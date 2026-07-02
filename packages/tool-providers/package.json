@@ -13,6 +13,7 @@
   "dependencies": {
     "@aaa/ai": "workspace:*",
     "@aaa/config": "workspace:*",
+    "@aaa/integrations": "workspace:*",
     "@aaa/observability": "workspace:*",
     "@aaa/shared": "workspace:*"
   },
