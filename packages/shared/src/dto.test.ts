@@ -2,11 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ApprovalDecisionRequest,
   AuthCredentialsRequest,
-  RegisterRequest,
   SendMessageRequest,
   UpdateConversationRequest,
   UploadAttachmentResponse,
-  VoiceTurnRequest,
 } from './dto.js';
 
 const userId = '11111111-1111-4111-8111-111111111111';
@@ -27,13 +25,6 @@ describe('DTO schemas', () => {
 
     expect(() =>
       AuthCredentialsRequest.parse({ email: 'not-an-email', password: 'short' }),
-    ).toThrow();
-    expect(() =>
-      RegisterRequest.parse({
-        email: 'user@example.com',
-        password: 'password123',
-        displayName: '',
-      }),
     ).toThrow();
   });
 
@@ -96,24 +87,4 @@ describe('DTO schemas', () => {
     ).toThrow();
   });
 
-  it('validates voice turn transcript requirements', () => {
-    expect(
-      VoiceTurnRequest.parse({
-        conversationId,
-        userTranscript: 'What changed?',
-        assistantTranscript: 'Here is the summary.',
-      }),
-    ).toEqual({
-      conversationId,
-      userTranscript: 'What changed?',
-      assistantTranscript: 'Here is the summary.',
-    });
-
-    expect(() =>
-      VoiceTurnRequest.parse({ userTranscript: '   ', assistantTranscript: 'answer' }),
-    ).toThrow();
-    expect(() =>
-      VoiceTurnRequest.parse({ userTranscript: 'question', assistantTranscript: '   ' }),
-    ).toThrow();
-  });
 });

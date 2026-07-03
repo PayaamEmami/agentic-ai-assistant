@@ -110,11 +110,6 @@ export const AuthCredentialsRequest = z.object({
 });
 export type AuthCredentialsRequest = z.infer<typeof AuthCredentialsRequest>;
 
-export const RegisterRequest = AuthCredentialsRequest.extend({
-  displayName: z.string().min(1).max(120),
-});
-export type RegisterRequest = z.infer<typeof RegisterRequest>;
-
 export const AuthUserDto = z.object({
   id: z.string().uuid(),
   email: z.string().email(),
@@ -237,20 +232,6 @@ export const VoiceSessionResponse = z.object({
   voice: z.string(),
 });
 export type VoiceSessionResponse = z.infer<typeof VoiceSessionResponse>;
-
-export const VoiceTurnRequest = z.object({
-  conversationId: z.string().uuid().optional(),
-  userTranscript: z.string().trim().min(1).max(32000),
-  assistantTranscript: z.string().trim().min(1).max(32000),
-});
-export type VoiceTurnRequest = z.infer<typeof VoiceTurnRequest>;
-
-export const VoiceTurnResponse = z.object({
-  conversationId: z.string().uuid(),
-  userMessageId: z.string().uuid(),
-  assistantMessageId: z.string().uuid(),
-});
-export type VoiceTurnResponse = z.infer<typeof VoiceTurnResponse>;
 
 export const VoiceTurnStartRequest = z.object({
   conversationId: z.string().uuid().optional(),

@@ -6,7 +6,6 @@ import {
   VoiceTurnAssistantTextRequest,
   VoiceTurnCompleteRequest,
   VoiceTurnPrepareRequest,
-  VoiceTurnRequest,
   VoiceTurnStartRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
@@ -127,24 +126,6 @@ export async function voiceRoutes(app: FastifyInstance, options: VoiceRouteOptio
       request.params.id,
       parsed.data.text,
     );
-    return reply.status(200).send(result);
-  });
-
-  app.post('/voice/turns', async (request, reply) => {
-    const parsed = VoiceTurnRequest.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-      });
-    }
-
-    const result = await voiceService.persistTurn(
-      request.user!.id,
-      parsed.data.userTranscript,
-      parsed.data.assistantTranscript,
-      parsed.data.conversationId,
-    );
-
     return reply.status(200).send(result);
   });
 

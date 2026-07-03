@@ -51,7 +51,6 @@ export type {
 
 export {
   AuthCredentialsRequest,
-  RegisterRequest,
   AuthUserDto,
   AuthResponse,
   SendMessageRequest,
@@ -78,8 +77,6 @@ export {
   PendingApprovalsResponse,
   VoiceSessionRequest,
   VoiceSessionResponse,
-  VoiceTurnRequest,
-  VoiceTurnResponse,
   VoiceTurnStartRequest,
   VoiceTurnStartResponse,
   VoiceTurnAssistantTextRequest,

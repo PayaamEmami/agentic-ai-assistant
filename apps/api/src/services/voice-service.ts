@@ -387,52 +387,6 @@ export class VoiceService {
     return response.text();
   }
 
-  async persistTurn(
-    userId: string,
-    userTranscript: string,
-    assistantTranscript: string,
-    conversationId?: string,
-  ) {
-    const trimmedUserTranscript = userTranscript.trim();
-    const trimmedAssistantTranscript = assistantTranscript.trim();
-
-    if (!trimmedUserTranscript || !trimmedAssistantTranscript) {
-      throw new AppError(400, 'Both transcripts are required', 'VOICE_TURN_INVALID');
-    }
-
-    const started = await this.startTurn(userId, trimmedUserTranscript, conversationId);
-
-    try {
-      await this.updateAssistantText(userId, started.voiceTurnId, trimmedAssistantTranscript);
-    } catch (error) {
-      getLogger({
-        component: 'voice-service',
-        userId,
-        conversationId: started.conversationId,
-      }).warn(
-        {
-          event: 'voice.turn.assistant_text_update_failed',
-          outcome: 'failure',
-          voiceTurnId: started.voiceTurnId,
-          error,
-        },
-        'Failed to update assistant text on legacy persistTurn',
-      );
-    }
-
-    const completed = await this.completeTurn(
-      userId,
-      started.voiceTurnId,
-      trimmedAssistantTranscript,
-    );
-
-    return {
-      conversationId: completed.conversationId,
-      userMessageId: started.userMessageId,
-      assistantMessageId: completed.assistantMessageId,
-    };
-  }
-
   async startTurn(userId: string, userTranscript: string, conversationId?: string) {
     getPool();
 

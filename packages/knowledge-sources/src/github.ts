@@ -219,6 +219,10 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
       .filter((repo): repo is GitHubRepoSelection => repo !== null);
   }
 
+  // `list` returns a single bounded snapshot of the selected repositories'
+  // indexable files and never paginates, so the cursor argument is intentionally
+  // ignored (nextCursor is always null). Incremental, cursor-based traversal is
+  // handled by `sync`, which tracks per-repo commit SHAs.
   async list(
     _cursor?: string,
     limit = 200,

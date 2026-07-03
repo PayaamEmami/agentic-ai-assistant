@@ -198,13 +198,6 @@ export function buildWebSocketUrl(
 
 export const api = {
   auth: {
-    // Account creation is intentionally disabled.
-    // register(email: string, password: string, displayName: string) {
-    //   return requestPublic<AuthPayload>('/api/auth/register', {
-    //     method: 'POST',
-    //     body: JSON.stringify({ email, password, displayName }),
-    //   });
-    // },
     login(email: string, password: string) {
       return requestPublic<AuthPayload>('/api/auth/login', {
         method: 'POST',
@@ -430,20 +423,6 @@ export const api = {
           body: JSON.stringify(input),
         },
       );
-    },
-    persistTurn(
-      conversationId: string | undefined,
-      userTranscript: string,
-      assistantTranscript: string,
-    ) {
-      return request<{
-        conversationId: string;
-        userMessageId: string;
-        assistantMessageId: string;
-      }>('/api/voice/turns', {
-        method: 'POST',
-        body: JSON.stringify({ conversationId, userTranscript, assistantTranscript }),
-      });
     },
   },
   personalization: {
