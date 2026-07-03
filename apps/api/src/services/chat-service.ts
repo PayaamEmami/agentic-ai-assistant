@@ -32,6 +32,7 @@ import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
 import { decideRetrieval } from './retrieval-policy.js';
 import {
+  MAX_RETRIEVAL_CONTEXT,
   appLabel,
   buildRetrievalContextSections,
   extractExplicitCitationIndexes,
@@ -50,8 +51,9 @@ import { buildAssistantMessageContent } from './chat-turn-content.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
+// Text chat keeps a wider recent-history window than live voice (see
+// voice-service HISTORY_LIMIT), which trades latency for richer context.
 const HISTORY_LIMIT = 20;
-const MAX_RETRIEVAL_CONTEXT = 6;
 const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'Review the pending approval request below to continue.';
 const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
