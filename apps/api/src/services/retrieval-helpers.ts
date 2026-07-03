@@ -2,6 +2,10 @@ import type { RetrievalCitation, RetrievalResponse } from './retrieval-bridge.js
 
 export const MAX_CITATIONS = 6;
 
+// Maximum number of retrieval results injected into a turn's prompt context.
+// Shared by the text (chat) and voice paths so they stay in sync.
+export const MAX_RETRIEVAL_CONTEXT = 6;
+
 export function appLabel(kind: string): string {
   switch (kind) {
     case 'github':

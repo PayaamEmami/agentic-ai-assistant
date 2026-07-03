@@ -1,4 +1,4 @@
-import { refreshGoogleAccessToken } from '@aaa/observability';
+import { GoogleCredentialSession } from '@aaa/observability';
 import { requestJson, requestText } from './http.js';
 
 export interface GoogleDriveToolCredentials {
@@ -23,12 +23,10 @@ interface GoogleDriveFile {
 }
 
 export class GoogleDriveToolProvider {
-  private credentials: GoogleDriveToolCredentials;
-  private readonly onRefresh?: (credentials: GoogleDriveToolCredentials) => Promise<void>;
+  private readonly session: GoogleCredentialSession<GoogleDriveToolCredentials>;
 
   constructor(options: GoogleDriveToolProviderOptions) {
-    this.credentials = { ...options.credentials };
-    this.onRefresh = options.onRefresh;
+    this.session = new GoogleCredentialSession(options.credentials, options.onRefresh);
   }
 
   async searchFiles(query: string, pageSize = 20): Promise<unknown> {
@@ -218,18 +216,6 @@ export class GoogleDriveToolProvider {
   }
 
   private async headers(): Promise<Record<string, string>> {
-    const token = await this.getAccessToken();
-    return {
-      Authorization: `Bearer ${token}`,
-    };
-  }
-
-  private async getAccessToken(): Promise<string> {
-    this.credentials = await refreshGoogleAccessToken(this.credentials, async (nextCredentials) => {
-      this.credentials = nextCredentials;
-      await this.onRefresh?.({ ...nextCredentials });
-    });
-
-    return this.credentials.accessToken;
+    return this.session.authorizationHeaders();
   }
 }

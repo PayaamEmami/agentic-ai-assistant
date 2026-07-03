@@ -1,5 +1,4 @@
 import crypto from 'node:crypto';
-import { buildSystemPrompt, type PromptToolContext } from '@aaa/ai';
 import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
 import type { AssistantInterruptedEvent, AssistantTextDoneEvent } from '@aaa/shared';
@@ -13,10 +12,17 @@ import {
   RetrievalBridge,
 } from './retrieval-bridge.js';
 import {
+  MAX_RETRIEVAL_CONTEXT,
   buildRetrievalContextSections,
   selectDisplayedCitations,
   toCitationContentBlocks,
 } from './retrieval-helpers.js';
+import {
+  buildRealtimeInstructions,
+  buildRealtimeSessionConfig,
+  extractMessageText,
+  toRealtimeToolName,
+} from './realtime-instructions.js';
 import { decideRetrieval } from './retrieval-policy.js';
 import { createToolCall } from './tool-call-service.js';
 import {
@@ -26,9 +32,9 @@ import {
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
 import { buildConversationTitle } from './chat-service-helpers.js';
 
+// Voice keeps a tighter recent-history window than text chat (see chat-service
+// HISTORY_LIMIT) to bound realtime prompt size and latency.
 const HISTORY_LIMIT = 12;
-const MAX_HISTORY_CHARS = 1_800;
-const MAX_RETRIEVAL_CONTEXT = 6;
 const PREPARED_TURN_TTL_MS = 5 * 60 * 1000;
 
 interface PreparedTurnCache {
@@ -37,158 +43,9 @@ interface PreparedTurnCache {
   preparedAt: number;
 }
 
-type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
-
-function extractMessageText(content: unknown[]): string {
-  const textParts: string[] = [];
-
-  for (const block of content) {
-    if (typeof block !== 'object' || block === null) {
-      continue;
-    }
-
-    const candidate = block as { type?: unknown; text?: unknown };
-    if (
-      (candidate.type === 'text' || candidate.type === 'transcript') &&
-      typeof candidate.text === 'string'
-    ) {
-      textParts.push(candidate.text.trim());
-      continue;
-    }
-  }
-
-  return textParts.filter(Boolean).join('\n').trim();
-}
-
-function summarizeHistory(messages: DbMessage[]): string {
-  const historyLines = messages
-    .map((message) => {
-      const text = extractMessageText(message.content);
-      if (!text) {
-        return null;
-      }
-
-      const speaker =
-        message.role === 'assistant' ? 'Assistant' : message.role === 'user' ? 'User' : null;
-
-      if (!speaker) {
-        return null;
-      }
-
-      return `${speaker}: ${text.replace(/\s+/g, ' ').trim()}`;
-    })
-    .filter((line): line is string => line !== null);
-
-  if (historyLines.length === 0) {
-    return '';
-  }
-
-  const joined = historyLines.join('\n');
-  if (joined.length <= MAX_HISTORY_CHARS) {
-    return joined;
-  }
-
-  return joined.slice(joined.length - MAX_HISTORY_CHARS).trimStart();
-}
-
-export function toRealtimeToolName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'tool';
-}
-
-function toRealtimePromptToolContexts(tools: AvailableTool[]): PromptToolContext[] {
-  return tools.map((tool) => ({
-    name: toRealtimeToolName(tool.name),
-    description: tool.description,
-    requiresApproval: tool.requiresApproval,
-  }));
-}
-
-function toRealtimeToolDefinitions(tools: AvailableTool[]): Array<Record<string, unknown>> {
-  return tools.map((tool) => ({
-    type: 'function',
-    name: toRealtimeToolName(tool.name),
-    description: tool.description,
-    parameters: tool.parameters,
-  }));
-}
-
-function buildRealtimeInstructions(
-  personalContext: string | null,
-  recentMessages: DbMessage[],
-  availableTools: AvailableTool[],
-  retrievalContextSections: string[] = [],
-): string {
-  const hasTools = availableTools.length > 0;
-  const hasRetrieval = retrievalContextSections.length > 0;
-  const basePrompt = buildSystemPrompt({
-    personalContext: personalContext ?? undefined,
-    availableTools: hasTools ? toRealtimePromptToolContexts(availableTools) : undefined,
-    includeToolGuidance: hasTools,
-    includeRetrievalGuidance: hasRetrieval,
-  });
-
-  const sections = [
-    basePrompt,
-    'Live voice mode constraints:',
-    '- You are in a realtime spoken conversation.',
-    '- Respond naturally, warmly, and conversationally.',
-    '- Keep spoken answers concise by default unless the user asks for depth.',
-    hasTools
-      ? '- You may invoke the available tools when the user asks for something that requires them. Tools marked as requiring approval will pause the conversation until the user responds in the UI; acknowledge briefly and wait for their decision.'
-      : '- No tools are available this session; if a request requires tools, say so and offer to continue in text chat.',
-  ];
-
-  if (hasRetrieval) {
-    const numbered = retrievalContextSections
-      .map((section, index) => `[${index + 1}] ${section}`)
-      .join('\n\n');
-    sections.push(
-      `Retrieved context for this turn (cite as [Source N] only when you use the content):\n${numbered}`,
-    );
-  }
-
-  const historySummary = summarizeHistory(recentMessages);
-  if (historySummary) {
-    sections.push(`Recent conversation context:\n${historySummary}`);
-  }
-
-  return sections.join('\n\n');
-}
-
-function buildRealtimeSessionConfig(
-  model: string,
-  voice: string,
-  instructions: string,
-  tools: AvailableTool[],
-): Record<string, unknown> {
-  const hasTools = tools.length > 0;
-  return {
-    type: 'realtime',
-    model,
-    instructions,
-    tools: hasTools ? toRealtimeToolDefinitions(tools) : [],
-    tool_choice: hasTools ? 'auto' : 'none',
-    audio: {
-      input: {
-        noise_reduction: {
-          type: 'near_field',
-        },
-        transcription: {
-          model: 'gpt-4o-mini-transcribe',
-        },
-        turn_detection: {
-          type: 'server_vad',
-          create_response: false,
-          interrupt_response: true,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 450,
-        },
-      },
-      output: {
-        voice,
-      },
-    },
-  };
+interface OwnedVoiceTurn {
+  assistantMessage: NonNullable<Awaited<ReturnType<typeof messageRepository.findById>>>;
+  conversation: Conversation;
 }
 
 async function ensureOwnedConversation(
@@ -252,6 +109,23 @@ export class VoiceService {
     }
     this.preparedTurns.delete(voiceTurnId);
     return cache;
+  }
+
+  private async assertOwnedVoiceTurn(
+    userId: string,
+    voiceTurnId: string,
+  ): Promise<OwnedVoiceTurn> {
+    const assistantMessage = await messageRepository.findById(voiceTurnId);
+    if (!assistantMessage || assistantMessage.role !== 'assistant') {
+      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
+    }
+
+    const conversation = await conversationRepository.findById(assistantMessage.conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
+    }
+
+    return { assistantMessage, conversation };
   }
 
   async createSession(userId: string, conversationId?: string) {
@@ -387,52 +261,6 @@ export class VoiceService {
     return response.text();
   }
 
-  async persistTurn(
-    userId: string,
-    userTranscript: string,
-    assistantTranscript: string,
-    conversationId?: string,
-  ) {
-    const trimmedUserTranscript = userTranscript.trim();
-    const trimmedAssistantTranscript = assistantTranscript.trim();
-
-    if (!trimmedUserTranscript || !trimmedAssistantTranscript) {
-      throw new AppError(400, 'Both transcripts are required', 'VOICE_TURN_INVALID');
-    }
-
-    const started = await this.startTurn(userId, trimmedUserTranscript, conversationId);
-
-    try {
-      await this.updateAssistantText(userId, started.voiceTurnId, trimmedAssistantTranscript);
-    } catch (error) {
-      getLogger({
-        component: 'voice-service',
-        userId,
-        conversationId: started.conversationId,
-      }).warn(
-        {
-          event: 'voice.turn.assistant_text_update_failed',
-          outcome: 'failure',
-          voiceTurnId: started.voiceTurnId,
-          error,
-        },
-        'Failed to update assistant text on legacy persistTurn',
-      );
-    }
-
-    const completed = await this.completeTurn(
-      userId,
-      started.voiceTurnId,
-      trimmedAssistantTranscript,
-    );
-
-    return {
-      conversationId: completed.conversationId,
-      userMessageId: started.userMessageId,
-      assistantMessageId: completed.assistantMessageId,
-    };
-  }
-
   async startTurn(userId: string, userTranscript: string, conversationId?: string) {
     getPool();
 
@@ -483,15 +311,7 @@ export class VoiceService {
   async prepareTurn(userId: string, voiceTurnId: string, overrideUserTranscript?: string) {
     getPool();
 
-    const assistantMessage = await messageRepository.findById(voiceTurnId);
-    if (!assistantMessage || assistantMessage.role !== 'assistant') {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
-
-    const conversation = await conversationRepository.findById(assistantMessage.conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
+    const { conversation } = await this.assertOwnedVoiceTurn(userId, voiceTurnId);
 
     const recentMessages = await messageRepository.listByConversation(
       conversation.id,
@@ -583,15 +403,7 @@ export class VoiceService {
   async updateAssistantText(userId: string, voiceTurnId: string, text: string) {
     getPool();
 
-    const assistantMessage = await messageRepository.findById(voiceTurnId);
-    if (!assistantMessage || assistantMessage.role !== 'assistant') {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
-
-    const conversation = await conversationRepository.findById(assistantMessage.conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
+    await this.assertOwnedVoiceTurn(userId, voiceTurnId);
 
     await messageRepository.replaceAssistantText(voiceTurnId, text);
 
@@ -613,18 +425,13 @@ export class VoiceService {
   ) {
     getPool();
 
-    const assistantMessage = await messageRepository.findById(params.voiceTurnId);
-    if (!assistantMessage || assistantMessage.role !== 'assistant') {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
+    const { assistantMessage, conversation } = await this.assertOwnedVoiceTurn(
+      userId,
+      params.voiceTurnId,
+    );
 
     if (assistantMessage.conversationId !== params.conversationId) {
       throw new AppError(400, 'Voice turn does not belong to conversation', 'VOICE_TURN_MISMATCH');
-    }
-
-    const conversation = await conversationRepository.findById(assistantMessage.conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
     }
 
     let toolInput: Record<string, unknown> = {};
@@ -755,15 +562,7 @@ export class VoiceService {
   async completeTurn(userId: string, voiceTurnId: string, finalText?: string) {
     getPool();
 
-    const assistantMessage = await messageRepository.findById(voiceTurnId);
-    if (!assistantMessage || assistantMessage.role !== 'assistant') {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
-
-    const conversation = await conversationRepository.findById(assistantMessage.conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Voice turn not found', 'VOICE_TURN_NOT_FOUND');
-    }
+    const { assistantMessage, conversation } = await this.assertOwnedVoiceTurn(userId, voiceTurnId);
 
     let assistantText =
       typeof finalText === 'string' ? finalText : extractMessageText(assistantMessage.content);

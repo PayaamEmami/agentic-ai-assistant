@@ -1,12 +1,5 @@
+import { asString, isRecord } from '@aaa/shared';
 import type { ChatMessage, ChatRole, MessageContentBlock } from './message-types';
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
-
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
 
 export function stringify(value: unknown): string {
   if (typeof value === 'string') {

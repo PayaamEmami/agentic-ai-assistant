@@ -51,7 +51,6 @@ export type {
 
 export {
   AuthCredentialsRequest,
-  RegisterRequest,
   AuthUserDto,
   AuthResponse,
   SendMessageRequest,
@@ -78,8 +77,6 @@ export {
   PendingApprovalsResponse,
   VoiceSessionRequest,
   VoiceSessionResponse,
-  VoiceTurnRequest,
-  VoiceTurnResponse,
   VoiceTurnStartRequest,
   VoiceTurnStartResponse,
   VoiceTurnAssistantTextRequest,
@@ -143,6 +140,15 @@ export type {
   CitationEvent,
   ErrorEvent,
 } from './events.js';
+
+export {
+  isRecord,
+  asString,
+  asNonEmptyString,
+  asNumber,
+  requireString,
+  isAbortError,
+} from './guards.js';
 
 export type { NativeToolDefinition } from './tools.js';
 export { NATIVE_TOOL_DEFINITIONS } from './tools.js';

@@ -1,6 +1,5 @@
 import {
   AgentOrchestrator,
-  type AgentStreamHooks,
   CodingAgent,
   OpenAIProvider,
   OrchestratorAgent,
@@ -19,9 +18,9 @@ import {
 import {
   type ApprovalRequestedEvent,
   type AssistantInterruptedEvent,
-  type AssistantStage,
   type AssistantTextDoneEvent,
   type InterruptChatRunResponse,
+  isAbortError,
 } from '@aaa/shared';
 import type { AppConfig } from '../config.js';
 import { loadAvailableTools, type AvailableTool } from './tools-loader.js';
@@ -33,11 +32,11 @@ import { PersonalizationService } from './personalization-service.js';
 import { RetrievalBridge } from './retrieval-bridge.js';
 import { decideRetrieval } from './retrieval-policy.js';
 import {
+  MAX_RETRIEVAL_CONTEXT,
   appLabel,
   buildRetrievalContextSections,
   extractExplicitCitationIndexes,
   selectDisplayedCitations,
-  toCitationContentBlocks,
 } from './retrieval-helpers.js';
 import {
   type EnqueueToolExecutionJob,
@@ -46,12 +45,15 @@ import {
 import { ChatRunRegistry } from './chat-run-registry.js';
 import { ChatEventPublisher } from './chat-event-publisher.js';
 import { getLatestUserRequestText, toAgentHistoryMessages } from './chat-history.js';
-import { buildConversationTitle, isAbortError } from './chat-service-helpers.js';
+import { buildConversationTitle } from './chat-service-helpers.js';
+import { createAssistantStreamHooks } from './chat-stream-hooks.js';
+import { buildAssistantMessageContent } from './chat-turn-content.js';
 
 const DEFAULT_FALLBACK_RESPONSE =
   'I ran into an issue generating a response right now. Please try again.';
+// Text chat keeps a wider recent-history window than live voice (see
+// voice-service HISTORY_LIMIT), which trades latency for richer context.
 const HISTORY_LIMIT = 20;
-const MAX_RETRIEVAL_CONTEXT = 6;
 const TOOL_EXECUTION_RESPONSE = 'I prepared tool calls and started execution where allowed.';
 const TOOL_APPROVAL_RESPONSE = 'Review the pending approval request below to continue.';
 const INTERRUPTED_STATUS_LABEL = 'Agent stopped';
@@ -394,52 +396,13 @@ export class ChatService {
         ),
       );
 
-      // Accumulate per-stage reasoning so the "thinking" trace can be persisted
-      // on the message after streaming completes.
-      const thinkingByStage = new Map<AssistantStage, string>();
-      const thinkingStageOrder: AssistantStage[] = [];
-      const streamHooks: AgentStreamHooks = {
-        onStage: (stage) => {
-          this.eventPublisher.assistantStatus({
-            type: 'assistant.status',
-            conversationId: conversation.id,
-            messageId: assistantMessageId,
-            stage,
-          });
-        },
-        onReasoningDelta: (stage, delta) => {
-          if (!delta) {
-            return;
-          }
-          if (!thinkingByStage.has(stage)) {
-            thinkingByStage.set(stage, '');
-            thinkingStageOrder.push(stage);
-          }
-          thinkingByStage.set(stage, (thinkingByStage.get(stage) ?? '') + delta);
-          this.eventPublisher.assistantThinkingDelta({
-            type: 'assistant.thinking.delta',
-            conversationId: conversation.id,
-            messageId: assistantMessageId,
-            stage,
-            delta,
-          });
-        },
-        onAnswerDelta: (delta) => {
-          if (!delta) {
-            return;
-          }
-          this.eventPublisher.assistantTextDelta({
-            type: 'assistant.text.delta',
-            conversationId: conversation.id,
-            messageId: assistantMessageId,
-            delta,
-          });
-        },
-      };
-      const collectThinkingSegments = () =>
-        thinkingStageOrder
-          .map((stage) => ({ stage, text: (thinkingByStage.get(stage) ?? '').trim() }))
-          .filter((segment) => segment.text.length > 0);
+      // Wire streaming callbacks to WebSocket events and accumulate the
+      // per-stage "thinking" trace for persistence after streaming completes.
+      const { hooks: streamHooks, collectThinkingSegments } = createAssistantStreamHooks(
+        this.eventPublisher,
+        conversation.id,
+        assistantMessageId,
+      );
 
       if (retrievalDecision.shouldRetrieve) {
         streamHooks.onStage?.('retrieving');
@@ -488,59 +451,14 @@ export class ChatService {
         );
       }
 
-      const availableToolsByName = new Map(
-        availableTools.map((tool) => [tool.name, tool] as const),
-      );
-      const toolResultBlocks: Array<Record<string, unknown>> = [];
-      const toolExecutionIds: string[] = [];
-      const queuedToolJobs: Array<Parameters<EnqueueToolExecutionJob>[0]> = [];
-      const approvalEvents: ApprovalRequestedEvent[] = [];
-      let hasApprovalRequest = false;
-
-      for (const toolCall of toolCalls) {
-        throwIfAborted(signal);
-
-        const tool = availableToolsByName.get(toolCall.name);
-        if (!tool) {
-          continue;
-        }
-
-        const toolInput = toolCall.arguments;
-        const stagedToolCall = await stageToolCall({
+      const { toolResultBlocks, toolExecutionIds, queuedToolJobs, approvalEvents, hasApprovalRequest } =
+        await this.stageToolCalls({
           conversationId: conversation.id,
           userId,
-          tool,
-          input: toolInput,
-          messageId: null,
-          originMode: 'text',
-          enqueueToolExecutionJob: this.enqueueToolExecutionJob,
+          toolCalls,
+          availableTools,
+          signal,
         });
-        toolExecutionIds.push(stagedToolCall.toolExecutionId);
-
-        if (stagedToolCall.status === 'requires_approval') {
-          hasApprovalRequest = true;
-
-          toolResultBlocks.push({
-            type: 'tool_result',
-            toolExecutionId: stagedToolCall.toolExecutionId,
-            toolName: toolCall.name,
-            status: 'pending',
-          });
-
-          if (stagedToolCall.approvalEvent) {
-            approvalEvents.push(stagedToolCall.approvalEvent);
-          }
-        } else if (stagedToolCall.queuedJob) {
-          queuedToolJobs.push(stagedToolCall.queuedJob);
-
-          toolResultBlocks.push({
-            type: 'tool_result',
-            toolExecutionId: stagedToolCall.toolExecutionId,
-            toolName: toolCall.name,
-            status: 'planned',
-          });
-        }
-      }
 
       if (
         hasApprovalRequest &&
@@ -549,14 +467,6 @@ export class ChatService {
           (!assistantResponse.trim() && requiresApproval))
       ) {
         assistantResponse = TOOL_APPROVAL_RESPONSE;
-      }
-
-      const assistantTextBlock: Record<string, unknown> = { type: 'text', text: assistantResponse };
-      if (verificationStatus) {
-        assistantTextBlock['verificationStatus'] = verificationStatus;
-      }
-      if (verificationIssues.length > 0) {
-        assistantTextBlock['verificationIssues'] = verificationIssues;
       }
 
       // Retrieval ran concurrently with the orchestrator; resolve it now for
@@ -571,18 +481,14 @@ export class ChatService {
       }
 
       const displayedCitations = selectDisplayedCitations(assistantResponse, retrieval);
-      const assistantContent: Array<Record<string, unknown>> = [assistantTextBlock];
-
-      const thinkingSegments = collectThinkingSegments();
-      if (thinkingSegments.length > 0) {
-        assistantContent.push({ type: 'thinking', segments: thinkingSegments });
-      }
-
-      if (toolResultBlocks.length > 0) {
-        assistantContent.push(...toolResultBlocks);
-      } else {
-        assistantContent.push(...toCitationContentBlocks(displayedCitations));
-      }
+      const assistantContent = buildAssistantMessageContent({
+        assistantResponse,
+        verificationStatus,
+        verificationIssues,
+        thinkingSegments: collectThinkingSegments(),
+        toolResultBlocks,
+        displayedCitations,
+      });
 
       await messageRepository.setContent(assistantMessageId, assistantContent);
       if (toolExecutionIds.length > 0) {
@@ -744,6 +650,83 @@ export class ChatService {
     };
   }
 
+  private async stageToolCalls(params: {
+    conversationId: string;
+    userId: string;
+    toolCalls: AgentToolCall[];
+    availableTools: AvailableTool[];
+    signal?: AbortSignal;
+  }): Promise<{
+    toolResultBlocks: Array<Record<string, unknown>>;
+    toolExecutionIds: string[];
+    queuedToolJobs: Array<Parameters<EnqueueToolExecutionJob>[0]>;
+    approvalEvents: ApprovalRequestedEvent[];
+    hasApprovalRequest: boolean;
+  }> {
+    const availableToolsByName = new Map(
+      params.availableTools.map((tool) => [tool.name, tool] as const),
+    );
+    const toolResultBlocks: Array<Record<string, unknown>> = [];
+    const toolExecutionIds: string[] = [];
+    const queuedToolJobs: Array<Parameters<EnqueueToolExecutionJob>[0]> = [];
+    const approvalEvents: ApprovalRequestedEvent[] = [];
+    let hasApprovalRequest = false;
+
+    for (const toolCall of params.toolCalls) {
+      throwIfAborted(params.signal);
+
+      const tool = availableToolsByName.get(toolCall.name);
+      if (!tool) {
+        continue;
+      }
+
+      const stagedToolCall = await stageToolCall({
+        conversationId: params.conversationId,
+        userId: params.userId,
+        tool,
+        input: toolCall.arguments,
+        messageId: null,
+        originMode: 'text',
+        enqueueToolExecutionJob: this.enqueueToolExecutionJob,
+      });
+      toolExecutionIds.push(stagedToolCall.toolExecutionId);
+
+      if (stagedToolCall.status === 'requires_approval') {
+        hasApprovalRequest = true;
+
+        toolResultBlocks.push({
+          type: 'tool_result',
+          toolExecutionId: stagedToolCall.toolExecutionId,
+          toolName: toolCall.name,
+          status: 'pending',
+        });
+
+        if (stagedToolCall.approvalEvent) {
+          approvalEvents.push(stagedToolCall.approvalEvent);
+        }
+      } else if (stagedToolCall.queuedJob) {
+        queuedToolJobs.push(stagedToolCall.queuedJob);
+
+        toolResultBlocks.push({
+          type: 'tool_result',
+          toolExecutionId: stagedToolCall.toolExecutionId,
+          toolName: toolCall.name,
+          status: 'planned',
+        });
+      }
+    }
+
+    return { toolResultBlocks, toolExecutionIds, queuedToolJobs, approvalEvents, hasApprovalRequest };
+  }
+
+  private async requireOwnedConversation(userId: string, conversationId: string) {
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+    return conversation;
+  }
+
   private async createAssistantPlaceholder(conversationId: string): Promise<string> {
     const placeholder = await messageRepository.create(conversationId, 'assistant', [
       { type: 'text', text: '' },
@@ -812,10 +795,7 @@ export class ChatService {
   async updateConversationTitle(userId: string, conversationId: string, title: string) {
     getPool();
 
-    const conversation = await conversationRepository.findById(conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
-    }
+    await this.requireOwnedConversation(userId, conversationId);
 
     const normalizedTitle = title.trim();
     if (!normalizedTitle) {
@@ -833,10 +813,7 @@ export class ChatService {
   async deleteConversation(userId: string, conversationId: string) {
     getPool();
 
-    const conversation = await conversationRepository.findById(conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
-    }
+    await this.requireOwnedConversation(userId, conversationId);
 
     const deleted = await conversationRepository.delete(conversationId);
     if (!deleted) {
@@ -849,10 +826,7 @@ export class ChatService {
   async getConversation(userId: string, conversationId: string) {
     getPool();
 
-    const conversation = await conversationRepository.findById(conversationId);
-    if (!conversation || conversation.userId !== userId) {
-      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
-    }
+    const conversation = await this.requireOwnedConversation(userId, conversationId);
 
     const messages = await messageRepository.listByConversation(conversation.id);
 

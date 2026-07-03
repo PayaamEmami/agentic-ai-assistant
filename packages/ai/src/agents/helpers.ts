@@ -63,30 +63,6 @@ export async function completeOrStream(
   };
 }
 
-const RESEARCH_HINTS = [
-  '?',
-  'what',
-  'when',
-  'where',
-  'who',
-  'why',
-  'how',
-  'tell me about',
-  'explain',
-  'show me',
-  'search',
-  'find',
-  'look up',
-  'sources',
-  'source',
-  'evidence',
-  'according to',
-  'what does',
-  'summarize',
-  'compare',
-  'analyze',
-];
-
 export function toSystemPromptContext(context: AgentContext): SystemPromptContext {
   return {
     personalContext: context.personalContext,
@@ -146,27 +122,6 @@ export function latestUserMessage(context: AgentContext): string {
   return userMessage ? extractTextContent(userMessage.content) : '';
 }
 
-export function shouldDelegateToResearch(context: AgentContext): boolean {
-  if (context.retrievedContext.length === 0) {
-    return false;
-  }
-
-  const latestMessage = latestUserMessage(context).toLowerCase();
-  if (!latestMessage) {
-    return false;
-  }
-
-  if (latestMessage.includes('?')) {
-    return true;
-  }
-
-  return RESEARCH_HINTS.some((hint) => latestMessage.includes(hint));
-}
-
-export function shouldDelegateToTool(context: AgentContext): boolean {
-  return buildExplicitToolCallForRequest(context) !== null;
-}
-
 export function buildExplicitToolCallForRequest(
   context: AgentContext,
 ): AgentResult['toolCalls'][number] | null {
@@ -186,32 +141,6 @@ export function buildExplicitToolCallForRequest(
     name: directToolMatch.groups.name,
     arguments: parseToolArguments(directToolMatch.groups.args ?? '{}'),
   };
-}
-
-const CODING_HINTS = [
-  'code',
-  'fix',
-  'bug',
-  'implement',
-  'refactor',
-  'open a pr',
-  'create a pr',
-  'pull request',
-  'commit',
-  'branch',
-  'repository',
-  'repo',
-  'file',
-  'test',
-];
-
-export function shouldDelegateToCoding(context: AgentContext): boolean {
-  const latestMessage = latestUserMessage(context).toLowerCase();
-  if (!latestMessage) {
-    return false;
-  }
-
-  return CODING_HINTS.some((hint) => latestMessage.includes(hint));
 }
 
 export function requiresApprovalForCalls(

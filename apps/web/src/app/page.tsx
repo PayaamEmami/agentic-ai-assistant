@@ -4,23 +4,16 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useAuthContext } from '@/lib/auth-context';
 
-// Account creation is intentionally disabled in this build. The "Create
-// Account" tab, the display-name input, and the register submit branch are
-// commented out below. To re-enable, restore the Mode union, the register
-// destructure, and the commented JSX/handler branches.
-// type Mode = 'login' | 'register';
+// Account creation is intentionally disabled in this build; this screen only
+// supports sign-in (and development login).
 
 export default function Home() {
   const router = useRouter();
   const { isAuthenticated, isReady, login, devLogin } = useAuthContext();
-  // const [mode, setMode] = useState<Mode>('login');
-  // const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // const activeMode: Mode = 'login';
 
   useEffect(() => {
     if (isReady && isAuthenticated) {
@@ -34,11 +27,6 @@ export default function Home() {
     setIsSubmitting(true);
 
     try {
-      // if (activeMode === 'register') {
-      //   await register(email, password, displayName);
-      // } else {
-      //   await login(email, password);
-      // }
       await login(email, password);
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : 'Authentication failed');
@@ -74,52 +62,11 @@ export default function Home() {
         </section>
 
         <section className="rounded-3xl border border-border bg-surface-elevated p-8 shadow-sm">
-          {/*
-          <div className="flex rounded-full bg-surface-input p-1 text-sm">
-            <button
-              type="button"
-              onClick={() => setMode('login')}
-              className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                mode === 'login'
-                  ? 'bg-surface-elevated text-foreground shadow-sm'
-                  : 'text-foreground-muted'
-              }`}
-            >
-              Sign In
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('register')}
-              className={`flex-1 rounded-full px-4 py-2 transition-colors ${
-                mode === 'register'
-                  ? 'bg-surface-elevated text-foreground shadow-sm'
-                  : 'text-foreground-muted'
-              }`}
-            >
-              Create Account
-            </button>
-          </div>
-          */}
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-foreground-muted">
             Sign in
           </p>
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-            {/*
-            {activeMode === 'register' ? (
-              <label className="block">
-                <span className="mb-2 block text-sm font-medium text-foreground">Display name</span>
-                <input
-                  value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
-                  className="w-full rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-foreground placeholder:text-foreground-inactive outline-none transition focus:border-accent"
-                  placeholder="Alex Morgan"
-                  required
-                />
-              </label>
-            ) : null}
-            */}
-
             <label className="block">
               <span className="mb-2 block text-sm font-medium text-foreground">Email</span>
               <input

@@ -10,6 +10,7 @@ import {
 } from './assistant-caption';
 import type { SessionInit, VoicePendingToolCall, VoicePhase } from './types';
 import { getBrowserVoiceSupport } from './browser-support';
+import { createRealtimeEventHandler } from './realtime-event-handler';
 import { useVoiceMeter } from './use-voice-meter';
 import { connectWebRtcVoiceSession } from './webrtc-connection';
 import { VoiceToolRegistry } from './tool-registry';
@@ -526,120 +527,44 @@ export function useLiveVoiceSession({
     return subscribeToolEvents(handleToolEventFromServer);
   }, [handleToolEventFromServer, subscribeToolEvents]);
 
-  const handleRealtimeEvent = async (event: { type?: string; [key: string]: unknown }) => {
-    switch (event.type) {
-      case 'session.created':
-      case 'session.updated':
-        setConnectionLabel('Connected. Start speaking when you are ready.');
-        setVoicePhase('listening');
-        return;
-      case 'input_audio_buffer.speech_started':
-        if (canInterruptAssistant()) {
-          interruptAssistant();
-        }
-        setVoicePhase('listening');
-        setConnectionLabel('Listening...');
-        setUserCaption('');
-        return;
-      case 'input_audio_buffer.speech_stopped':
-        setVoicePhase('thinking');
-        setConnectionLabel('Thinking...');
-        return;
-      case 'conversation.item.input_audio_transcription.delta': {
-        const delta = typeof event.delta === 'string' ? event.delta : '';
-        if (delta) {
-          setUserCaption((previous) => previous + delta);
-        }
-        return;
-      }
-      case 'conversation.item.input_audio_transcription.completed': {
-        const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : '';
-        if (transcript) {
-          await finalizeUserTranscript(transcript);
-        }
-        return;
-      }
-      case 'response.output_audio_transcript.delta':
-      case 'response.audio_transcript.delta': {
-        const delta = typeof event.delta === 'string' ? event.delta : '';
-        if (delta) {
-          updateAssistantCaption('audio_transcript', delta, 'append');
-        }
-        return;
-      }
-      case 'response.output_audio_transcript.done':
-      case 'response.audio_transcript.done': {
-        const transcript = typeof event.transcript === 'string' ? event.transcript.trim() : '';
-        if (transcript) {
-          updateAssistantCaption('audio_transcript', transcript, 'replace');
-        }
-        await maybePersistTurn();
-        return;
-      }
-      case 'response.output_text.delta': {
-        const delta = typeof event.delta === 'string' ? event.delta : '';
-        if (delta) {
-          updateAssistantCaption('output_text', delta, 'append');
-        }
-        return;
-      }
-      case 'response.output_text.done': {
-        const text = typeof event.text === 'string' ? event.text.trim() : '';
-        if (text) {
-          updateAssistantCaption('output_text', text, 'replace');
-        }
-        return;
-      }
-      case 'response.function_call_arguments.done': {
-        await handleFunctionCallArgumentsDone(
-          event as { call_id?: unknown; name?: unknown; arguments?: unknown },
-        );
-        return;
-      }
-      case 'response.done':
-        responseDoneRef.current = true;
-        if (pendingAssistantTranscriptRef.current && !assistantMessageAddedRef.current) {
-          addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current);
-          assistantMessageAddedRef.current = true;
-        }
-        setVoicePhase('listening');
-        setConnectionLabel('Listening...');
-        await maybePersistTurn();
-        return;
-      case 'output_audio_buffer.cleared':
-        setVoicePhase('listening');
-        setConnectionLabel('Listening...');
-        return;
-      case 'error': {
-        const message =
-          typeof event.error === 'object' &&
-          event.error !== null &&
-          'message' in event.error &&
-          typeof event.error.message === 'string'
-            ? event.error.message
-            : 'Live voice mode ran into an error.';
-
-        if (message === 'Cancellation failed: no active response found') {
-          return;
-        }
-
-        void reportClientError({
-          event: 'client.voice.realtime_error',
-          component: 'use-live-voice-session',
-          message,
-          conversationId: conversationIdRef.current ?? undefined,
-          voiceSessionId: sessionIdRef.current ?? undefined,
-          context: { event },
-        });
-        setError(message);
-        setVoicePhase('error');
-        setConnectionLabel(message);
-        return;
-      }
-      default:
-        return;
+  const handleResponseDone = async () => {
+    responseDoneRef.current = true;
+    if (pendingAssistantTranscriptRef.current && !assistantMessageAddedRef.current) {
+      addVoiceMessageToChat('assistant', pendingAssistantTranscriptRef.current);
+      assistantMessageAddedRef.current = true;
     }
+    setVoicePhase('listening');
+    setConnectionLabel('Listening...');
+    await maybePersistTurn();
   };
+
+  const reportRealtimeError = (message: string, event: Record<string, unknown>) => {
+    void reportClientError({
+      event: 'client.voice.realtime_error',
+      component: 'use-live-voice-session',
+      message,
+      conversationId: conversationIdRef.current ?? undefined,
+      voiceSessionId: sessionIdRef.current ?? undefined,
+      context: { event },
+    });
+    setError(message);
+    setVoicePhase('error');
+    setConnectionLabel(message);
+  };
+
+  const handleRealtimeEvent = createRealtimeEventHandler({
+    setConnectionLabel,
+    setPhase: setVoicePhase,
+    setUserCaption,
+    canInterruptAssistant,
+    interruptAssistant,
+    finalizeUserTranscript,
+    updateAssistantCaption,
+    maybePersistTurn,
+    handleFunctionCallArgumentsDone,
+    handleResponseDone,
+    reportRealtimeError,
+  });
 
   const start = async () => {
     if (

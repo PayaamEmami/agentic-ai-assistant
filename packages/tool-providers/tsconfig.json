@@ -9,6 +9,7 @@
   "references": [
     { "path": "../ai" },
     { "path": "../config" },
+    { "path": "../integrations" },
     { "path": "../observability" },
     { "path": "../shared" }
   ]

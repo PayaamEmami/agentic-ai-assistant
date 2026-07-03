@@ -11,7 +11,9 @@
   },
   "dependencies": {
     "@aaa/config": "workspace:*",
-    "@aaa/observability": "workspace:*"
+    "@aaa/integrations": "workspace:*",
+    "@aaa/observability": "workspace:*",
+    "@aaa/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.5.0",

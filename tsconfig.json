@@ -9,6 +9,7 @@
     { "path": "./packages/db" },
     { "path": "./packages/retrieval" },
     { "path": "./packages/ai" },
+    { "path": "./packages/integrations" },
     { "path": "./packages/knowledge-sources" },
     { "path": "./packages/tool-providers" },
     { "path": "./apps/api" },

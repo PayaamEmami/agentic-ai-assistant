@@ -249,14 +249,32 @@ importers:
         specifier: ^5.5.0
         version: 5.9.3
 
+  packages/integrations:
+    devDependencies:
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.37
+      typescript:
+        specifier: ^5.5.0
+        version: 5.9.3
+      vitest:
+        specifier: ^4.1.5
+        version: 4.1.5(@opentelemetry/api@1.9.1)(@types/node@20.19.37)(@vitest/coverage-v8@4.1.5)(vite@8.0.10(@types/node@20.19.37)(esbuild@0.27.3)(jiti@2.6.1)(tsx@4.21.0))
+
   packages/knowledge-sources:
     dependencies:
       '@aaa/config':
         specifier: workspace:*
         version: link:../config
+      '@aaa/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
+      '@aaa/shared':
+        specifier: workspace:*
+        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^20.0.0
@@ -361,6 +379,9 @@ importers:
       '@aaa/config':
         specifier: workspace:*
         version: link:../config
+      '@aaa/integrations':
+        specifier: workspace:*
+        version: link:../integrations
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability

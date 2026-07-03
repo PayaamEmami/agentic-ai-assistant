@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { toRealtimeToolName } from './voice-service.js';
+import { toRealtimeToolName } from './realtime-instructions.js';
 
 describe('toRealtimeToolName', () => {
   it('converts native tool names to OpenAI Realtime function names', () => {

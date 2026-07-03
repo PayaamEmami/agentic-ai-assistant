@@ -1,3 +1,5 @@
+import { GitHubApiClient, buildGitHubHeaders } from '@aaa/integrations';
+import { asNumber, asString } from '@aaa/shared';
 import type {
   KnowledgeSource,
   KnowledgeSourceAuth,
@@ -127,14 +129,6 @@ interface GitHubCursorRepoState {
   private?: boolean;
 }
 
-function asString(value: unknown): string | undefined {
-  return typeof value === 'string' ? value : undefined;
-}
-
-function asNumber(value: unknown): number | undefined {
-  return typeof value === 'number' ? value : undefined;
-}
-
 function getFileExtension(path: string): string {
   const index = path.lastIndexOf('.');
   return index >= 0 ? path.slice(index).toLowerCase() : '';
@@ -181,6 +175,7 @@ function toCursorRepoState(repo: GitHubRepoSelection, sha: string): GitHubCursor
 export class GitHubKnowledgeSource implements KnowledgeSource {
   kind = 'github' as const;
   private token = '';
+  private api: GitHubApiClient | null = null;
   private selectedRepos: GitHubRepoSelection[] = [];
 
   async initialize(auth: KnowledgeSourceAuth): Promise<void> {
@@ -190,6 +185,7 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
     }
 
     this.token = accessToken;
+    this.api = new GitHubApiClient(accessToken, { requestJson, requestText });
     const selectedRepos = Array.isArray(auth.settings?.selectedRepos)
       ? auth.settings.selectedRepos
       : [];
@@ -223,6 +219,10 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
       .filter((repo): repo is GitHubRepoSelection => repo !== null);
   }
 
+  // `list` returns a single bounded snapshot of the selected repositories'
+  // indexable files and never paginates, so the cursor argument is intentionally
+  // ignored (nextCursor is always null). Incremental, cursor-based traversal is
+  // handled by `sync`, which tracks per-repo commit SHAs.
   async list(
     _cursor?: string,
     limit = 200,
@@ -256,39 +256,17 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
       return null;
     }
 
-    const encodedPath = parsed.path
-      .split('/')
-      .map((segment) => encodeURIComponent(segment))
-      .join('/');
-    const contentResponse = await requestJson<{
-      content?: string;
-      encoding?: string;
-      sha?: string;
-      size?: number;
-    }>(
-      `https://api.github.com/repos/${repo.fullName}/contents/${encodedPath}?ref=${encodeURIComponent(repo.defaultBranch)}`,
-      {
-        headers: this.buildHeaders(),
-      },
+    const fileContent = await this.requireApi().getFileContent(
+      repo.fullName,
+      parsed.path,
+      repo.defaultBranch,
     );
-    const content =
-      contentResponse.encoding === 'base64' && contentResponse.content
-        ? Buffer.from(contentResponse.content.replace(/\n/g, ''), 'base64').toString('utf8')
-        : await requestText(
-            `https://api.github.com/repos/${repo.fullName}/contents/${encodedPath}?ref=${encodeURIComponent(repo.defaultBranch)}`,
-            {
-              headers: {
-                ...this.buildHeaders(),
-                Accept: 'application/vnd.github.raw+json',
-              },
-            },
-          );
 
     return {
       externalId,
       sourceKind: 'code_repository',
       title: parsed.path,
-      content,
+      content: fileContent.content,
       mimeType: 'text/plain',
       uri: `https://github.com/${repo.fullName}/blob/${repo.defaultBranch}/${parsed.path}`,
       updatedAt: null,
@@ -298,8 +276,8 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
         fullName: repo.fullName,
         branch: repo.defaultBranch,
         path: parsed.path,
-        blobSha: contentResponse.sha,
-        size: contentResponse.size ?? null,
+        blobSha: fileContent.sha,
+        size: fileContent.size ?? null,
       },
     };
   }
@@ -421,52 +399,18 @@ export class GitHubKnowledgeSource implements KnowledgeSource {
   }
 
   async listRepositories(): Promise<GitHubRepoSelection[]> {
-    const repositories: GitHubRepoSelection[] = [];
-    let page = 1;
+    return this.requireApi().listRepositories();
+  }
 
-    while (true) {
-      const params = new URLSearchParams({
-        per_page: '100',
-        page: String(page),
-        sort: 'updated',
-      });
-      const pageItems = await requestJson<GitHubRepoApiResponse[]>(
-        `https://api.github.com/user/repos?${params.toString()}`,
-        {
-          headers: this.buildHeaders(),
-        },
-      );
-      if (pageItems.length === 0) {
-        break;
-      }
-
-      repositories.push(
-        ...pageItems.map((repo) => ({
-          id: repo.id,
-          name: repo.name,
-          fullName: repo.full_name,
-          owner: repo.owner.login,
-          defaultBranch: repo.default_branch,
-          private: repo.private,
-        })),
-      );
-
-      if (pageItems.length < 100) {
-        break;
-      }
-      page += 1;
+  private requireApi(): GitHubApiClient {
+    if (!this.api) {
+      throw new Error('GitHub knowledge source is not initialized');
     }
-
-    return repositories;
+    return this.api;
   }
 
   private buildHeaders(): Record<string, string> {
-    return {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${this.token}`,
-      'User-Agent': 'agentic-ai-assistant',
-      'X-GitHub-Api-Version': '2022-11-28',
-    };
+    return buildGitHubHeaders(this.token);
   }
 
   private async loadRepositoryTree(

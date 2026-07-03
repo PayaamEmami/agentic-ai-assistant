@@ -90,15 +90,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
-  // Account creation is intentionally disabled.
-  // const register = useCallback(
-  //   async (email: string, password: string, displayName: string) => {
-  //     const response = await api.auth.register(email, password, displayName);
-  //     applyAuth(response.token, response.user);
-  //   },
-  //   [applyAuth],
-  // );
-
   const devLogin = useCallback(
     async (email = 'dev@localhost', displayName = 'Dev User') => {
       const response = await api.auth.devLogin(email, displayName);

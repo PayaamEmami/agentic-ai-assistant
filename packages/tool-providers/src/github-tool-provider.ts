@@ -1,3 +1,4 @@
+import { GitHubApiClient, type GitHubRepository } from '@aaa/integrations';
 import { requestJson, requestText } from './http.js';
 
 export interface GitHubPullRequestSummary {
@@ -23,58 +24,18 @@ interface GitHubReviewCommentReplyResponse {
   body: string;
 }
 
-interface GitHubRepositoryListItem {
-  id: number;
-  name: string;
-  full_name: string;
-  private: boolean;
-  default_branch: string;
-  owner: {
-    login: string;
-  };
-}
-
-export interface GitHubRepositoryReference {
-  id: number;
-  name: string;
-  fullName: string;
-  owner: string;
-  private: boolean;
-  defaultBranch: string;
-}
+/** @deprecated Use `GitHubRepository` from `@aaa/integrations`. */
+export type GitHubRepositoryReference = GitHubRepository;
 
 export class GitHubToolProvider {
-  constructor(private readonly token: string) {}
+  private readonly api: GitHubApiClient;
 
-  async listRepositories(): Promise<GitHubRepositoryReference[]> {
-    const repositories: GitHubRepositoryReference[] = [];
-    let page = 1;
+  constructor(token: string) {
+    this.api = new GitHubApiClient(token, { requestJson, requestText });
+  }
 
-    while (true) {
-      const pageItems = await requestJson<GitHubRepositoryListItem[]>(
-        `https://api.github.com/user/repos?per_page=100&page=${page}&sort=updated`,
-        {
-          headers: this.headers(),
-        },
-      );
-
-      repositories.push(
-        ...pageItems.map((repo) => ({
-          id: repo.id,
-          name: repo.name,
-          fullName: repo.full_name,
-          owner: repo.owner.login,
-          private: repo.private,
-          defaultBranch: repo.default_branch,
-        })),
-      );
-
-      if (pageItems.length < 100) {
-        return repositories;
-      }
-
-      page += 1;
-    }
+  async listRepositories(): Promise<GitHubRepository[]> {
+    return this.api.listRepositories();
   }
 
   async getRepository(repo: string): Promise<unknown> {
@@ -88,35 +49,8 @@ export class GitHubToolProvider {
     path: string,
     ref?: string,
   ): Promise<{ content: string; sha?: string }> {
-    const encodedPath = path
-      .split('/')
-      .map((segment) => encodeURIComponent(segment))
-      .join('/');
-    const suffix = ref ? `?ref=${encodeURIComponent(ref)}` : '';
-    const metadata = await requestJson<{ content?: string; encoding?: string; sha?: string }>(
-      `https://api.github.com/repos/${repo}/contents/${encodedPath}${suffix}`,
-      {
-        headers: this.headers(),
-      },
-    );
-
-    const content =
-      metadata.encoding === 'base64' && metadata.content
-        ? Buffer.from(metadata.content.replace(/\n/g, ''), 'base64').toString('utf8')
-        : await requestText(
-            `https://api.github.com/repos/${repo}/contents/${encodedPath}${suffix}`,
-            {
-              headers: {
-                ...this.headers(),
-                Accept: 'application/vnd.github.raw+json',
-              },
-            },
-          );
-
-    return {
-      content,
-      sha: metadata.sha,
-    };
+    const { content, sha } = await this.api.getFileContent(repo, path, ref);
+    return { content, sha };
   }
 
   async getBranch(repo: string, branch: string): Promise<unknown> {
@@ -266,11 +200,6 @@ export class GitHubToolProvider {
   }
 
   private headers(): Record<string, string> {
-    return {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${this.token}`,
-      'User-Agent': 'agentic-ai-assistant',
-      'X-GitHub-Api-Version': '2022-11-28',
-    };
+    return this.api.headers();
   }
 }

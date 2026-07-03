@@ -100,7 +100,6 @@ function testServices(overrides: Partial<ApiServices> = {}): ApiServices {
       updateAssistantText: vi.fn(),
       prepareTurn: vi.fn(),
       completeTurn: vi.fn(),
-      persistTurn: vi.fn(),
       submitToolCall: vi.fn(),
       interruptSession: vi.fn(),
     },

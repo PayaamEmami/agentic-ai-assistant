@@ -20,36 +20,8 @@ function normalizeEmail(email: string): string {
 // cannot require a bearer token themselves). `/auth/me` is the lone exception
 // and opts in via a per-route `preHandler`.
 export async function authRoutes(app: FastifyInstance) {
-  // Account creation is intentionally disabled. To re-enable, restore the
-  // `RegisterRequest` import above and uncomment the handler below.
-  // app.post('/auth/register', async (request, reply) => {
-  //   const parsed = RegisterRequest.safeParse(request.body);
-  //   if (!parsed.success) {
-  //     return reply.status(400).send({
-  //       error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
-  //     });
-  //   }
-  //
-  //   const email = normalizeEmail(parsed.data.email);
-  //   const existing = await userRepository.findAuthByEmail(email);
-  //   if (existing) {
-  //     throw new AppError(409, 'An account already exists for this email', 'AUTH_EMAIL_EXISTS');
-  //   }
-  //
-  //   const passwordHash = await hashPassword(parsed.data.password);
-  //   const user = await userRepository.create(email, parsed.data.displayName.trim(), passwordHash);
-  //   const token = signAuthToken(user.id, user.email);
-  //
-  //   return reply.status(201).send({
-  //     token,
-  //     user: {
-  //       id: user.id,
-  //       email: user.email,
-  //       displayName: user.displayName,
-  //     },
-  //   });
-  // });
-
+  // Account creation is intentionally disabled; only login and dev-login
+  // establish identity in this deployment.
   app.post('/auth/login', async (request, reply) => {
     const parsed = AuthCredentialsRequest.safeParse(request.body);
     if (!parsed.success) {

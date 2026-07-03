@@ -1,15 +1,12 @@
 import { attachmentRepository } from '@aaa/db';
 import type { messageRepository } from '@aaa/db';
 import type { AgentHistoryMessage, ChatContentPart } from '@aaa/ai';
+import { isRecord } from '@aaa/shared';
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
 type DbAttachment = Awaited<ReturnType<typeof attachmentRepository.findById>>;
 
 const MAX_INLINE_ATTACHMENT_TEXT_CHARS = 12_000;
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
-}
 
 function stringifyValue(value: unknown): string {
   if (typeof value === 'string') {
