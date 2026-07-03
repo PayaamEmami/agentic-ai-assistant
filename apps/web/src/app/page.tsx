@@ -101,7 +101,7 @@ export default function Home() {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-2xl border border-border-subtle bg-surface-input px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full rounded-2xl border border-accent/60 bg-transparent px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? 'Working...' : 'Sign in'}
             </button>
@@ -112,7 +112,7 @@ export default function Home() {
               type="button"
               onClick={() => void handleDevLogin()}
               disabled={isSubmitting}
-              className="mt-4 w-full rounded-2xl border border-dashed border-border-subtle px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              className="mt-4 w-full rounded-2xl border border-dashed border-border-subtle bg-transparent px-4 py-3 text-sm font-medium text-foreground-muted transition hover:border-foreground-muted hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
             >
               Use development login
             </button>

@@ -91,14 +91,14 @@ export function ContentBlock({
               <button
                 type="button"
                 onClick={() => void approveAction(approval.id)}
-                className="rounded bg-success px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+                className="rounded border border-success/60 bg-transparent px-3 py-1 text-xs font-medium text-success transition hover:border-success hover:bg-success/10"
               >
                 Approve
               </button>
               <button
                 type="button"
                 onClick={() => void rejectAction(approval.id)}
-                className="rounded bg-error px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+                className="rounded border border-error/60 bg-transparent px-3 py-1 text-xs font-medium text-error transition hover:border-error hover:bg-error/10"
               >
                 Reject
               </button>

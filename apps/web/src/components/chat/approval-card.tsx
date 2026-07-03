@@ -16,13 +16,13 @@ export function ApprovalCard({ id, description }: ApprovalCardProps) {
       <div className="mt-2 flex gap-2">
         <button
           onClick={() => void approveAction(id)}
-          className="rounded bg-success px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+          className="rounded border border-success/60 bg-transparent px-3 py-1 text-xs font-medium text-success transition hover:border-success hover:bg-success/10"
         >
           Approve
         </button>
         <button
           onClick={() => void rejectAction(id)}
-          className="rounded bg-error px-3 py-1 text-xs font-medium text-white hover:opacity-90"
+          className="rounded border border-error/60 bg-transparent px-3 py-1 text-xs font-medium text-error transition hover:border-error hover:bg-error/10"
         >
           Reject
         </button>

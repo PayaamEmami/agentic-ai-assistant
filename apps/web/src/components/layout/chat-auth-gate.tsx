@@ -24,7 +24,7 @@ export function ChatAuthGate({ children }: { children: React.ReactNode }) {
           </p>
           <Link
             href="/"
-            className="mt-6 inline-flex rounded-2xl bg-accent px-5 py-3 text-sm font-medium text-white transition hover:bg-accent-hover"
+            className="mt-6 inline-flex rounded-2xl border border-accent/60 bg-transparent px-5 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-accent/10"
           >
             Go to sign in
           </Link>
