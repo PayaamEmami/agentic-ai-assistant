@@ -40,15 +40,11 @@ vi.mock('@aaa/config', () => ({
     openaiModel: 'gpt-5-mini',
     openaiEmbeddingModel: 'text-embedding-3-small',
     openaiTranscriptionModel: 'transcribe-test',
-    openaiTtsModel: 'tts-test',
-    openaiTtsVoice: 'alloy',
   })),
   openAIProviderModelConfigFromWorkerConfig: vi.fn((config) => ({
     model: config.openaiModel,
     embeddingModel: config.openaiEmbeddingModel,
     transcriptionModel: config.openaiTranscriptionModel,
-    ttsModel: config.openaiTtsModel,
-    ttsVoice: config.openaiTtsVoice,
   })),
 }));
 

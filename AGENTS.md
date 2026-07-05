@@ -78,7 +78,7 @@ When deciding where a change belongs:
 
 Model access is abstracted so the chat provider can be swapped without touching agent, retrieval, or app code.
 
-- `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription, TTS). `OpenAIProvider` is the only implementation today.
+- `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription). `OpenAIProvider` is the only implementation today.
 - Two narrow seams are derived from it and are what consumers depend on:
   - `ChatProvider` = `complete` + `streamComplete` (used by all agents, the orchestrator, `ChatService`, and the coding task runner)
   - `EmbeddingProvider` = `embed` (used by `RetrievalBridge`, `UploadService`, and the worker embedding job)

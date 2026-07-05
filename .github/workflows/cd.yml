@@ -100,8 +100,6 @@ jobs:
           OPENAI_REALTIME_MODEL: ${{ secrets.OPENAI_REALTIME_MODEL }}
           OPENAI_REALTIME_VOICE: ${{ secrets.OPENAI_REALTIME_VOICE }}
           OPENAI_TRANSCRIPTION_MODEL: ${{ secrets.OPENAI_TRANSCRIPTION_MODEL }}
-          OPENAI_TTS_MODEL: ${{ secrets.OPENAI_TTS_MODEL }}
-          OPENAI_TTS_VOICE: ${{ secrets.OPENAI_TTS_VOICE }}
           # Auth secrets
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           INTERNAL_SERVICE_SECRET: ${{ secrets.INTERNAL_SERVICE_SECRET }}
@@ -124,8 +122,6 @@ jobs:
             printf 'OPENAI_REALTIME_MODEL=%s\n' "$OPENAI_REALTIME_MODEL"
             printf 'OPENAI_REALTIME_VOICE=%s\n' "$OPENAI_REALTIME_VOICE"
             printf 'OPENAI_TRANSCRIPTION_MODEL=%s\n' "$OPENAI_TRANSCRIPTION_MODEL"
-            printf 'OPENAI_TTS_MODEL=%s\n' "$OPENAI_TTS_MODEL"
-            printf 'OPENAI_TTS_VOICE=%s\n' "$OPENAI_TTS_VOICE"
             # Auth secrets
             printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
             printf 'INTERNAL_SERVICE_SECRET=%s\n' "$INTERNAL_SERVICE_SECRET"

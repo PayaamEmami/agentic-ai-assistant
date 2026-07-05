@@ -80,15 +80,3 @@ export interface TranscriptionRequest {
 export interface TranscriptionResponse {
   text: string;
 }
-
-export interface SpeechRequest {
-  input: string;
-  model?: string;
-  voice?: string;
-  format?: 'mp3' | 'wav';
-}
-
-export interface SpeechResponse {
-  audio: Buffer;
-  contentType: string;
-}

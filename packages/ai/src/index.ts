@@ -12,8 +12,6 @@ export type {
   EmbeddingResponse,
   TranscriptionRequest,
   TranscriptionResponse,
-  SpeechRequest,
-  SpeechResponse,
 } from './types.js';
 
 export type { ModelProvider, ChatProvider, EmbeddingProvider } from './model-provider.js';

@@ -43,8 +43,6 @@ function testConfig(): AppConfig {
     openaiRealtimeModel: 'realtime-test',
     openaiRealtimeVoice: 'alloy',
     openaiTranscriptionModel: 'transcribe-test',
-    openaiTtsModel: 'tts-test',
-    openaiTtsVoice: 'alloy',
     jwtSecret: 'test-secret',
     internalServiceSecret: 'internal-secret',
     apiInstanceId: 'api-test',

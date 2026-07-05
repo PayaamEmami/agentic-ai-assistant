@@ -54,8 +54,6 @@ const envSchema = z.object({
   OPENAI_REALTIME_MODEL: z.string().min(1),
   OPENAI_REALTIME_VOICE: z.string().min(1),
   OPENAI_TRANSCRIPTION_MODEL: z.string().min(1),
-  OPENAI_TTS_MODEL: z.string().min(1),
-  OPENAI_TTS_VOICE: z.string().min(1),
 
   // Apps / OAuth
   GITHUB_TOKEN: z.string().optional(),
@@ -103,8 +101,6 @@ const openAiEnvSchema = envSchema.pick({
   OPENAI_MODEL: true,
   OPENAI_EMBEDDING_MODEL: true,
   OPENAI_TRANSCRIPTION_MODEL: true,
-  OPENAI_TTS_MODEL: true,
-  OPENAI_TTS_VOICE: true,
   LLM_PRICING_OVERRIDES_JSON: true,
 });
 

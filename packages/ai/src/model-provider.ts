@@ -3,8 +3,6 @@ import type {
   CompletionResponse,
   EmbeddingRequest,
   EmbeddingResponse,
-  SpeechRequest,
-  SpeechResponse,
   StreamDelta,
   TranscriptionRequest,
   TranscriptionResponse,
@@ -15,7 +13,6 @@ export interface ModelProvider {
   streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta>;
   embed(request: EmbeddingRequest): Promise<EmbeddingResponse>;
   transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse>;
-  synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse>;
 }
 
 export type ChatProvider = Pick<ModelProvider, 'complete' | 'streamComplete'>;

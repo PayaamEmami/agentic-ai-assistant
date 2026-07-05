@@ -19,8 +19,6 @@ import type {
   ToolCall,
   TranscriptionRequest,
   TranscriptionResponse,
-  SpeechRequest,
-  SpeechResponse,
 } from './types.js';
 
 export type { OpenAIProviderModelConfig };
@@ -279,43 +277,6 @@ export class OpenAIProvider implements ModelProvider {
       return response;
     } catch (error) {
       telemetry.failure('openai.transcription.completed', 'OpenAI transcription failed', error);
-      throw error;
-    }
-  }
-
-  async synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse> {
-    const format = request.format ?? 'mp3';
-    const model = request.model ?? this.defaults.ttsModel;
-    const telemetry = new OpenAiCallTelemetry('speech', model);
-    try {
-      const response = await withSpan(
-        'openai.audio.speech',
-        {
-          'ai.model': model,
-          'aaa.ai.operation': 'speech',
-        },
-        () =>
-          this.client.audio.speech.create({
-            model,
-            voice: request.voice ?? this.defaults.ttsVoice,
-            input: request.input,
-            response_format: format,
-          }),
-      );
-
-      const result = {
-        audio: Buffer.from(await response.arrayBuffer()),
-        contentType: format === 'wav' ? 'audio/wav' : 'audio/mpeg',
-      };
-
-      telemetry.success('openai.tts.completed', 'OpenAI speech synthesis finished', {
-        voice: request.voice ?? this.defaults.ttsVoice,
-        audioBytes: result.audio.byteLength,
-      });
-
-      return result;
-    } catch (error) {
-      telemetry.failure('openai.tts.completed', 'OpenAI speech synthesis failed', error);
       throw error;
     }
   }

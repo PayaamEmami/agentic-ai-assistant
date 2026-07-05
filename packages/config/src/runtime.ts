@@ -12,8 +12,6 @@ export interface OpenAIProviderModelConfig {
   model: string;
   embeddingModel: string;
   transcriptionModel: string;
-  ttsModel: string;
-  ttsVoice: string;
 }
 
 export interface ApiConfig {
@@ -32,8 +30,6 @@ export interface ApiConfig {
   openaiRealtimeModel: string;
   openaiRealtimeVoice: string;
   openaiTranscriptionModel: string;
-  openaiTtsModel: string;
-  openaiTtsVoice: string;
   jwtSecret: string;
   internalServiceSecret: string;
   apiInstanceId: string;
@@ -70,8 +66,6 @@ export interface WorkerConfig {
   openaiModel: string;
   openaiEmbeddingModel: string;
   openaiTranscriptionModel: string;
-  openaiTtsModel: string;
-  openaiTtsVoice: string;
   internalServiceSecret: string;
   apiInternalBaseUrl: string;
   workerObservabilityHost: string;
@@ -133,8 +127,6 @@ export function loadApiConfig(): ApiConfig {
     openaiRealtimeModel: env.OPENAI_REALTIME_MODEL,
     openaiRealtimeVoice: env.OPENAI_REALTIME_VOICE,
     openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
-    openaiTtsModel: env.OPENAI_TTS_MODEL,
-    openaiTtsVoice: env.OPENAI_TTS_VOICE,
     jwtSecret: env.JWT_SECRET,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInstanceId: buildApiInstanceId(env),
@@ -174,8 +166,6 @@ export function loadWorkerConfig(): WorkerConfig {
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
     openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
-    openaiTtsModel: env.OPENAI_TTS_MODEL,
-    openaiTtsVoice: env.OPENAI_TTS_VOICE,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInternalBaseUrl: buildApiInternalBaseUrl(env),
     workerObservabilityHost: env.WORKER_OBSERVABILITY_HOST,
@@ -194,16 +184,12 @@ export function openAIProviderModelConfigFromApiConfig(
     | 'openaiModel'
     | 'openaiEmbeddingModel'
     | 'openaiTranscriptionModel'
-    | 'openaiTtsModel'
-    | 'openaiTtsVoice'
   >,
 ): OpenAIProviderModelConfig {
   return {
     model: config.openaiModel,
     embeddingModel: config.openaiEmbeddingModel,
     transcriptionModel: config.openaiTranscriptionModel,
-    ttsModel: config.openaiTtsModel,
-    ttsVoice: config.openaiTtsVoice,
   };
 }
 
@@ -213,8 +199,6 @@ export function openAIProviderModelConfigFromWorkerConfig(
     | 'openaiModel'
     | 'openaiEmbeddingModel'
     | 'openaiTranscriptionModel'
-    | 'openaiTtsModel'
-    | 'openaiTtsVoice'
   >,
 ): OpenAIProviderModelConfig {
   return openAIProviderModelConfigFromApiConfig(config);
@@ -225,7 +209,5 @@ export function openAIProviderModelConfigFromEnv(env: OpenAiEnv): OpenAIProvider
     model: env.OPENAI_MODEL,
     embeddingModel: env.OPENAI_EMBEDDING_MODEL,
     transcriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
-    ttsModel: env.OPENAI_TTS_MODEL,
-    ttsVoice: env.OPENAI_TTS_VOICE,
   };
 }

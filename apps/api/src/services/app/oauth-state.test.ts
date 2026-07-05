@@ -17,8 +17,6 @@ const config: AppConfig = {
   openaiRealtimeModel: 'realtime-test',
   openaiRealtimeVoice: 'verse',
   openaiTranscriptionModel: 'transcribe-test',
-  openaiTtsModel: 'tts-test',
-  openaiTtsVoice: 'verse',
   jwtSecret: 'state-secret',
   internalServiceSecret: 'internal-secret',
   apiInstanceId: 'api-1',
