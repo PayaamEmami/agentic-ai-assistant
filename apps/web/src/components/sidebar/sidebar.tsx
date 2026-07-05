@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
-import { ChevronDownIcon, EditIcon, MoreIcon, PlusIcon, SidebarToggleIcon, TrashIcon } from '@/components/icons';
+import { EditIcon, MoreIcon, PlusIcon, SidebarToggleIcon, TrashIcon } from '@/components/icons';
 import { AccountMenu } from '@/components/sidebar/account-menu';
 import { IconButton } from '@/components/ui/icon-button';
 import { useChatContext } from '@/lib/chat';
@@ -41,7 +41,6 @@ export function Sidebar({
   const [draftTitle, setDraftTitle] = useState('');
   const [pendingConversationId, setPendingConversationId] = useState<string | null>(null);
   const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
-  const [isConversationListCollapsed, setIsConversationListCollapsed] = useState(false);
   const [mobileActionMenuConversationId, setMobileActionMenuConversationId] = useState<
     string | null
   >(null);
@@ -145,20 +144,7 @@ export function Sidebar({
           className={`flex items-center gap-2 ${collapsed ? 'justify-center' : 'justify-between'}`}
         >
           {collapsed ? null : (
-            <button
-              type="button"
-              onClick={() => setIsConversationListCollapsed((previous) => !previous)}
-              className="inline-flex items-center gap-2 rounded-xl px-2 py-2 text-sm font-semibold text-foreground transition hover:bg-surface-hover"
-              aria-label={
-                isConversationListCollapsed ? 'Expand conversations' : 'Collapse conversations'
-              }
-              title={
-                isConversationListCollapsed ? 'Expand conversations' : 'Collapse conversations'
-              }
-            >
-              <span>Conversations</span>
-              <ChevronDownIcon collapsed={isConversationListCollapsed} />
-            </button>
+            <h2 className="px-2 py-2 text-sm font-semibold text-foreground">Conversations</h2>
           )}
           <div className="flex items-center gap-2">
             {!collapsed ? (
@@ -181,7 +167,7 @@ export function Sidebar({
         </div>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto p-2">
-        {collapsed || isConversationListCollapsed ? null : loading.isLoadingConversations &&
+        {collapsed ? null : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p
             className="p-2 text-sm text-foreground-muted"
