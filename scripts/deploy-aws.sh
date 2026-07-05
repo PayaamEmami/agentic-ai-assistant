@@ -151,15 +151,31 @@ if database_url and not postgres_password:
 if not postgres_password:
     raise SystemExit("POSTGRES_PASSWORD is missing and could not be derived from DATABASE_URL.")
 
+# These must be non-empty in the production .env or the API and worker crash on
+# boot in loadEnv() (Zod rejects missing/empty values). Keep this list in sync
+# with the required (no-default) fields in packages/config/src/env.ts. Failing
+# fast here turns a silent "container unhealthy" timeout into a clear message.
 required_keys = [
+    "LLM_CHAT_PROVIDER",
     "OPENAI_API_KEY",
+    "OPENAI_MODEL",
+    "OPENAI_EMBEDDING_MODEL",
+    "OPENAI_REALTIME_MODEL",
+    "OPENAI_REALTIME_VOICE",
+    "OPENAI_TRANSCRIPTION_MODEL",
+    "OPENAI_TTS_MODEL",
+    "OPENAI_TTS_VOICE",
     "JWT_SECRET",
     "INTERNAL_SERVICE_SECRET",
     "APP_CREDENTIALS_SECRET",
 ]
 missing = [key for key in required_keys if not values.get(key)]
 if missing:
-    raise SystemExit(f"Missing required deployment values: {', '.join(missing)}")
+    raise SystemExit(
+        "Missing required deployment values: "
+        f"{', '.join(missing)}. Set the matching GitHub Actions secrets "
+        "(or .env entries) before deploying."
+    )
 
 deployment_values = {
     "AWS_REGION": aws_region,
@@ -248,6 +264,9 @@ dump_deploy_diagnostics() {{
     df -h / >&2 || true
     docker ps --format 'table {{{{.Names}}}}\t{{{{.Image}}}}\t{{{{.Status}}}}' >&2 || true
     docker compose --env-file {env_file} -f {release_dir}/docker-compose.prod.yml ps >&2 || true
+    echo "=== recent app container logs ===" >&2
+    docker compose --env-file {env_file} -f {release_dir}/docker-compose.prod.yml \
+      logs --no-color --tail 100 api worker web >&2 2>&1 || true
   fi
   exit "$exit_code"
 }}
