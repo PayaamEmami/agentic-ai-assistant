@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { buttonClassName } from '@/components/ui/button-variants';
 import { useAuthContext } from '@/lib/auth-context';
 
 export function ChatAuthGate({ children }: { children: React.ReactNode }) {
@@ -24,7 +25,7 @@ export function ChatAuthGate({ children }: { children: React.ReactNode }) {
           </p>
           <Link
             href="/"
-            className="mt-6 inline-flex rounded-2xl border border-accent/60 bg-transparent px-5 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-accent/10"
+            className={buttonClassName({ className: 'mt-6 rounded-2xl py-3' })}
           >
             Go to sign in
           </Link>

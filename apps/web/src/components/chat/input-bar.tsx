@@ -248,7 +248,6 @@ export function InputBar() {
             variant="danger"
             onClick={() => void interruptMessage()}
             disabled={loading.isInterruptingMessage}
-            className="text-error hover:bg-surface-hover disabled:opacity-40"
             title={loading.isInterruptingMessage ? 'Stopping response...' : 'Stop response'}
             aria-label={loading.isInterruptingMessage ? 'Stopping response' : 'Stop response'}
           >

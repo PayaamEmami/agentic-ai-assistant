@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { useAuthContext } from '@/lib/auth-context';
 
 // Account creation is intentionally disabled in this build; this screen only
@@ -98,24 +99,27 @@ export default function Home() {
               </p>
             ) : null}
 
-            <button
+            <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full rounded-2xl border border-accent/60 bg-transparent px-4 py-3 text-sm font-medium text-foreground transition hover:border-accent hover:bg-accent/10 disabled:cursor-not-allowed disabled:opacity-60"
+              fullWidth
+              className="rounded-2xl py-3"
             >
               {isSubmitting ? 'Working...' : 'Sign in'}
-            </button>
+            </Button>
           </form>
 
           {process.env.NODE_ENV !== 'production' ? (
-            <button
+            <Button
               type="button"
+              variant="secondary"
               onClick={() => void handleDevLogin()}
               disabled={isSubmitting}
-              className="mt-4 w-full rounded-2xl border border-dashed border-border-subtle bg-transparent px-4 py-3 text-sm font-medium text-foreground-muted transition hover:border-foreground-muted hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-60"
+              fullWidth
+              className="mt-4 rounded-2xl border-dashed py-3"
             >
               Use development login
-            </button>
+            </Button>
           ) : null}
         </section>
       </div>

@@ -3,6 +3,7 @@
 import type { MessageContentBlock } from '@/lib/chat';
 import type { ApprovalStatusByToolExecution, PendingApproval } from '@/lib/chat/types';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Markdown } from '../markdown';
 import { WordFadeText } from './assistant-text';
 import {
@@ -88,20 +89,12 @@ export function ContentBlock({
           <div className="mt-2">
             <p className="text-xs text-foreground-muted">{approval.description}</p>
             <div className="mt-2 flex gap-2">
-              <button
-                type="button"
-                onClick={() => void approveAction(approval.id)}
-                className="rounded border border-success/60 bg-transparent px-3 py-1 text-xs font-medium text-success transition hover:border-success hover:bg-success/10"
-              >
+              <Button size="sm" variant="success" onClick={() => void approveAction(approval.id)}>
                 Approve
-              </button>
-              <button
-                type="button"
-                onClick={() => void rejectAction(approval.id)}
-                className="rounded border border-error/60 bg-transparent px-3 py-1 text-xs font-medium text-error transition hover:border-error hover:bg-error/10"
-              >
+              </Button>
+              <Button size="sm" variant="danger" onClick={() => void rejectAction(approval.id)}>
                 Reject
-              </button>
+              </Button>
             </div>
           </div>
         ) : null}
