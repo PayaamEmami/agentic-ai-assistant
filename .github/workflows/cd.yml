@@ -92,16 +92,9 @@ jobs:
 
       - name: Materialize .env from secrets
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          JWT_SECRET: ${{ secrets.JWT_SECRET }}
-          INTERNAL_SERVICE_SECRET: ${{ secrets.INTERNAL_SERVICE_SECRET }}
-          APP_CREDENTIALS_SECRET: ${{ secrets.APP_CREDENTIALS_SECRET }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          OAUTH_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
-          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
-          OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}
-          OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}
+          # Model providers
           LLM_CHAT_PROVIDER: ${{ secrets.LLM_CHAT_PROVIDER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
           OPENAI_EMBEDDING_MODEL: ${{ secrets.OPENAI_EMBEDDING_MODEL }}
           OPENAI_REALTIME_MODEL: ${{ secrets.OPENAI_REALTIME_MODEL }}
@@ -109,21 +102,23 @@ jobs:
           OPENAI_TRANSCRIPTION_MODEL: ${{ secrets.OPENAI_TRANSCRIPTION_MODEL }}
           OPENAI_TTS_MODEL: ${{ secrets.OPENAI_TTS_MODEL }}
           OPENAI_TTS_VOICE: ${{ secrets.OPENAI_TTS_VOICE }}
+          # Auth secrets
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          INTERNAL_SERVICE_SECRET: ${{ secrets.INTERNAL_SERVICE_SECRET }}
+          APP_CREDENTIALS_SECRET: ${{ secrets.APP_CREDENTIALS_SECRET }}
+          # Database
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          # OAuth apps
+          OAUTH_GITHUB_CLIENT_ID: ${{ secrets.OAUTH_GITHUB_CLIENT_ID }}
+          OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.OAUTH_GITHUB_CLIENT_SECRET }}
+          OAUTH_GOOGLE_CLIENT_ID: ${{ secrets.OAUTH_GOOGLE_CLIENT_ID }}
+          OAUTH_GOOGLE_CLIENT_SECRET: ${{ secrets.OAUTH_GOOGLE_CLIENT_SECRET }}
         run: |
           umask 077
           {
-            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
-            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
-            printf 'INTERNAL_SERVICE_SECRET=%s\n' "$INTERNAL_SERVICE_SECRET"
-            printf 'APP_CREDENTIALS_SECRET=%s\n' "$APP_CREDENTIALS_SECRET"
-            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-            printf 'GITHUB_CLIENT_ID=%s\n' "$OAUTH_GITHUB_CLIENT_ID"
-            printf 'GITHUB_CLIENT_SECRET=%s\n' "$OAUTH_GITHUB_CLIENT_SECRET"
-            printf 'GOOGLE_CLIENT_ID=%s\n' "$OAUTH_GOOGLE_CLIENT_ID"
-            printf 'GOOGLE_CLIENT_SECRET=%s\n' "$OAUTH_GOOGLE_CLIENT_SECRET"
-            printf 'S3_BUCKET=%s\n' "$DEPLOY_BUCKET"
-            printf 'S3_REGION=%s\n' "$AWS_REGION"
+            # Model providers
             printf 'LLM_CHAT_PROVIDER=%s\n' "$LLM_CHAT_PROVIDER"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
             printf 'OPENAI_MODEL=%s\n' "$OPENAI_MODEL"
             printf 'OPENAI_EMBEDDING_MODEL=%s\n' "$OPENAI_EMBEDDING_MODEL"
             printf 'OPENAI_REALTIME_MODEL=%s\n' "$OPENAI_REALTIME_MODEL"
@@ -131,6 +126,20 @@ jobs:
             printf 'OPENAI_TRANSCRIPTION_MODEL=%s\n' "$OPENAI_TRANSCRIPTION_MODEL"
             printf 'OPENAI_TTS_MODEL=%s\n' "$OPENAI_TTS_MODEL"
             printf 'OPENAI_TTS_VOICE=%s\n' "$OPENAI_TTS_VOICE"
+            # Auth secrets
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'INTERNAL_SERVICE_SECRET=%s\n' "$INTERNAL_SERVICE_SECRET"
+            printf 'APP_CREDENTIALS_SECRET=%s\n' "$APP_CREDENTIALS_SECRET"
+            # Database
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            # Storage
+            printf 'S3_BUCKET=%s\n' "$DEPLOY_BUCKET"
+            printf 'S3_REGION=%s\n' "$AWS_REGION"
+            # OAuth apps
+            printf 'GITHUB_CLIENT_ID=%s\n' "$OAUTH_GITHUB_CLIENT_ID"
+            printf 'GITHUB_CLIENT_SECRET=%s\n' "$OAUTH_GITHUB_CLIENT_SECRET"
+            printf 'GOOGLE_CLIENT_ID=%s\n' "$OAUTH_GOOGLE_CLIENT_ID"
+            printf 'GOOGLE_CLIENT_SECRET=%s\n' "$OAUTH_GOOGLE_CLIENT_SECRET"
           } > .env
 
       - name: Deploy

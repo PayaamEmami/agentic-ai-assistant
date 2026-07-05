@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 const envSchema = z.object({
+  // Application
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   HOSTNAME: z.string().optional(),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
@@ -10,13 +11,27 @@ const envSchema = z.object({
     .optional(),
   LOG_LOKI_ENDPOINT: z.string().optional(),
 
+  // API server
   API_HOST: z.string().default('0.0.0.0'),
   API_PORT: z.coerce.number().default(3001),
+  API_INSTANCE_ID: z.string().optional(),
+  API_INTERNAL_BASE_URL: z.string().optional(),
+  INTERNAL_API_BASE_URL: z.string().optional(),
+  API_BASE_URL: z.string().optional(),
+  INTERNAL_SERVICE_SECRET: z.string().default('dev-internal-service-secret'),
+  JWT_SECRET: z.string().default('dev-insecure-jwt-secret'),
 
+  // Frontend
+  WEB_BASE_URL: z.string().default('http://localhost:3000'),
+
+  // Database
   DATABASE_URL: z.string(),
   DATABASE_POOL_SIZE: z.coerce.number().default(10),
 
+  // Redis
   REDIS_URL: z.string().default('redis://localhost:6379'),
+
+  // Observability
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().optional(),
   OTEL_SERVICE_NAMESPACE: z.string().optional(),
   OTEL_RESOURCE_ATTRIBUTES: z.string().optional(),
@@ -24,12 +39,14 @@ const envSchema = z.object({
   WORKER_OBSERVABILITY_PORT: z.coerce.number().default(9464),
   LLM_PRICING_OVERRIDES_JSON: z.string().optional(),
 
+  // S3 / object storage
   S3_BUCKET: z.string().default('aaa-uploads'),
   S3_REGION: z.string().default('us-west-1'),
   S3_ENDPOINT: z.string().optional(),
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 
+  // Model providers
   LLM_CHAT_PROVIDER: z.enum(['openai']),
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().min(1),
@@ -39,13 +56,8 @@ const envSchema = z.object({
   OPENAI_TRANSCRIPTION_MODEL: z.string().min(1),
   OPENAI_TTS_MODEL: z.string().min(1),
   OPENAI_TTS_VOICE: z.string().min(1),
-  JWT_SECRET: z.string().default('dev-insecure-jwt-secret'),
-  INTERNAL_SERVICE_SECRET: z.string().default('dev-internal-service-secret'),
-  API_INSTANCE_ID: z.string().optional(),
-  API_INTERNAL_BASE_URL: z.string().optional(),
-  INTERNAL_API_BASE_URL: z.string().optional(),
-  API_BASE_URL: z.string().optional(),
 
+  // Apps / OAuth
   GITHUB_TOKEN: z.string().optional(),
   GITHUB_CLIENT_ID: z.string().optional(),
   GITHUB_CLIENT_SECRET: z.string().optional(),
@@ -53,7 +65,6 @@ const envSchema = z.object({
   GOOGLE_CLIENT_ID: z.string().optional(),
   GOOGLE_CLIENT_SECRET: z.string().optional(),
   GOOGLE_APP_REDIRECT_URI_BASE: z.string().optional(),
-  WEB_BASE_URL: z.string().default('http://localhost:3000'),
   APP_CREDENTIALS_SECRET: z.string().default('dev-app-credentials-secret'),
 });
 
