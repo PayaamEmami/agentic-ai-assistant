@@ -38,59 +38,6 @@ Provider apps connect once per external provider and expose separate internal ca
 - **Knowledge** — Used for sync, indexing, and retrieval, such as using docs or repository context for RAG
 - **Tools** — Used for live tool access and side-effectful operations, such as editing docs in Google Drive or making code changes in a GitHub repository
 
-## Technology Stack
-
-| Layer          | Technology                                          |
-| -------------- | --------------------------------------------------- |
-| Frontend       | Next.js 15, React 19, TypeScript, Tailwind CSS      |
-| Backend        | Node.js, TypeScript, Fastify 5                      |
-| Database       | PostgreSQL 16 with pgvector                         |
-| Cache/Queue    | Redis 7, BullMQ                                     |
-| Storage        | PostgreSQL attachments, AWS S3 for deployment assets |
-| AI             | Model provider gateway, embeddings, realtime voice  |
-| Tools          | Native tool handlers, provider tools                |
-| Infrastructure | AWS EC2, Docker Compose, Caddy, optional CloudFront |
-| Monorepo       | pnpm workspaces                                     |
-
-## Infrastructure
-
-Production runs on AWS with a containerized web, API, worker, Postgres, and Redis stack:
-
-- **EC2 + Docker Compose** run the application containers and stateful services
-- **Postgres with pgvector** stores app data, attachments, memory, and embeddings
-- **Redis + BullMQ** handle background jobs and queues
-- **S3** stores deployment artifacts
-- **Caddy** reverse-proxies web and API traffic; custom-domain Caddy TLS or CloudFront can provide public HTTPS
-- **GitHub Actions** runs CI and deploys changes from `main`
-
-See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, and rollback details.
-
-## Repository Structure
-
-```
-├── apps/
-│   ├── web/                  # Next.js frontend (App Router, React, Tailwind)
-│   ├── api/                  # Fastify backend (REST + WebSocket)
-│   └── worker/               # Background job processor (BullMQ)
-├── packages/
-│   ├── shared/               # Domain types, DTOs, event schemas, enums
-│   ├── ai/                   # Model gateway, prompts, agent orchestration
-│   ├── tool-providers/       # Native tool providers used by tool execution
-│   ├── retrieval/            # Chunking, embeddings, indexing, search
-│   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
-│   ├── memory/               # Preferences, personalization, memory
-│   ├── db/                   # Database schema, migrations, repositories
-│   ├── config/               # Environment parsing, constants
-│   └── observability/        # Logging, tracing, metrics, sanitization
-├── infra/
-│   └── aws-ec2/              # EC2 provisioning script and cloud-init user-data
-├── docker/                   # Dockerfiles and docker-compose for local dev and prod
-├── .github/workflows/        # CI and CD GitHub Actions pipelines
-├── .env.example              # Environment variable template
-├── pnpm-workspace.yaml       # pnpm workspace definition
-└── tsconfig.base.json        # Shared TypeScript configuration
-```
-
 ## Local Development Setup
 
 ### Prerequisites
@@ -143,4 +90,4 @@ That command handles the local startup flow for you.
 
 ## License
 
-See [LICENSE](./LICENSE).
+This project is licensed under the [GNU General Public License v3.0](LICENSE).

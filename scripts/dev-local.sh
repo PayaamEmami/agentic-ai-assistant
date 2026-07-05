@@ -57,8 +57,54 @@ wait_for_postgres() {
   return 1
 }
 
+is_windows() {
+  case "$(uname -s)" in
+    CYGWIN* | MINGW* | MSYS*) return 0 ;;
+  esac
+
+  [[ "${OS:-}" == Windows_NT ]]
+}
+
+start_docker_desktop_cli() {
+  if ! docker desktop start >/dev/null 2>&1; then
+    return 1
+  fi
+
+  echo "Docker daemon is not running. Starting Docker Desktop..."
+  return 0
+}
+
+start_docker_desktop_windows() {
+  if ! is_windows; then
+    return 1
+  fi
+
+  if ! command -v powershell.exe >/dev/null 2>&1; then
+    return 1
+  fi
+
+  echo "Docker daemon is not running. Starting Docker Desktop..."
+  powershell.exe -NoProfile -Command '
+    $candidates = @(
+      (Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"),
+      (Join-Path $env:LOCALAPPDATA "Docker\Docker Desktop.exe")
+    )
+    foreach ($candidate in $candidates) {
+      if (Test-Path $candidate) {
+        Start-Process $candidate
+        exit 0
+      }
+    }
+    exit 1
+  ' >/dev/null 2>&1
+}
+
 start_docker_engine() {
   if docker info >/dev/null 2>&1; then
+    return 0
+  fi
+
+  if start_docker_desktop_cli; then
     return 0
   fi
 
@@ -82,6 +128,10 @@ start_docker_engine() {
     fi
   fi
 
+  if start_docker_desktop_windows; then
+    return 0
+  fi
+
   return 1
 }
 
@@ -94,9 +144,13 @@ Docker engine must already be running before this command can succeed.
 
 `pnpm dev:local` will try to start a supported local Docker runtime first, but
 if that doesn't work you can start one of the following yourself and re-run it:
-- Docker Desktop
+- Docker Desktop (`docker desktop start` on Windows/macOS when available)
 - OrbStack
 - Colima (`colima start`)
+
+On Windows, the script also tries to launch Docker Desktop via PowerShell when
+the CLI start command is unavailable. Docker Desktop can take a minute to become
+ready; increase `DOCKER_START_TIMEOUT_SECONDS` if needed.
 EOF
 }
 
@@ -111,8 +165,15 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 if ! docker info >/dev/null 2>&1; then
-  if start_docker_engine && wait_for_docker "$DOCKER_START_TIMEOUT_SECONDS"; then
-    echo "Docker daemon is ready."
+  if start_docker_engine; then
+    echo "Waiting for Docker daemon (up to ${DOCKER_START_TIMEOUT_SECONDS}s)..."
+    if wait_for_docker "$DOCKER_START_TIMEOUT_SECONDS"; then
+      echo "Docker daemon is ready."
+    else
+      echo "Docker did not become ready within ${DOCKER_START_TIMEOUT_SECONDS}s."
+      print_docker_help
+      exit 1
+    fi
   else
     print_docker_help
     exit 1

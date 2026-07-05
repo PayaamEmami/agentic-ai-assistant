@@ -42,8 +42,11 @@ export function Message({ role, content, presentation }: MessageProps) {
     (block): block is Extract<MessageContentBlock, { type: 'status' }> => block.type === 'status',
   );
   const primaryContent = visibleContent.filter((block) => block.type !== 'status');
-  const hasRenderedText = primaryContent.some(
-    (block) => block.type === 'text' && block.text.trim().length > 0,
+  const hasRenderableText = (block: MessageContentBlock) =>
+    block.type === 'text' && block.text.trim().length > 0;
+  const hasRenderedText = primaryContent.some(hasRenderableText);
+  const renderablePrimaryContent = primaryContent.filter(
+    (block) => block.type !== 'text' || block.text.trim().length > 0,
   );
   const citations = content.filter(
     (block): block is CitationContentBlock => block.type === 'citation',
@@ -94,8 +97,8 @@ export function Message({ role, content, presentation }: MessageProps) {
             hasRenderedText={hasRenderedText}
           />
         ) : null}
-        {primaryContent.length > 0 ? (
-          primaryContent.map((block, index) => {
+        {renderablePrimaryContent.length > 0 ? (
+          renderablePrimaryContent.map((block, index) => {
             const renderedBlock = renderContentBlock(block, index);
 
             if (!shouldAnimateAssistantOutput || block.type === 'text') {

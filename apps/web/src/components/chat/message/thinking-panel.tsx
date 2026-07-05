@@ -49,9 +49,9 @@ export function ThinkingPanel({
           <span>{label}</span>
         </div>
         {hasSegments ? (
-          <div className="space-y-1.5 text-xs leading-relaxed text-foreground-muted/80">
+          <div className="space-y-1.5 text-xs leading-normal text-foreground-muted/80">
             {segments.map((segment, index) => (
-              <p key={`${segment.stage}-${index}`} className="whitespace-pre-wrap">
+              <p key={`${segment.stage}-${index}`} className="m-0 whitespace-pre-wrap">
                 {segment.text}
               </p>
             ))}
@@ -77,7 +77,7 @@ export function ThinkingPanel({
         Thoughts
       </button>
       {expanded ? (
-        <div className="space-y-2 border-b border-border-subtle pb-2">
+        <div className="space-y-2 border-t border-border-subtle/80 px-0 pt-2">
           {segments.map((segment, index) => (
             <div key={`${segment.stage}-${index}`} className="space-y-1">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-foreground-muted/80">

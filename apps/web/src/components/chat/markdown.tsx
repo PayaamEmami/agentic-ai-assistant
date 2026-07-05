@@ -89,6 +89,10 @@ const markdownComponents: Components = {
 };
 
 function MarkdownImpl({ children }: { children: string }) {
+  if (!children.trim()) {
+    return null;
+  }
+
   return (
     <div className="min-w-0 space-y-2 break-words">
       <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>

@@ -55,7 +55,7 @@ export function createStreamingAssistantMessage(messageId: string): ChatMessage 
   return {
     id: messageId,
     role: 'assistant',
-    content: [{ type: 'text', text: '' }],
+    content: [],
     createdAt: new Date().toISOString(),
     presentation: { streaming: true },
   };

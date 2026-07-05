@@ -6,31 +6,58 @@ This file orients AI coding agents and human readers to this repository. It expl
 
 Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a Next.js web app, Fastify API, and BullMQ worker. Shared TypeScript packages handle orchestration, retrieval, tools, database access, and observability on top of PostgreSQL and Redis.
 
-## Repo Shape
+## Technology Stack
 
-Main apps:
+| Layer          | Technology                                          |
+| -------------- | --------------------------------------------------- |
+| Frontend       | Next.js 15, React 19, TypeScript, Tailwind CSS      |
+| Backend        | Node.js, TypeScript, Fastify 5                      |
+| Database       | PostgreSQL 16 with pgvector                         |
+| Cache/Queue    | Redis 7, BullMQ                                     |
+| Storage        | PostgreSQL attachments, AWS S3 for deployment assets |
+| AI             | Model provider gateway, embeddings, realtime voice  |
+| Tools          | Native tool handlers, provider tools                |
+| Infrastructure | AWS EC2, Docker Compose, Caddy, optional CloudFront |
+| Monorepo       | pnpm workspaces                                     |
 
-- `apps/web`: UI, routes, chat and voice client flows
-- `apps/api`: HTTP endpoints, auth, uploads, WebSocket flows
-- `apps/worker`: queues, background jobs, async processing
+## Infrastructure
 
-Shared packages:
+Production runs on AWS with a containerized web, API, worker, Postgres, and Redis stack:
 
-- `packages/shared`: shared types, DTOs, schemas, enums
-- `packages/ai`: prompts, model gateway, orchestration logic
-- `packages/tool-providers`: native tool provider implementations
-- `packages/retrieval`: chunking, embeddings, indexing, search
-- `packages/knowledge-sources`: external source integrations and credential helpers
-- `packages/memory`: personalization and memory logic
-- `packages/db`: schema, migrations, repositories
-- `packages/config`: environment parsing and constants
-- `packages/observability`: logging, tracing, metrics, sanitization
+- **EC2 + Docker Compose** run the application containers and stateful services
+- **Postgres with pgvector** stores app data, attachments, memory, and embeddings
+- **Redis + BullMQ** handle background jobs and queues
+- **S3** stores deployment artifacts
+- **Caddy** reverse-proxies web and API traffic; custom-domain Caddy TLS or CloudFront can provide public HTTPS
+- **GitHub Actions** runs CI and deploys changes from `main`
 
-Useful infrastructure folders:
+See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, and rollback details.
 
-- `docker/`: local and production Docker assets
-- `scripts/`: local startup and AWS helper scripts
-- `.github/workflows/`: CI and CD definitions
+## Repository Structure
+
+```
+├── apps/
+│   ├── web/                  # Next.js frontend (App Router, React, Tailwind)
+│   ├── api/                  # Fastify backend (REST + WebSocket)
+│   └── worker/               # Background job processor (BullMQ)
+├── packages/
+│   ├── shared/               # Domain types, DTOs, event schemas, enums
+│   ├── ai/                   # Model gateway, prompts, agent orchestration
+│   ├── tool-providers/       # Native tool providers used by tool execution
+│   ├── retrieval/            # Chunking, embeddings, indexing, search
+│   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
+│   ├── memory/               # Preferences, personalization, memory
+│   ├── db/                   # Database schema, migrations, repositories
+│   ├── config/               # Environment parsing, constants
+│   └── observability/        # Logging, tracing, metrics, sanitization
+├── infra/
+│   └── aws-ec2/              # EC2 provisioning script and cloud-init user-data
+├── docker/                   # Dockerfiles and docker-compose for local dev and prod
+├── .github/workflows/        # CI and CD GitHub Actions pipelines
+├── .env.example              # Environment variable template
+├── pnpm-workspace.yaml       # pnpm workspace definition
+└── tsconfig.base.json        # Shared TypeScript configuration
+```
 
 ## Change Routing Guide
 
@@ -66,6 +93,7 @@ Windows note:
 
 - `pnpm dev:local` runs `bash ./scripts/dev-local.sh`
 - Use WSL or Git Bash for that workflow
+- If Docker Desktop is closed, the script tries `docker desktop start` and then a PowerShell launch fallback before waiting for the daemon
 
 Useful local URLs:
 
@@ -166,12 +194,13 @@ See `.env.example` for the full template.
 
 - Production uses Docker-based deployment from `.github/workflows/cd.yml`
 - CI validation lives in `.github/workflows/ci.yml`
-- Use `README.md` for deeper deploy and infrastructure details
+- See the Infrastructure section above and [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for deploy and rollback details
 
 ## Maintenance
 
 Coding agents should update this file as part of the same change whenever any of the following become stale:
 
+- Technology stack or infrastructure layout
 - Repo shape or package ownership
 - Local startup workflow
 - Required environment variables
