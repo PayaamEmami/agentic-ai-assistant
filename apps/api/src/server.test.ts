@@ -7,21 +7,13 @@ import { AppError } from './lib/errors.js';
 
 type TestServer = Awaited<ReturnType<typeof buildServer>>;
 
-const { local } = vi.hoisted(() => ({
-  local: (relativePath: string) =>
-    new URL(relativePath, import.meta.url).pathname.replace(
-      /^\/(\w):/,
-      (_match, drive: string) => `${drive.toLowerCase()}:`,
-    ),
-}));
-
 const TEST_USER = {
   id: '11111111-1111-4111-8111-111111111111',
   email: 'test@example.com',
   displayName: 'Test User',
 };
 
-vi.mock(local('./middleware/auth.ts'), () => ({
+vi.mock('./middleware/auth.js', () => ({
   authenticate: async (request: FastifyRequest): Promise<void> => {
     const header = request.headers.authorization;
     const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : null;
@@ -50,6 +42,9 @@ function testConfig(): AppConfig {
     openaiEmbeddingModel: 'embedding-test',
     openaiRealtimeModel: 'realtime-test',
     openaiRealtimeVoice: 'alloy',
+    openaiTranscriptionModel: 'transcribe-test',
+    openaiTtsModel: 'tts-test',
+    openaiTtsVoice: 'alloy',
     jwtSecret: 'test-secret',
     internalServiceSecret: 'internal-secret',
     apiInstanceId: 'api-test',

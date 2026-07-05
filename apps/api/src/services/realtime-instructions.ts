@@ -125,6 +125,7 @@ export function buildRealtimeInstructions(
 export function buildRealtimeSessionConfig(
   model: string,
   voice: string,
+  transcriptionModel: string,
   instructions: string,
   tools: AvailableTool[],
 ): Record<string, unknown> {
@@ -141,7 +142,7 @@ export function buildRealtimeSessionConfig(
           type: 'near_field',
         },
         transcription: {
-          model: 'gpt-4o-mini-transcribe',
+          model: transcriptionModel,
         },
         turn_detection: {
           type: 'server_vad',

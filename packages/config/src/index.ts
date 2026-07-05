@@ -27,7 +27,15 @@ export {
   buildApiInternalBaseUrl,
   loadApiConfig,
   loadWorkerConfig,
+  openAIProviderModelConfigFromApiConfig,
+  openAIProviderModelConfigFromEnv,
+  openAIProviderModelConfigFromWorkerConfig,
   parseOptionalBooleanFlag,
   parseRedisUrl,
 } from './runtime.js';
-export type { ApiConfig, RedisConnectionConfig, WorkerConfig } from './runtime.js';
+export type {
+  ApiConfig,
+  OpenAIProviderModelConfig,
+  RedisConnectionConfig,
+  WorkerConfig,
+} from './runtime.js';

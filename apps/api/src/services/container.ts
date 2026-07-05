@@ -1,4 +1,5 @@
 import { OpenAIProvider } from '@aaa/ai';
+import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import type { AppConfig } from '../config.js';
 import { ApprovalService } from './approval-service.js';
 import { AppService } from './app-service.js';
@@ -22,8 +23,7 @@ export interface ApiServices {
 export function buildApiServices(config: AppConfig): ApiServices {
   const modelProvider = new OpenAIProvider(
     config.openaiApiKey,
-    config.openaiModel,
-    config.openaiEmbeddingModel,
+    openAIProviderModelConfigFromApiConfig(config),
   );
   const personalizationService = new PersonalizationService();
   const retrievalBridge = new RetrievalBridge(config, modelProvider, {

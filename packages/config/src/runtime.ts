@@ -1,11 +1,19 @@
 import { randomUUID } from 'node:crypto';
-import type { Env, InternalServiceEnv } from './env.js';
+import type { Env, InternalServiceEnv, OpenAiEnv } from './env.js';
 import { loadEnv } from './env.js';
 
 export interface RedisConnectionConfig {
   host: string;
   port: number;
   password?: string;
+}
+
+export interface OpenAIProviderModelConfig {
+  model: string;
+  embeddingModel: string;
+  transcriptionModel: string;
+  ttsModel: string;
+  ttsVoice: string;
 }
 
 export interface ApiConfig {
@@ -22,6 +30,9 @@ export interface ApiConfig {
   openaiEmbeddingModel: string;
   openaiRealtimeModel: string;
   openaiRealtimeVoice: string;
+  openaiTranscriptionModel: string;
+  openaiTtsModel: string;
+  openaiTtsVoice: string;
   jwtSecret: string;
   internalServiceSecret: string;
   apiInstanceId: string;
@@ -56,6 +67,9 @@ export interface WorkerConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
+  openaiTranscriptionModel: string;
+  openaiTtsModel: string;
+  openaiTtsVoice: string;
   internalServiceSecret: string;
   apiInternalBaseUrl: string;
   workerObservabilityHost: string;
@@ -115,6 +129,9 @@ export function loadApiConfig(): ApiConfig {
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
     openaiRealtimeModel: env.OPENAI_REALTIME_MODEL,
     openaiRealtimeVoice: env.OPENAI_REALTIME_VOICE,
+    openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    openaiTtsModel: env.OPENAI_TTS_MODEL,
+    openaiTtsVoice: env.OPENAI_TTS_VOICE,
     jwtSecret: env.JWT_SECRET,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInstanceId: buildApiInstanceId(env),
@@ -152,6 +169,9 @@ export function loadWorkerConfig(): WorkerConfig {
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
+    openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    openaiTtsModel: env.OPENAI_TTS_MODEL,
+    openaiTtsVoice: env.OPENAI_TTS_VOICE,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInternalBaseUrl: buildApiInternalBaseUrl(env),
     workerObservabilityHost: env.WORKER_OBSERVABILITY_HOST,
@@ -161,5 +181,47 @@ export function loadWorkerConfig(): WorkerConfig {
     otlpEndpoint: env.OTEL_EXPORTER_OTLP_ENDPOINT,
     otelServiceNamespace: env.OTEL_SERVICE_NAMESPACE,
     otelResourceAttributes: env.OTEL_RESOURCE_ATTRIBUTES,
+  };
+}
+
+export function openAIProviderModelConfigFromApiConfig(
+  config: Pick<
+    ApiConfig,
+    | 'openaiModel'
+    | 'openaiEmbeddingModel'
+    | 'openaiTranscriptionModel'
+    | 'openaiTtsModel'
+    | 'openaiTtsVoice'
+  >,
+): OpenAIProviderModelConfig {
+  return {
+    model: config.openaiModel,
+    embeddingModel: config.openaiEmbeddingModel,
+    transcriptionModel: config.openaiTranscriptionModel,
+    ttsModel: config.openaiTtsModel,
+    ttsVoice: config.openaiTtsVoice,
+  };
+}
+
+export function openAIProviderModelConfigFromWorkerConfig(
+  config: Pick<
+    WorkerConfig,
+    | 'openaiModel'
+    | 'openaiEmbeddingModel'
+    | 'openaiTranscriptionModel'
+    | 'openaiTtsModel'
+    | 'openaiTtsVoice'
+  >,
+): OpenAIProviderModelConfig {
+  return openAIProviderModelConfigFromApiConfig(config);
+}
+
+export function openAIProviderModelConfigFromEnv(env: OpenAiEnv): OpenAIProviderModelConfig {
+  return {
+    model: env.OPENAI_MODEL,
+    embeddingModel: env.OPENAI_EMBEDDING_MODEL,
+    transcriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    ttsModel: env.OPENAI_TTS_MODEL,
+    ttsVoice: env.OPENAI_TTS_VOICE,
   };
 }

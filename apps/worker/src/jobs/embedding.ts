@@ -1,6 +1,6 @@
 import type { Job } from 'bullmq';
 import { OpenAIProvider } from '@aaa/ai';
-import { loadWorkerConfig } from '@aaa/config';
+import { loadWorkerConfig, openAIProviderModelConfigFromWorkerConfig } from '@aaa/config';
 import { chunkRepository, embeddingRepository } from '@aaa/db';
 import type { EmbeddingJobData } from '@aaa/shared';
 import { logger } from '../lib/logger.js';
@@ -38,8 +38,7 @@ export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void>
   const config = loadWorkerConfig();
   const provider = new OpenAIProvider(
     config.openaiApiKey,
-    config.openaiModel,
-    config.openaiEmbeddingModel,
+    openAIProviderModelConfigFromWorkerConfig(config),
   );
   const result = await provider.embed({
     input: chunks.map((chunk) => chunk.content),

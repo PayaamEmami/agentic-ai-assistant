@@ -7,6 +7,7 @@ import {
   ToolAgent,
   VerifierAgent,
 } from '@aaa/ai';
+import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   attachmentRepository,
   appCapabilityConfigRepository,
@@ -157,8 +158,7 @@ export class ChatService {
       options.modelProvider ??
       new OpenAIProvider(
         config.openaiApiKey,
-        config.openaiModel,
-        config.openaiEmbeddingModel,
+        openAIProviderModelConfigFromApiConfig(config),
       );
     const model = config.openaiModel;
     this.agentOrchestrator =

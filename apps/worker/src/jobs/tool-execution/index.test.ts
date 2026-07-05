@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { finalizeToolExecution } from './index.js';
 
-const { mocks, local } = vi.hoisted(() => ({
-  local: (relativePath: string) =>
-    new URL(relativePath, import.meta.url).pathname.replace(
-      /^\/(\w):/,
-      (_match, drive: string) => `${drive.toLowerCase()}:`,
-    ),
+const { mocks } = vi.hoisted(() => ({
   mocks: {
     updateStatus: vi.fn(),
     publishToolEvent: vi.fn(),
@@ -27,16 +22,16 @@ vi.mock('@aaa/db', () => ({
   },
 }));
 
-vi.mock(local('./events.ts'), () => ({
+vi.mock('./events.js', () => ({
   publishToolEvent: mocks.publishToolEvent,
   updateInlineToolResult: mocks.updateInlineToolResult,
 }));
 
-vi.mock(local('../../lib/chat-continuation-queue.ts'), () => ({
+vi.mock('../../lib/chat-continuation-queue.js', () => ({
   enqueueChatContinuationJob: mocks.enqueueChatContinuationJob,
 }));
 
-vi.mock(local('../../lib/logger.ts'), () => ({
+vi.mock('../../lib/logger.js', () => ({
   logger: {
     info: mocks.loggerInfo,
     warn: mocks.loggerWarn,

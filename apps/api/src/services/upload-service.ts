@@ -1,5 +1,6 @@
 import type { MultipartFile } from '@fastify/multipart';
 import { OpenAIProvider } from '@aaa/ai';
+import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   attachmentRepository,
   chunkRepository,
@@ -99,8 +100,7 @@ export class UploadService {
       modelProvider ??
       new OpenAIProvider(
         config.openaiApiKey,
-        config.openaiModel,
-        config.openaiEmbeddingModel,
+        openAIProviderModelConfigFromApiConfig(config),
       );
     this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { OpenAIProvider } from '@aaa/ai';
-import { loadOpenAiEnv } from '@aaa/config';
+import { loadOpenAiEnv, openAIProviderModelConfigFromEnv } from '@aaa/config';
 import type { ToolProgressEvent } from '@aaa/shared';
 import { GitHubToolProvider } from './github-tool-provider.js';
 
@@ -56,12 +56,13 @@ export class CodingTaskRunner {
     model?: string;
   }) {
     const env = loadOpenAiEnv();
+    const modelDefaults = openAIProviderModelConfigFromEnv(env);
     this.githubToken = input.githubToken;
     this.github = new GitHubToolProvider(input.githubToken);
-    this.modelProvider = new OpenAIProvider(
-      env.OPENAI_API_KEY,
-      input.model ?? env.OPENAI_MODEL,
-    );
+    this.modelProvider = new OpenAIProvider(env.OPENAI_API_KEY, {
+      ...modelDefaults,
+      model: input.model ?? modelDefaults.model,
+    });
     this.progress = input.progress;
     this.toolExecutionId = input.toolExecutionId;
   }

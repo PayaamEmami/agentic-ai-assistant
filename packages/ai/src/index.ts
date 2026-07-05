@@ -17,6 +17,7 @@ export type {
 } from './types.js';
 
 export type { ModelProvider } from './model-provider.js';
+export type { OpenAIProviderModelConfig } from './openai-provider.js';
 
 export { OpenAIProvider } from './openai-provider.js';
 

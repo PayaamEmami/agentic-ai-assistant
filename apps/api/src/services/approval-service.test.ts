@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApprovalService } from './approval-service.js';
 
-const { mocks, local } = vi.hoisted(() => ({
-  local: (relativePath: string) =>
-    new URL(relativePath, import.meta.url).pathname.replace(
-      /^\/(\w):/,
-      (_match, drive: string) => `${drive.toLowerCase()}:`,
-    ),
+const { mocks } = vi.hoisted(() => ({
   mocks: {
     findApprovalById: vi.fn(),
     decideApproval: vi.fn(),
@@ -40,11 +35,11 @@ vi.mock('@aaa/observability', () => ({
   }),
 }));
 
-vi.mock(local('./tool-execution-queue.ts'), () => ({
+vi.mock('./tool-execution-queue.js', () => ({
   enqueueToolExecutionJob: mocks.enqueueToolExecutionJob,
 }));
 
-vi.mock(local('../ws/connections.ts'), () => ({
+vi.mock('../ws/connections.js', () => ({
   broadcast: mocks.broadcast,
 }));
 

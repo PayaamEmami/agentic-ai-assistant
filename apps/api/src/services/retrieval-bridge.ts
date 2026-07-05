@@ -1,4 +1,5 @@
 import { OpenAIProvider } from '@aaa/ai';
+import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   chunkRepository,
   documentRepository,
@@ -191,7 +192,10 @@ export class RetrievalBridge {
   ) {
     this.modelProvider =
       modelProvider ??
-      new OpenAIProvider(config.openaiApiKey, config.openaiModel, config.openaiEmbeddingModel);
+      new OpenAIProvider(
+        config.openaiApiKey,
+        openAIProviderModelConfigFromApiConfig(config),
+      );
     this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }
 

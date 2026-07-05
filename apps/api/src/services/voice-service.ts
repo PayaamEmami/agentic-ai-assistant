@@ -194,8 +194,15 @@ export class VoiceService {
     ]);
     const model = this.config.openaiRealtimeModel;
     const voice = this.config.openaiRealtimeVoice;
+    const transcriptionModel = this.config.openaiTranscriptionModel;
     const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
-    const sessionConfig = buildRealtimeSessionConfig(model, voice, instructions, availableTools);
+    const sessionConfig = buildRealtimeSessionConfig(
+      model,
+      voice,
+      transcriptionModel,
+      instructions,
+      availableTools,
+    );
     const formData = new FormData();
     formData.set('sdp', sdp);
     formData.set('session', JSON.stringify(sessionConfig));
@@ -236,6 +243,7 @@ export class VoiceService {
           sessionConfigSummary: {
             model,
             voice,
+            transcriptionModel,
             instructionsLength: instructions.length,
             toolCount: availableTools.length,
             toolNames: availableTools.slice(0, 20).map((tool) => tool.name),

@@ -163,27 +163,6 @@ Build everything:
 pnpm build
 ```
 
-## Environment Notes
-
-Common local requirements:
-
-- `DATABASE_URL`
-- `REDIS_URL`
-- `OPENAI_API_KEY`
-- `JWT_SECRET`
-- `APP_CREDENTIALS_SECRET`
-
-Sometimes needed depending on the feature area:
-
-- `LOCAL_POSTGRES_PORT` when `5432` is already in use
-- `LOCAL_REDIS_PORT` when `6379` is already in use
-- GitHub OAuth values
-- Google OAuth values
-- S3 or MinIO settings
-- `LOG_FORMAT`
-
-See `.env.example` for the full template.
-
 ## Logging Notes
 
 - Local logs may be written under `.logs/`

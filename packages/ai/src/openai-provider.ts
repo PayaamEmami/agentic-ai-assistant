@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import type { OpenAIProviderModelConfig } from '@aaa/config';
 import { estimateOpenAiCost, withSpan } from '@aaa/observability';
 import type { ModelProvider } from './model-provider.js';
 import {
@@ -22,19 +23,19 @@ import type {
   SpeechResponse,
 } from './types.js';
 
+export type { OpenAIProviderModelConfig };
+
 export class OpenAIProvider implements ModelProvider {
   private client: OpenAI;
-  private defaultModel: string;
-  private defaultEmbeddingModel: string;
+  private readonly defaults: OpenAIProviderModelConfig;
 
-  constructor(apiKey: string, model?: string, embeddingModel?: string) {
+  constructor(apiKey: string, defaults: OpenAIProviderModelConfig) {
     this.client = new OpenAI({ apiKey });
-    this.defaultModel = model ?? 'gpt-5-mini';
-    this.defaultEmbeddingModel = embeddingModel ?? 'text-embedding-3-small';
+    this.defaults = defaults;
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    const model = request.model ?? this.defaultModel;
+    const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('chat_complete', model);
     const preparedTools = prepareTools(request.tools);
     try {
@@ -96,7 +97,7 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
-    const model = request.model ?? this.defaultModel;
+    const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('chat_stream', model);
     const preparedTools = prepareTools(request.tools);
     try {
@@ -200,7 +201,7 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async embed(request: EmbeddingRequest): Promise<EmbeddingResponse> {
-    const model = request.model ?? this.defaultEmbeddingModel;
+    const model = request.model ?? this.defaults.embeddingModel;
     const telemetry = new OpenAiCallTelemetry('embedding', model);
     try {
       const result = await withSpan(
@@ -248,7 +249,7 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse> {
-    const model = request.model ?? 'gpt-4o-mini-transcribe';
+    const model = request.model ?? this.defaults.transcriptionModel;
     const telemetry = new OpenAiCallTelemetry('transcription', model);
     const file = new File([request.audio], request.fileName, {
       type: request.mimeType,
@@ -284,7 +285,7 @@ export class OpenAIProvider implements ModelProvider {
 
   async synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse> {
     const format = request.format ?? 'mp3';
-    const model = request.model ?? 'gpt-4o-mini-tts';
+    const model = request.model ?? this.defaults.ttsModel;
     const telemetry = new OpenAiCallTelemetry('speech', model);
     try {
       const response = await withSpan(
@@ -296,7 +297,7 @@ export class OpenAIProvider implements ModelProvider {
         () =>
           this.client.audio.speech.create({
             model,
-            voice: request.voice ?? 'marin',
+            voice: request.voice ?? this.defaults.ttsVoice,
             input: request.input,
             response_format: format,
           }),
@@ -308,7 +309,7 @@ export class OpenAIProvider implements ModelProvider {
       };
 
       telemetry.success('openai.tts.completed', 'OpenAI speech synthesis finished', {
-        voice: request.voice ?? 'marin',
+        voice: request.voice ?? this.defaults.ttsVoice,
         audioBytes: result.audio.byteLength,
       });
 
