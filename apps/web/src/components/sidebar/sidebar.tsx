@@ -229,7 +229,7 @@ export function Sidebar({
                     </button>
                   </form>
                 ) : (
-                  <div className="group relative flex items-center gap-2">
+                  <div className="group relative flex min-w-0 items-center">
                     <button
                       onClick={() => void openChat(conversation.id)}
                       onPointerDown={(event) => {
@@ -249,17 +249,16 @@ export function Sidebar({
                         event.preventDefault();
                         setMobileActionMenuConversationId(conversation.id);
                       }}
-                      className="min-w-0 flex-1 touch-manipulation select-none text-left"
+                      className="min-w-0 flex-1 touch-manipulation select-none pr-10 text-left md:pr-0 md:transition-[padding] md:group-hover:pr-[4.25rem] md:group-focus-within:pr-[4.25rem]"
                       disabled={isPending}
                     >
                       <p className="truncate">{label}</p>
                     </button>
-                    <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+                    <div className="pointer-events-none absolute right-0 flex items-center gap-0.5 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100 max-md:hidden">
                       <IconButton
                         size="sm"
                         onClick={() => startEditing(conversation.id, conversation.title)}
                         disabled={isPending}
-                        className="h-auto w-auto rounded p-1 hover:bg-surface"
                         title="Rename conversation"
                         aria-label="Rename conversation"
                       >
@@ -267,10 +266,9 @@ export function Sidebar({
                       </IconButton>
                       <IconButton
                         size="sm"
-                        variant="danger"
                         onClick={() => void handleDelete(conversation.id, conversation.title)}
                         disabled={isPending}
-                        className="h-auto w-auto rounded p-1 hover:bg-surface"
+                        className="hover:text-error"
                         title="Delete conversation"
                         aria-label="Delete conversation"
                       >
@@ -285,7 +283,7 @@ export function Sidebar({
                         )
                       }
                       disabled={isPending}
-                      className="h-auto w-auto rounded p-1 hover:bg-surface md:hidden"
+                      className="shrink-0 md:hidden"
                       title="Conversation actions"
                       aria-label="Conversation actions"
                     >
