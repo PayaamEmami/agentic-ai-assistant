@@ -5,7 +5,7 @@ import {
   UpdatePersonalizationProfileRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { PersonalizationService } from '../services/personalization-service.js';
+import { PersonalizationService } from '../services/personalization/index.js';
 
 function toProfileResponse(profile: {
   writingStyle: string | null;

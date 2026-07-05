@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { ApprovalDecisionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { ApprovalService } from '../services/approval-service.js';
+import { ApprovalService } from '../services/approval/index.js';
 
 interface ApprovalRouteOptions {
   approvalService?: ApprovalService;

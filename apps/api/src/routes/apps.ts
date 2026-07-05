@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { getLogger } from '@aaa/observability';
 import { AppKindDto, GitHubRepoSelectionRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { AppService } from '../services/app-service.js';
+import { AppService } from '../services/app/index.js';
 
 interface OAuthCallbackQuery {
   code?: string;

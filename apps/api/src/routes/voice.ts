@@ -9,7 +9,7 @@ import {
   VoiceTurnStartRequest,
 } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { VoiceService } from '../services/voice-service.js';
+import { VoiceService } from '../services/voice/index.js';
 
 interface VoiceRouteOptions {
   voiceService?: VoiceService;

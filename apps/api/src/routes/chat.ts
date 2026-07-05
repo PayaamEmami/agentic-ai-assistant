@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { SendMessageRequest, UpdateConversationRequest } from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
-import { ChatService } from '../services/chat-service.js';
+import { ChatService } from '../services/chat/index.js';
 
 interface ChatRouteOptions {
   chatService?: ChatService;

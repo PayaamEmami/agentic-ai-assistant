@@ -8,10 +8,10 @@ import { buildApiServices } from './services/container.js';
 import {
   startChatContinuationWorker,
   stopChatContinuationWorker,
-} from './services/chat-continuation-worker.js';
-import { stopToolEventRelay, startToolEventRelay } from './services/tool-event-relay.js';
-import { closeToolExecutionQueue } from './services/tool-execution-queue.js';
-import { closeAppSyncQueue } from './services/app-queue.js';
+} from './services/chat/index.js';
+import { stopToolEventRelay, startToolEventRelay } from './services/tools/index.js';
+import { closeToolExecutionQueue } from './services/tools/index.js';
+import { closeAppSyncQueue } from './services/app/index.js';
 
 async function main() {
   const config = loadConfig();

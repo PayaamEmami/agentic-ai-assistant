@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { authenticate } from '../middleware/auth.js';
-import { UploadService } from '../services/upload-service.js';
+import { UploadService } from '../services/upload/index.js';
 
 interface UploadRouteOptions {
   uploadService?: UploadService;
