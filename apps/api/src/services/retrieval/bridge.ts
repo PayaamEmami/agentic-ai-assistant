@@ -1,4 +1,4 @@
-import { OpenAIProvider } from '@aaa/ai';
+import { type EmbeddingProvider, createEmbeddingProvider } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   chunkRepository,
@@ -182,17 +182,17 @@ function truncateOnWordBoundary(content: string, maxLength: number): string {
 }
 
 export class RetrievalBridge {
-  private readonly modelProvider: OpenAIProvider | null;
+  private readonly modelProvider: EmbeddingProvider | null;
   private readonly embeddingModel: string | undefined;
 
   constructor(
     config: AppConfig,
-    modelProvider?: OpenAIProvider,
+    modelProvider?: EmbeddingProvider,
     options?: { embeddingModel?: string },
   ) {
     this.modelProvider =
       modelProvider ??
-      new OpenAIProvider(
+      createEmbeddingProvider(
         config.openaiApiKey,
         openAIProviderModelConfigFromApiConfig(config),
       );

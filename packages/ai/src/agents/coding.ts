@@ -1,4 +1,4 @@
-import type { ModelProvider } from '../model-provider.js';
+import type { ChatProvider } from '../model-provider.js';
 import { buildAgentSystemPrompt } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import {
@@ -14,7 +14,7 @@ export class CodingAgent implements Agent {
   readonly role = 'coding' as const;
 
   constructor(
-    private readonly modelProvider: ModelProvider,
+    private readonly modelProvider: ChatProvider,
     private readonly model?: string,
   ) {}
 

@@ -25,6 +25,7 @@ export interface ApiConfig {
   databaseUrl: string;
   databasePoolSize: number;
   redisUrl: string;
+  llmChatProvider: Env['LLM_CHAT_PROVIDER'];
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
@@ -64,6 +65,7 @@ export interface WorkerConfig {
   redisUrl: string;
   databaseUrl: string;
   databasePoolSize: number;
+  llmChatProvider: Env['LLM_CHAT_PROVIDER'];
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
@@ -124,6 +126,7 @@ export function loadApiConfig(): ApiConfig {
     databaseUrl: env.DATABASE_URL,
     databasePoolSize: env.DATABASE_POOL_SIZE,
     redisUrl: env.REDIS_URL,
+    llmChatProvider: env.LLM_CHAT_PROVIDER,
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
@@ -166,6 +169,7 @@ export function loadWorkerConfig(): WorkerConfig {
     redisUrl: env.REDIS_URL,
     databaseUrl: env.DATABASE_URL,
     databasePoolSize: env.DATABASE_POOL_SIZE,
+    llmChatProvider: env.LLM_CHAT_PROVIDER,
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,

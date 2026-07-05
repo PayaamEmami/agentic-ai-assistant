@@ -5,7 +5,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from '../types.js';
-import type { ModelProvider } from '../model-provider.js';
+import type { ChatProvider } from '../model-provider.js';
 import type { SystemPromptContext } from '../prompts.js';
 import type { AgentContext, AgentHistoryMessage, AgentResult, AgentToolContext } from './types.js';
 
@@ -13,10 +13,10 @@ import type { AgentContext, AgentHistoryMessage, AgentResult, AgentToolContext }
  * Runs a completion either streaming (when `onTextDelta` is provided) or in a
  * single shot. When streaming, text deltas are forwarded to `onTextDelta` as
  * they arrive and the accumulated result is returned in the same shape as
- * `ModelProvider.complete`, so callers can stay agnostic to the transport.
+ * `ChatProvider.complete`, so callers can stay agnostic to the transport.
  */
 export async function completeOrStream(
-  modelProvider: ModelProvider,
+  modelProvider: ChatProvider,
   request: CompletionRequest,
   onTextDelta?: (delta: string) => void,
 ): Promise<CompletionResponse> {

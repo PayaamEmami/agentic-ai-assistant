@@ -17,3 +17,7 @@ export interface ModelProvider {
   transcribeAudio(request: TranscriptionRequest): Promise<TranscriptionResponse>;
   synthesizeSpeech(request: SpeechRequest): Promise<SpeechResponse>;
 }
+
+export type ChatProvider = Pick<ModelProvider, 'complete' | 'streamComplete'>;
+
+export type EmbeddingProvider = Pick<ModelProvider, 'embed'>;

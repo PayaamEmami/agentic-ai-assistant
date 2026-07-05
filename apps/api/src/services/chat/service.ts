@@ -1,7 +1,8 @@
 import {
   AgentOrchestrator,
+  type ChatProvider,
   CodingAgent,
-  OpenAIProvider,
+  createChatProvider,
   OrchestratorAgent,
   ResearchAgent,
   ToolAgent,
@@ -131,7 +132,7 @@ interface SendMessageResult {
 
 export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
-  private readonly modelProvider: OpenAIProvider;
+  private readonly modelProvider: ChatProvider;
   private readonly agentOrchestrator: AgentOrchestrator;
   private readonly personalizationService: PersonalizationService;
   private readonly runRegistry: ChatRunRegistry;
@@ -141,7 +142,7 @@ export class ChatService {
   constructor(options: {
     config: AppConfig;
     retrievalBridge?: RetrievalBridge;
-    modelProvider?: OpenAIProvider;
+    modelProvider?: ChatProvider;
     agentOrchestrator?: AgentOrchestrator;
     personalizationService?: PersonalizationService;
     runRegistry?: ChatRunRegistry;
@@ -156,9 +157,10 @@ export class ChatService {
       });
     this.modelProvider =
       options.modelProvider ??
-      new OpenAIProvider(
+      createChatProvider(
         config.openaiApiKey,
         openAIProviderModelConfigFromApiConfig(config),
+        config.llmChatProvider,
       );
     const model = config.openaiModel;
     this.agentOrchestrator =

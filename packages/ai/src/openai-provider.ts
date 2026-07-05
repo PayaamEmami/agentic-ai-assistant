@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import type { OpenAIProviderModelConfig } from '@aaa/config';
-import { estimateOpenAiCost, withSpan } from '@aaa/observability';
+import { estimateModelCost, withSpan } from '@aaa/observability';
 import type { ModelProvider } from './model-provider.js';
 import {
   extractTextContent,
@@ -75,7 +75,7 @@ export class OpenAIProvider implements ModelProvider {
         },
       };
 
-      const estimatedCostUsd = estimateOpenAiCost({
+      const estimatedCostUsd = estimateModelCost({
         model,
         promptTokens: response.usage.promptTokens,
         completionTokens: response.usage.completionTokens,
@@ -178,7 +178,7 @@ export class OpenAIProvider implements ModelProvider {
         telemetry.recordTokens('prompt', usage.promptTokens);
         telemetry.recordTokens('completion', usage.completionTokens);
         telemetry.recordCost(
-          estimateOpenAiCost({
+          estimateModelCost({
             model,
             promptTokens: usage.promptTokens,
             completionTokens: usage.completionTokens,
@@ -229,7 +229,7 @@ export class OpenAIProvider implements ModelProvider {
         },
       };
 
-      const estimatedCostUsd = estimateOpenAiCost({
+      const estimatedCostUsd = estimateModelCost({
         model,
         inputTokens: response.usage.totalTokens,
       });

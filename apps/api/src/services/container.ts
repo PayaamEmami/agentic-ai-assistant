@@ -1,4 +1,4 @@
-import { OpenAIProvider } from '@aaa/ai';
+import { createChatProvider, createEmbeddingProvider } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import type { AppConfig } from '../config.js';
 import { ApprovalService } from './approval/index.js';
@@ -21,12 +21,15 @@ export interface ApiServices {
 }
 
 export function buildApiServices(config: AppConfig): ApiServices {
-  const modelProvider = new OpenAIProvider(
+  const modelConfig = openAIProviderModelConfigFromApiConfig(config);
+  const chatProvider = createChatProvider(
     config.openaiApiKey,
-    openAIProviderModelConfigFromApiConfig(config),
+    modelConfig,
+    config.llmChatProvider,
   );
+  const embeddingProvider = createEmbeddingProvider(config.openaiApiKey, modelConfig);
   const personalizationService = new PersonalizationService();
-  const retrievalBridge = new RetrievalBridge(config, modelProvider, {
+  const retrievalBridge = new RetrievalBridge(config, embeddingProvider, {
     embeddingModel: config.openaiEmbeddingModel,
   });
   const enqueueToolExecutionJob = configureToolExecutionQueue(config);
@@ -37,13 +40,13 @@ export function buildApiServices(config: AppConfig): ApiServices {
     appService: new AppService(config, { enqueueAppSyncJob }),
     chatService: new ChatService({
       config,
-      modelProvider,
+      modelProvider: chatProvider,
       personalizationService,
       retrievalBridge,
       enqueueToolExecutionJob,
     }),
     personalizationService,
-    uploadService: new UploadService(config, modelProvider, {
+    uploadService: new UploadService(config, embeddingProvider, {
       embeddingModel: config.openaiEmbeddingModel,
     }),
     voiceService: new VoiceService(config, personalizationService, retrievalBridge, {

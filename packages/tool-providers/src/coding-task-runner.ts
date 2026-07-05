@@ -3,7 +3,7 @@ import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { OpenAIProvider } from '@aaa/ai';
+import { type ChatProvider, createChatProvider } from '@aaa/ai';
 import { loadOpenAiEnv, openAIProviderModelConfigFromEnv } from '@aaa/config';
 import type { ToolProgressEvent } from '@aaa/shared';
 import { GitHubToolProvider } from './github-tool-provider.js';
@@ -43,7 +43,7 @@ export interface CodingTaskProgressReporter {
 
 export class CodingTaskRunner {
   private readonly github: GitHubToolProvider;
-  private readonly modelProvider: OpenAIProvider;
+  private readonly modelProvider: ChatProvider;
   private readonly progress: CodingTaskProgressReporter;
   private readonly toolExecutionId: string;
   private readonly githubToken: string;
@@ -59,7 +59,7 @@ export class CodingTaskRunner {
     const modelDefaults = openAIProviderModelConfigFromEnv(env);
     this.githubToken = input.githubToken;
     this.github = new GitHubToolProvider(input.githubToken);
-    this.modelProvider = new OpenAIProvider(env.OPENAI_API_KEY, {
+    this.modelProvider = createChatProvider(env.OPENAI_API_KEY, {
       ...modelDefaults,
       model: input.model ?? modelDefaults.model,
     });

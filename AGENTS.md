@@ -74,6 +74,25 @@ When deciding where a change belongs:
 - External source integrations: check `packages/knowledge-sources`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 
+## Model Providers
+
+Model access is abstracted so the chat provider can be swapped without touching agent, retrieval, or app code.
+
+- `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription, TTS). `OpenAIProvider` is the only implementation today.
+- Two narrow seams are derived from it and are what consumers depend on:
+  - `ChatProvider` = `complete` + `streamComplete` (used by all agents, the orchestrator, `ChatService`, and the coding task runner)
+  - `EmbeddingProvider` = `embed` (used by `RetrievalBridge`, `UploadService`, and the worker embedding job)
+- Construct providers through the factory in `packages/ai/src/provider-factory.ts`:
+  - `createChatProvider(apiKey, modelConfig, provider)` selects the chat provider from `LLM_CHAT_PROVIDER` (only `openai` implemented; unknown values throw).
+  - `createEmbeddingProvider(apiKey, modelConfig)` is always OpenAI.
+- To add a provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. Agents and services need no changes because they depend on the interfaces, not `OpenAIProvider`.
+
+Intentional coupling (out of scope for provider swaps):
+
+- Embeddings are pinned to OpenAI regardless of `LLM_CHAT_PROVIDER`, because the `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). Changing embedding dimensions requires a DB migration and re-embedding.
+- Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`.
+- Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
+
 ## Local Workflow
 
 Primary local entrypoint:

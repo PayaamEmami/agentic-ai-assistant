@@ -21,11 +21,9 @@ vi.mock('@aaa/db', () => ({
 }));
 
 vi.mock('@aaa/ai', () => ({
-  OpenAIProvider: vi.fn().mockImplementation(function OpenAIProvider() {
-    return {
-      embed: mocks.embed,
-    };
-  }),
+  createEmbeddingProvider: vi.fn(() => ({
+    embed: mocks.embed,
+  })),
 }));
 
 vi.mock('../lib/logger.js', () => ({

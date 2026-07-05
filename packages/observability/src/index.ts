@@ -29,7 +29,8 @@ export {
   databaseQueryDurationMs,
 } from './metrics.js';
 export { fetchWithTelemetry } from './http.js';
-export { estimateOpenAiCost } from './pricing.js';
+export { estimateModelCost, estimateOpenAiCost } from './pricing.js';
+export type { ModelUsageSample, OpenAiUsageSample } from './pricing.js';
 export {
   getActiveTraceMetadata,
   getTracer,

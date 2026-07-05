@@ -1,5 +1,5 @@
 import type { MultipartFile } from '@fastify/multipart';
-import { OpenAIProvider } from '@aaa/ai';
+import { type EmbeddingProvider, createEmbeddingProvider } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   attachmentRepository,
@@ -58,7 +58,7 @@ function extractTextContent(mimeType: string, buffer: Buffer): string | null {
 
 class UploadEmbeddingService implements EmbeddingService {
   constructor(
-    private readonly modelProvider: OpenAIProvider,
+    private readonly modelProvider: EmbeddingProvider,
     private readonly embeddingModel?: string,
   ) {}
 
@@ -92,13 +92,13 @@ class UploadEmbeddingService implements EmbeddingService {
 }
 
 export class UploadService {
-  private readonly modelProvider: OpenAIProvider;
+  private readonly modelProvider: EmbeddingProvider;
   private readonly embeddingModel: string | undefined;
 
-  constructor(config: AppConfig, modelProvider?: OpenAIProvider, options?: { embeddingModel?: string }) {
+  constructor(config: AppConfig, modelProvider?: EmbeddingProvider, options?: { embeddingModel?: string }) {
     this.modelProvider =
       modelProvider ??
-      new OpenAIProvider(
+      createEmbeddingProvider(
         config.openaiApiKey,
         openAIProviderModelConfigFromApiConfig(config),
       );

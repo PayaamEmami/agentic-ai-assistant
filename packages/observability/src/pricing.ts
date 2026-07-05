@@ -1,12 +1,15 @@
 import { loadOpenAiEnv } from '@aaa/config';
 
-export interface OpenAiUsageSample {
+export interface ModelUsageSample {
   model: string;
   promptTokens?: number;
   completionTokens?: number;
   inputTokens?: number;
   outputTokens?: number;
 }
+
+/** @deprecated Use {@link ModelUsageSample}. Kept for backward compatibility. */
+export type OpenAiUsageSample = ModelUsageSample;
 
 interface ModelPricing {
   inputPer1kUsd?: number;
@@ -22,7 +25,7 @@ const DEFAULT_PRICING: Record<string, ModelPricing> = {
 };
 
 function parseOverrides(): Record<string, ModelPricing> {
-  const raw = loadOpenAiEnv().OPENAI_PRICING_OVERRIDES_JSON;
+  const raw = loadOpenAiEnv().LLM_PRICING_OVERRIDES_JSON;
   if (!raw) {
     return {};
   }
@@ -35,7 +38,7 @@ function parseOverrides(): Record<string, ModelPricing> {
   }
 }
 
-export function estimateOpenAiCost(sample: OpenAiUsageSample): number {
+export function estimateModelCost(sample: ModelUsageSample): number {
   const pricing = {
     ...DEFAULT_PRICING,
     ...parseOverrides(),
@@ -51,3 +54,6 @@ export function estimateOpenAiCost(sample: OpenAiUsageSample): number {
   const outputUsd = (completionTokens / 1000) * (pricing.outputPer1kUsd ?? 0);
   return Number((inputUsd + outputUsd).toFixed(8));
 }
+
+/** @deprecated Use {@link estimateModelCost}. Kept for backward compatibility. */
+export const estimateOpenAiCost = estimateModelCost;

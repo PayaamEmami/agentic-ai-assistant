@@ -48,6 +48,23 @@ aws_file_uri() {
   printf 'file://%s' "${path}"
 }
 
+# Read a KEY=value assignment from the env file. The last matching line wins and
+# surrounding quotes are stripped. Returns empty if the key is absent.
+read_env_value() {
+  local key="$1"
+  local file="$2"
+  [[ -f "${file}" ]] || return 0
+  local line
+  line="$(grep -E "^[[:space:]]*${key}=" "${file}" | tail -n 1)" || true
+  [[ -n "${line}" ]] || return 0
+  local value="${line#*=}"
+  value="${value%$'\r'}"
+  if [[ ("${value}" == \"*\" || "${value}" == \'*\') && "${#value}" -ge 2 ]]; then
+    value="${value:1:${#value}-2}"
+  fi
+  printf '%s' "${value}"
+}
+
 instance_id="$(aws_cli ec2 describe-instances \
   --filters Name=tag:Name,Values="${INSTANCE_NAME}" Name=instance-state-name,Values=running \
   --query 'Reservations[0].Instances[0].InstanceId' \
@@ -73,8 +90,11 @@ if [[ "${public_dns}" == "None" || -z "${public_dns}" ]]; then
   exit 1
 fi
 
-public_base_url="${PUBLIC_BASE_URL:-http://${public_dns}}"
-caddy_site_address="${CADDY_SITE_ADDRESS:-:80}"
+# Precedence: shell env (used by CI) > value in the env file (used locally) > default.
+env_file_public_base_url="$(read_env_value PUBLIC_BASE_URL "${ENV_SOURCE}")"
+env_file_caddy_site_address="$(read_env_value CADDY_SITE_ADDRESS "${ENV_SOURCE}")"
+public_base_url="${PUBLIC_BASE_URL:-${env_file_public_base_url:-http://${public_dns}}}"
+caddy_site_address="${CADDY_SITE_ADDRESS:-${env_file_caddy_site_address:-:80}}"
 
 revision="$(git rev-parse --short HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
 deployment_id="${revision}-$(date -u +%Y%m%d%H%M%S)"
@@ -178,7 +198,8 @@ passthrough_keys = [
     "OPENAI_TRANSCRIPTION_MODEL",
     "OPENAI_TTS_MODEL",
     "OPENAI_TTS_VOICE",
-    "OPENAI_PRICING_OVERRIDES_JSON",
+    "LLM_CHAT_PROVIDER",
+    "LLM_PRICING_OVERRIDES_JSON",
     "JWT_SECRET",
     "INTERNAL_SERVICE_SECRET",
     "APP_CREDENTIALS_SECRET",

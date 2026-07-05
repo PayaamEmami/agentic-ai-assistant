@@ -1,5 +1,5 @@
 import type { ChatMessage } from '../types.js';
-import type { ModelProvider } from '../model-provider.js';
+import type { ChatProvider } from '../model-provider.js';
 import { buildAgentSystemPrompt, buildRetrievalAugmentedMessages } from '../prompts.js';
 import type { Agent, AgentContext, AgentResult } from './types.js';
 import { completeOrStream, toChatMessages, toSystemPromptContext } from './helpers.js';
@@ -8,7 +8,7 @@ export class ResearchAgent implements Agent {
   readonly role = 'research' as const;
 
   constructor(
-    private readonly modelProvider: ModelProvider,
+    private readonly modelProvider: ChatProvider,
     private readonly model?: string,
   ) {}
 

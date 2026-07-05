@@ -22,7 +22,7 @@ const envSchema = z.object({
   OTEL_RESOURCE_ATTRIBUTES: z.string().optional(),
   WORKER_OBSERVABILITY_HOST: z.string().default('0.0.0.0'),
   WORKER_OBSERVABILITY_PORT: z.coerce.number().default(9464),
-  OPENAI_PRICING_OVERRIDES_JSON: z.string().optional(),
+  LLM_PRICING_OVERRIDES_JSON: z.string().optional(),
 
   S3_BUCKET: z.string().default('aaa-uploads'),
   S3_REGION: z.string().default('us-west-1'),
@@ -30,6 +30,7 @@ const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().optional(),
   S3_SECRET_ACCESS_KEY: z.string().optional(),
 
+  LLM_CHAT_PROVIDER: z.enum(['openai']),
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().min(1),
   OPENAI_EMBEDDING_MODEL: z.string().min(1),
@@ -93,7 +94,7 @@ const openAiEnvSchema = envSchema.pick({
   OPENAI_TRANSCRIPTION_MODEL: true,
   OPENAI_TTS_MODEL: true,
   OPENAI_TTS_VOICE: true,
-  OPENAI_PRICING_OVERRIDES_JSON: true,
+  LLM_PRICING_OVERRIDES_JSON: true,
 });
 
 const googleOAuthEnvSchema = envSchema.pick({
