@@ -16,7 +16,7 @@ const EMPTY_CHAT_PROMPTS = [
   'What would you ask of me?',
 ];
 
-export function ChatPanel() {
+export function MessageList() {
   const { messages, loading } = useChatContext();
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [emptyChatPrompt, setEmptyChatPrompt] = useState(EMPTY_CHAT_PROMPTS[0]);

@@ -4,7 +4,7 @@ import type { MessageContentBlock } from '@/lib/chat';
 import type { ApprovalStatusByToolExecution, PendingApproval } from '@/lib/chat/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Markdown } from '../markdown';
+import { Markdown } from './markdown';
 import { WordFadeText } from './assistant-text';
 import {
   getDisplayToolStatus,

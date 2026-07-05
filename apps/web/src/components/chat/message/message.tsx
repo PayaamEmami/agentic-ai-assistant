@@ -14,9 +14,9 @@ import {
   WORD_FADE_MS,
   WORD_STAGGER_MS,
   countWords,
-} from './message/assistant-text';
-import { ContentBlock } from './message/content-block';
-import { ThinkingPanel } from './message/thinking-panel';
+} from './assistant-text';
+import { ContentBlock } from './content-block';
+import { ThinkingPanel } from './thinking-panel';
 
 interface MessageProps {
   role: 'user' | 'assistant' | 'system' | 'tool';
