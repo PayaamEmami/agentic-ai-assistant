@@ -14,6 +14,25 @@ function isIndexableDocument(file: File): boolean {
   return file.type.startsWith('text/') || INDEXABLE_MIME_TYPES.has(file.type);
 }
 
+function inferPastedFileName(file: File): string {
+  if (file.name) {
+    return file.name;
+  }
+
+  const extension = file.type.split('/')[1] ?? 'png';
+  return `pasted-${Date.now()}.${extension}`;
+}
+
+function extractPastedFiles(clipboardData: DataTransfer): File[] {
+  return Array.from(clipboardData.items)
+    .filter((item) => item.kind === 'file')
+    .map((item) => item.getAsFile())
+    .filter((file): file is File => file !== null)
+    .map((file) =>
+      file.name ? file : new File([file], inferPastedFileName(file), { type: file.type }),
+    );
+}
+
 function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): string {
   if (attachments.length === 1) {
     return `Attached ${attachments[0].kind}`;
@@ -94,12 +113,7 @@ export function InputBar() {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files ?? []);
-    if (files.length === 0) {
-      return;
-    }
-
+  const uploadFiles = async (files: File[]) => {
     for (const file of files) {
       try {
         const attachment = await uploadAttachment(file, {
@@ -120,8 +134,27 @@ export function InputBar() {
         });
       }
     }
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) {
+      return;
+    }
+
+    await uploadFiles(files);
 
     e.target.value = '';
+  };
+
+  const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = extractPastedFiles(event.clipboardData);
+    if (files.length === 0) {
+      return;
+    }
+
+    event.preventDefault();
+    await uploadFiles(files);
   };
 
   const removeAttachment = (attachmentId: string) => {
@@ -231,6 +264,7 @@ export function InputBar() {
             ref={messageInputRef}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
+            onPaste={(event) => void handlePaste(event)}
             onKeyDown={(event) => {
               if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
                 event.preventDefault();
