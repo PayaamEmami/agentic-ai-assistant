@@ -578,7 +578,7 @@ export function useLiveVoiceSession({
 
     const browserSupport = getBrowserVoiceSupport();
     if (!browserSupport.supported) {
-      const message = browserSupport.reason ?? 'Live voice mode is not supported in this browser.';
+      const message = browserSupport.reason ?? 'Voice mode is not supported in this browser.';
       void reportClientError({
         event: 'client.voice.unsupported',
         component: 'use-live-voice-session',

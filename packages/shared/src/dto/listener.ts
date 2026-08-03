@@ -33,11 +33,11 @@ export const ListenerTranscriptResponse = z.object({
 });
 export type ListenerTranscriptResponse = z.infer<typeof ListenerTranscriptResponse>;
 
-export const ListenerConceptDto = z.object({
+export const ListenerInsightDto = z.object({
   title: z.string().trim().min(1).max(160),
   explanation: z.string().trim().min(1).max(8000),
 });
-export type ListenerConceptDto = z.infer<typeof ListenerConceptDto>;
+export type ListenerInsightDto = z.infer<typeof ListenerInsightDto>;
 
 export const ListenerExplainRequest = z
   .object({
@@ -46,7 +46,7 @@ export const ListenerExplainRequest = z
     mode: z.enum(['selection', 'auto']),
     selectedText: z.string().trim().min(1).max(4000).optional(),
     context: z.string().trim().min(1).max(16000),
-    excludedConcepts: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
+    excludedInsights: z.array(z.string().trim().min(1).max(160)).max(50).default([]),
   })
   .superRefine((value, context) => {
     if (value.mode === 'selection' && !value.selectedText) {
@@ -62,6 +62,6 @@ export type ListenerExplainRequest = z.infer<typeof ListenerExplainRequest>;
 export const ListenerExplainResponse = z.object({
   conversationId: z.string().uuid(),
   messageId: z.string().uuid().optional(),
-  concepts: z.array(ListenerConceptDto).max(3),
+  insights: z.array(ListenerInsightDto).max(3),
 });
 export type ListenerExplainResponse = z.infer<typeof ListenerExplainResponse>;

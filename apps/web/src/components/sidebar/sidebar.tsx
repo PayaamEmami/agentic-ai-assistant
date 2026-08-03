@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   EditIcon,
-  ListenerIcon,
   MoreIcon,
   PlusIcon,
   SidebarToggleIcon,
@@ -55,7 +54,6 @@ export function Sidebar({
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
   const isAppsPage = pathname === '/chat/apps';
-  const isListenerPage = pathname === '/chat/listen';
 
   useEffect(() => {
     setIsAccountMenuOpen(false);
@@ -175,22 +173,6 @@ export function Sidebar({
         </div>
       </div>
       <nav className="min-h-0 flex-1 overflow-y-auto p-2">
-        <button
-          type="button"
-          onClick={() => navigateTo('/chat/listen')}
-          className={`mb-2 flex w-full items-center rounded-xl py-2 text-sm font-medium transition ${
-            collapsed ? 'justify-center px-2' : 'gap-3 px-3'
-          } ${
-            isListenerPage
-              ? 'bg-surface-accent text-foreground'
-              : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-          }`}
-          title="Listener Mode"
-          aria-label="Open Listener Mode"
-        >
-          <ListenerIcon />
-          {collapsed ? null : <span>Listener Mode</span>}
-        </button>
         {collapsed ? null : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p

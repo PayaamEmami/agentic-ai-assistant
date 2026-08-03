@@ -4,7 +4,7 @@ import { conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
 import type {
   ListenerAudioSourceDto,
-  ListenerConceptDto,
+  ListenerInsightDto,
   ListenerExplainRequest,
   ListenerTranscriptRequest,
 } from '@aaa/shared';
@@ -66,20 +66,20 @@ export function buildListenerSessionConfig(model: string): Record<string, unknow
   };
 }
 
-function conceptArray(value: unknown): ListenerConceptDto[] {
+function insightArray(value: unknown): ListenerInsightDto[] {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return [];
   }
-  const concepts = (value as Record<string, unknown>)['concepts'];
-  if (!Array.isArray(concepts)) {
+  const insights = (value as Record<string, unknown>)['insights'];
+  if (!Array.isArray(insights)) {
     return [];
   }
-  return concepts
-    .map((concept) => {
-      if (!concept || typeof concept !== 'object' || Array.isArray(concept)) {
+  return insights
+    .map((insight) => {
+      if (!insight || typeof insight !== 'object' || Array.isArray(insight)) {
         return null;
       }
-      const record = concept as Record<string, unknown>;
+      const record = insight as Record<string, unknown>;
       const title = typeof record['title'] === 'string' ? record['title'].trim() : '';
       const explanation =
         typeof record['explanation'] === 'string' ? record['explanation'].trim() : '';
@@ -91,11 +91,11 @@ function conceptArray(value: unknown): ListenerConceptDto[] {
         explanation: explanation.slice(0, 8000),
       };
     })
-    .filter((concept): concept is ListenerConceptDto => concept !== null)
+    .filter((insight): insight is ListenerInsightDto => insight !== null)
     .slice(0, 3);
 }
 
-export function parseListenerConcepts(raw: string | null): ListenerConceptDto[] {
+export function parseListenerInsights(raw: string | null): ListenerInsightDto[] {
   if (!raw) {
     return [];
   }
@@ -104,7 +104,7 @@ export function parseListenerConcepts(raw: string | null): ListenerConceptDto[] 
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/, '');
   try {
-    return conceptArray(JSON.parse(normalized));
+    return insightArray(JSON.parse(normalized));
   } catch {
     return [];
   }
@@ -112,15 +112,15 @@ export function parseListenerConcepts(raw: string | null): ListenerConceptDto[] 
 
 function explanationPrompt(input: ListenerExplainRequest): string {
   const excluded =
-    input.excludedConcepts.length > 0
-      ? `Do not repeat these concepts: ${input.excludedConcepts.join(', ')}.`
+    input.excludedInsights.length > 0
+      ? `Do not repeat these insights: ${input.excludedInsights.join(', ')}.`
       : '';
   if (input.mode === 'selection') {
     return [
       `Explain the selected text "${input.selectedText}" using the surrounding transcript.`,
       'Be concise but make the underlying idea understandable to a motivated learner.',
-      'Return JSON only: {"concepts":[{"title":"...","explanation":"..."}]}.',
-      'Return exactly one concept.',
+      'Return JSON only: {"insights":[{"title":"...","explanation":"..."}]}.',
+      'Return exactly one insight.',
       excluded,
       `Transcript context:\n${input.context}`,
     ]
@@ -128,10 +128,10 @@ function explanationPrompt(input: ListenerExplainRequest): string {
       .join('\n\n');
   }
   return [
-    'Identify up to three genuinely non-obvious technical concepts in this new transcript window.',
-    'Skip common words, names, filler, and concepts that do not need explanation.',
-    'If nothing deserves explanation, return {"concepts":[]}.',
-    'Return JSON only: {"concepts":[{"title":"...","explanation":"..."}]}.',
+    'Identify up to three genuinely non-obvious technical insights in this new transcript window.',
+    'Skip common words, names, filler, and ideas that do not need explanation.',
+    'If nothing deserves explanation, return {"insights":[]}.',
+    'Return JSON only: {"insights":[{"title":"...","explanation":"..."}]}.',
     'Each explanation should be concise, self-contained, and useful while someone keeps watching.',
     excluded,
     `Transcript window:\n${input.context}`,
@@ -140,9 +140,9 @@ function explanationPrompt(input: ListenerExplainRequest): string {
     .join('\n\n');
 }
 
-function conceptsAsMarkdown(concepts: ListenerConceptDto[]): string {
-  return concepts
-    .map((concept) => `### ${concept.title}\n\n${concept.explanation}`)
+function insightsAsMarkdown(insights: ListenerInsightDto[]): string {
+  return insights
+    .map((insight) => `### ${insight.title}\n\n${insight.explanation}`)
     .join('\n\n');
 }
 
@@ -364,16 +364,16 @@ export class ListenerService {
           {
             role: 'system',
             content:
-              'You are a silent learning companion. Explain concepts accurately and return only the requested JSON.',
+              'You are a silent learning companion. Explain insights accurately and return only the requested JSON.',
           },
           { role: 'user', content: explanationPrompt(input) },
         ],
       });
-      const concepts = parseListenerConcepts(completion.content);
+      const insights = parseListenerInsights(completion.content);
       const assistantMessage =
-        concepts.length > 0
+        insights.length > 0
           ? await messageRepository.create(input.conversationId, 'assistant', [
-              { type: 'text', text: conceptsAsMarkdown(concepts) },
+              { type: 'text', text: insightsAsMarkdown(insights) },
             ])
           : null;
       getLogger({
@@ -385,17 +385,17 @@ export class ListenerService {
           event: 'listener.explanation.completed',
           outcome: 'success',
           mode: input.mode,
-          conceptCount: concepts.length,
+          insightCount: insights.length,
           contextLength: input.context.length,
           durationMs: Date.now() - startedAt,
           model: this.config.openaiModel,
         },
-        'Completed listener concept explanation',
+        'Completed listener insight explanation',
       );
       return {
         conversationId: input.conversationId,
         messageId: assistantMessage?.id,
-        concepts,
+        insights,
       };
     } finally {
       if (input.mode === 'auto') {

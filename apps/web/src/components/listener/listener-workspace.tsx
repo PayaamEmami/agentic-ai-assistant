@@ -5,13 +5,13 @@ import { Button } from '@/components/ui/button';
 import { Alert } from '@/components/ui/alert';
 import { useChatContext } from '@/lib/chat';
 import { useListenerSession } from '@/lib/listener';
-import { ConceptPanel } from './concept-panel';
+import { InsightPanel } from './insight-panel';
 import { TranscriptPanel } from './transcript-panel';
 
 export function ListenerWorkspace() {
   const { syncConversationState } = useChatContext();
   const listener = useListenerSession({ syncConversation: syncConversationState });
-  const [mobilePanel, setMobilePanel] = useState<'transcript' | 'concepts'>('transcript');
+  const [mobilePanel, setMobilePanel] = useState<'transcript' | 'insights'>('transcript');
   const active = listener.phase === 'connecting' || listener.phase === 'listening';
 
   return (
@@ -68,24 +68,6 @@ export function ListenerWorkspace() {
                 ) : null}
               </div>
             ) : null}
-            <button
-              type="button"
-              role="switch"
-              aria-checked={listener.autoExplain}
-              onClick={() => listener.setAutoExplain(!listener.autoExplain)}
-              className={`flex h-9 items-center gap-2 rounded-xl border px-3 text-xs font-medium transition ${
-                listener.autoExplain
-                  ? 'border-accent/60 bg-accent/10 text-foreground'
-                  : 'border-border text-foreground-muted hover:border-border-subtle hover:text-foreground'
-              }`}
-            >
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  listener.autoExplain ? 'bg-accent' : 'bg-foreground-inactive'
-                }`}
-              />
-              Auto explain
-            </button>
             {active ? (
               <Button
                 variant="danger"
@@ -97,7 +79,7 @@ export function ListenerWorkspace() {
               </Button>
             ) : (
               <>
-                {listener.segments.length > 0 || listener.concepts.length > 0 ? (
+                {listener.segments.length > 0 || listener.insights.length > 0 ? (
                   <Button variant="ghost" size="sm" onClick={listener.clear}>
                     Clear
                   </Button>
@@ -131,36 +113,34 @@ export function ListenerWorkspace() {
         </button>
         <button
           type="button"
-          onClick={() => setMobilePanel('concepts')}
+          onClick={() => setMobilePanel('insights')}
           className={`flex-1 px-4 py-3 text-xs font-medium ${
-            mobilePanel === 'concepts'
+            mobilePanel === 'insights'
               ? 'border-b-2 border-accent text-foreground'
               : 'text-foreground-muted'
           }`}
         >
-          Concepts{listener.concepts.length > 0 ? ` (${listener.concepts.length})` : ''}
+          Insights{listener.insights.length > 0 ? ` (${listener.insights.length})` : ''}
         </button>
       </div>
 
       <div className="hidden min-h-0 flex-1 grid-cols-2 divide-x divide-border md:grid">
         <TranscriptPanel
           segments={listener.segments}
-          phase={listener.phase}
           isExplaining={listener.isExplaining}
           onExplain={listener.explainSelection}
         />
-        <ConceptPanel concepts={listener.concepts} isExplaining={listener.isExplaining} />
+        <InsightPanel insights={listener.insights} isExplaining={listener.isExplaining} />
       </div>
       <div className="flex min-h-0 flex-1 md:hidden">
         {mobilePanel === 'transcript' ? (
           <TranscriptPanel
             segments={listener.segments}
-            phase={listener.phase}
             isExplaining={listener.isExplaining}
             onExplain={listener.explainSelection}
           />
         ) : (
-          <ConceptPanel concepts={listener.concepts} isExplaining={listener.isExplaining} />
+          <InsightPanel insights={listener.insights} isExplaining={listener.isExplaining} />
         )}
       </div>
     </div>

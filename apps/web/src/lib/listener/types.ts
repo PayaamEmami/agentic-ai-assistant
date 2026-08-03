@@ -1,4 +1,4 @@
-import type { ListenerConcept, ListenerSession } from '@/lib/api/listener';
+import type { ListenerInsight, ListenerSession } from '@/lib/api/listener';
 
 export type ListenerAudioSource = 'microphone' | 'browser_tab';
 export type ListenerPhase = 'idle' | 'connecting' | 'listening' | 'error';
@@ -16,4 +16,4 @@ export interface ListenerConnection {
   mediaStream: MediaStream;
 }
 
-export type { ListenerConcept, ListenerSession };
+export type { ListenerInsight, ListenerSession };

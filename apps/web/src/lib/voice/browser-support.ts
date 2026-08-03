@@ -9,7 +9,7 @@ export function getBrowserVoiceSupport(): BrowserVoiceSupport {
   ) {
     return {
       supported: false,
-      reason: 'Live voice mode is not supported in this browser.',
+      reason: 'Voice mode is not supported in this browser.',
     };
   }
 

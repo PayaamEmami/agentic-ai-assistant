@@ -2,19 +2,17 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import type { ListenerPhase, ListenerTranscriptSegment } from '@/lib/listener';
+import type { ListenerTranscriptSegment } from '@/lib/listener';
 import { selectionInside } from '@/lib/listener/selection';
 
 interface TranscriptPanelProps {
   segments: ListenerTranscriptSegment[];
-  phase: ListenerPhase;
   isExplaining: boolean;
   onExplain: (selectedText: string) => Promise<void>;
 }
 
 export function TranscriptPanel({
   segments,
-  phase,
   isExplaining,
   onExplain,
 }: TranscriptPanelProps) {
@@ -42,12 +40,7 @@ export function TranscriptPanel({
   return (
     <section className="flex min-h-0 flex-1 flex-col bg-surface-elevated">
       <header className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
-        <div>
-          <h2 className="text-sm font-semibold text-foreground">Live transcript</h2>
-          <p className="text-xs text-foreground-muted">
-            {phase === 'listening' ? 'Listening now' : 'Select text to explain it'}
-          </p>
-        </div>
+        <h2 className="text-sm font-semibold text-foreground">Live transcript</h2>
         <button
           type="button"
           onClick={() => void copyTranscript()}
@@ -61,13 +54,12 @@ export function TranscriptPanel({
         ref={rootRef}
         onPointerUp={captureSelection}
         onKeyUp={captureSelection}
-        className="min-h-0 flex-1 select-text overflow-y-auto px-5 py-5"
+        className="flex min-h-0 flex-1 select-text flex-col overflow-y-auto px-5 py-5"
       >
         {segments.length === 0 ? (
-          <div className="flex min-h-48 items-center justify-center text-center">
+          <div className="flex h-full min-h-0 flex-1 items-center justify-center text-center">
             <p className="max-w-sm text-sm leading-relaxed text-foreground-muted">
-              Start listening and the transcript will appear here. Audio is transcribed live;
-              raw audio is not saved.
+              Start listening and the transcript will appear here.
             </p>
           </div>
         ) : (

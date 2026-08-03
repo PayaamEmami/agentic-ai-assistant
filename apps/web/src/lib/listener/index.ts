@@ -7,7 +7,7 @@ export {
 export { useListenerSession } from './use-listener-session';
 export type {
   ListenerAudioSource,
-  ListenerConcept,
+  ListenerInsight,
   ListenerPhase,
   ListenerSession,
   ListenerTranscriptSegment,

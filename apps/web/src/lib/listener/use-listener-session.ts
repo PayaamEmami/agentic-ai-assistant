@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api-client';
-import type { ListenerConcept, ListenerSession } from '@/lib/api/listener';
+import type { ListenerInsight, ListenerSession } from '@/lib/api/listener';
 import { reportClientError } from '@/lib/client-logging';
 import { getListenerBrowserSupport, type ListenerBrowserSupport } from './browser-support';
 import { acquireListenerMedia, stopListenerMedia } from './media-source';
@@ -27,8 +27,7 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
   const [phase, setPhase] = useState<ListenerPhase>('idle');
   const [source, setSourceState] = useState<ListenerAudioSource>('microphone');
   const [segments, setSegments] = useState<ListenerTranscriptSegment[]>([]);
-  const [concepts, setConcepts] = useState<ListenerConcept[]>([]);
-  const [autoExplain, setAutoExplainState] = useState(false);
+  const [insights, setInsights] = useState<ListenerInsight[]>([]);
   const [isExplaining, setIsExplaining] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [support, setSupport] = useState<ListenerBrowserSupport>({
@@ -42,10 +41,9 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
   const connectionRef = useRef<ListenerConnection | null>(null);
   const pendingMediaRef = useRef<MediaStream | null>(null);
   const persistenceTailRef = useRef<Promise<void>>(Promise.resolve());
-  const autoExplainRef = useRef(false);
   const lastAutoAnalysisAtRef = useRef(0);
   const lastAutoAnalysisLengthRef = useRef(0);
-  const conceptTitlesRef = useRef<string[]>([]);
+  const insightTitlesRef = useRef<string[]>([]);
   const stoppingRef = useRef(false);
 
   useEffect(() => {
@@ -59,17 +57,17 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
     pendingMediaRef.current = null;
   }, []);
 
-  const appendConcepts = useCallback((nextConcepts: ListenerConcept[]) => {
-    if (nextConcepts.length === 0) {
+  const appendInsights = useCallback((nextInsights: ListenerInsight[]) => {
+    if (nextInsights.length === 0) {
       return;
     }
-    setConcepts((previous) => {
-      const existing = new Set(previous.map((concept) => concept.title.trim().toLowerCase()));
-      const unique = nextConcepts.filter(
-        (concept) => !existing.has(concept.title.trim().toLowerCase()),
+    setInsights((previous) => {
+      const existing = new Set(previous.map((insight) => insight.title.trim().toLowerCase()));
+      const unique = nextInsights.filter(
+        (insight) => !existing.has(insight.title.trim().toLowerCase()),
       );
       const merged = [...previous, ...unique];
-      conceptTitlesRef.current = merged.map((concept) => concept.title);
+      insightTitlesRef.current = merged.map((insight) => insight.title);
       return merged;
     });
   }, []);
@@ -89,9 +87,9 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
           mode,
           selectedText: selectedText?.trim(),
           context: boundedContext,
-          excludedConcepts: conceptTitlesRef.current.slice(-50),
+          excludedInsights: insightTitlesRef.current.slice(-50),
         });
-        appendConcepts(response.concepts);
+        appendInsights(response.insights);
       } catch (requestError) {
         if (
           mode === 'auto' &&
@@ -103,7 +101,7 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
         const message =
           requestError instanceof Error
             ? requestError.message
-            : 'Could not explain the selected concept.';
+            : 'Could not explain the selected text.';
         setError(message);
         void reportClientError({
           event: 'client.listener.explanation_failed',
@@ -116,14 +114,11 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
         setIsExplaining(false);
       }
     },
-    [appendConcepts],
+    [appendInsights],
   );
 
   const maybeAutoExplain = useCallback(
     (finalText: string) => {
-      if (!autoExplainRef.current) {
-        return;
-      }
       const now = Date.now();
       const newChars = finalText.length - lastAutoAnalysisLengthRef.current;
       if (
@@ -241,8 +236,8 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
     setError(null);
     storeRef.current.clear();
     setSegments([]);
-    setConcepts([]);
-    conceptTitlesRef.current = [];
+    setInsights([]);
+    insightTitlesRef.current = [];
     lastAutoAnalysisAtRef.current = 0;
     lastAutoAnalysisLengthRef.current = 0;
     try {
@@ -293,14 +288,6 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
     setError(null);
   }, []);
 
-  const setAutoExplain = useCallback((enabled: boolean) => {
-    autoExplainRef.current = enabled;
-    setAutoExplainState(enabled);
-    if (enabled) {
-      lastAutoAnalysisAtRef.current = Date.now() - AUTO_ANALYSIS_INTERVAL_MS;
-    }
-  }, []);
-
   const explainSelection = useCallback(
     async (selectedText: string) => {
       await requestExplanation('selection', storeRef.current.finalText(), selectedText);
@@ -314,8 +301,8 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
     }
     storeRef.current.clear();
     setSegments([]);
-    setConcepts([]);
-    conceptTitlesRef.current = [];
+    setInsights([]);
+    insightTitlesRef.current = [];
     setError(null);
   }, [phase]);
 
@@ -330,14 +317,12 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
     phase,
     source,
     segments,
-    concepts,
-    autoExplain,
+    insights,
     isExplaining,
     error,
     support,
     session,
     setSource,
-    setAutoExplain,
     start,
     stop,
     clear,

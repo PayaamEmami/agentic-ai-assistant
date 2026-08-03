@@ -35,7 +35,7 @@ function extractErrorMessage(event: RealtimeEvent): string {
     'message' in event.error &&
     typeof (event.error as { message?: unknown }).message === 'string'
     ? (event.error as { message: string }).message
-    : 'Live voice mode ran into an error.';
+    : 'Voice mode ran into an error.';
 }
 
 export function createRealtimeEventHandler(controller: RealtimeEventController) {

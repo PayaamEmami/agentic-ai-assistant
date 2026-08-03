@@ -90,7 +90,7 @@ export function MicIcon(props: IconProps) {
 
 export function ListenerIcon(props: IconProps) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>
       <path d="M4 12v-2a8 8 0 0 1 16 0v2" />
       <path d="M4 12a2 2 0 0 1 2-2h1v7H6a2 2 0 0 1-2-2Z" />
       <path d="M20 12a2 2 0 0 0-2-2h-1v7h1a2 2 0 0 0 2-2Z" />

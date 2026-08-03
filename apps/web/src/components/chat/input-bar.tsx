@@ -1,7 +1,15 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { AttachmentIcon, CloseIcon, MicIcon, SendIcon, StopIcon } from '@/components/icons';
+import { useRouter } from 'next/navigation';
+import {
+  AttachmentIcon,
+  CloseIcon,
+  ListenerIcon,
+  MicIcon,
+  SendIcon,
+  StopIcon,
+} from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat';
@@ -42,6 +50,7 @@ function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): stri
 }
 
 export function InputBar() {
+  const router = useRouter();
   const {
     sendMessage,
     interruptMessage,
@@ -299,16 +308,26 @@ export function InputBar() {
                 <SendIcon />
               </IconButton>
             ) : (
-              <IconButton
-                size="lg"
-                onClick={() => void liveVoice.toggle()}
-                disabled={Boolean(micDisabledReason)}
-                className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
-                title={micDisabledReason ?? 'Live voice mode'}
-                aria-label={micDisabledReason ?? 'Live voice mode'}
-              >
-                <MicIcon />
-              </IconButton>
+              <>
+                <IconButton
+                  size="lg"
+                  onClick={() => router.push('/chat/listen')}
+                  title="Listener mode"
+                  aria-label="Listener mode"
+                >
+                  <ListenerIcon />
+                </IconButton>
+                <IconButton
+                  size="lg"
+                  onClick={() => void liveVoice.toggle()}
+                  disabled={Boolean(micDisabledReason)}
+                  className="disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-foreground-muted"
+                  title={micDisabledReason ?? 'Voice mode'}
+                  aria-label={micDisabledReason ?? 'Voice mode'}
+                >
+                  <MicIcon />
+                </IconButton>
+              </>
             )}
           </>
         )}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildListenerSessionConfig, parseListenerConcepts } from './service.js';
+import { buildListenerSessionConfig, parseListenerInsights } from './service.js';
 
 describe('listener service helpers', () => {
   it('builds a transcription-only realtime session', () => {
@@ -23,15 +23,15 @@ describe('listener service helpers', () => {
     });
   });
 
-  it('parses and bounds concept JSON', () => {
+  it('parses and bounds insight JSON', () => {
     expect(
-      parseListenerConcepts(
-        '```json\n{"concepts":[{"title":"Gradient descent","explanation":"An optimizer."}]}\n```',
+      parseListenerInsights(
+        '```json\n{"insights":[{"title":"Gradient descent","explanation":"An optimizer."}]}\n```',
       ),
     ).toEqual([{ title: 'Gradient descent', explanation: 'An optimizer.' }]);
   });
 
-  it('returns no concepts for malformed model output', () => {
-    expect(parseListenerConcepts('not json')).toEqual([]);
+  it('returns no insights for malformed model output', () => {
+    expect(parseListenerInsights('not json')).toEqual([]);
   });
 });

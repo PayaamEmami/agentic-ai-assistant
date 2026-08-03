@@ -9,7 +9,7 @@ export interface ListenerSession {
   model: string;
 }
 
-export interface ListenerConcept {
+export interface ListenerInsight {
   title: string;
   explanation: string;
 }
@@ -54,12 +54,12 @@ export const listenerApi = {
     mode: 'selection' | 'auto';
     selectedText?: string;
     context: string;
-    excludedConcepts: string[];
+    excludedInsights: string[];
   }) {
     return request<{
       conversationId: string;
       messageId?: string;
-      concepts: ListenerConcept[];
+      insights: ListenerInsight[];
     }>('/api/listener/explain', {
       method: 'POST',
       body: JSON.stringify(input),

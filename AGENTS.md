@@ -4,7 +4,7 @@ This file orients AI coding agents and human readers to this repository. It expl
 
 ## Overview
 
-Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a Next.js web app, Fastify API, and BullMQ worker. Shared TypeScript packages handle orchestration, retrieval, tools, database access, and observability on top of PostgreSQL and Redis. The web app includes text chat, speech-to-speech voice, and a silent Listener Mode for live transcription and concept explanations.
+Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a Next.js web app, Fastify API, and BullMQ worker. Shared TypeScript packages handle orchestration, retrieval, tools, database access, and observability on top of PostgreSQL and Redis. The web app includes text chat, speech-to-speech voice, and a silent Listener Mode for live transcription and insight explanations.
 
 ## Technology Stack
 
@@ -91,7 +91,7 @@ Intentional coupling (out of scope for provider swaps):
 
 - Embeddings are pinned to OpenAI regardless of `LLM_CHAT_PROVIDER`, because the `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). Changing embedding dimensions requires a DB migration and re-embedding.
 - Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`.
-- Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Concept explanations reuse the configured chat provider.
+- Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
 
 ## Local Workflow

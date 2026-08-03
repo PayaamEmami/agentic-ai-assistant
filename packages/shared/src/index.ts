@@ -94,7 +94,7 @@ export {
   ListenerSessionResponse,
   ListenerTranscriptRequest,
   ListenerTranscriptResponse,
-  ListenerConceptDto,
+  ListenerInsightDto,
   ListenerExplainRequest,
   ListenerExplainResponse,
   HealthResponse,
