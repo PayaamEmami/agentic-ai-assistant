@@ -39,12 +39,12 @@ vi.mock('@aaa/config', () => ({
     openaiApiKey: 'test-key',
     openaiModel: 'gpt-5-mini',
     openaiEmbeddingModel: 'text-embedding-3-small',
-    openaiTranscriptionModel: 'transcribe-test',
+    openaiStandardTranscriptionModel: 'transcribe-test',
   })),
   openAIProviderModelConfigFromWorkerConfig: vi.fn((config) => ({
     model: config.openaiModel,
     embeddingModel: config.openaiEmbeddingModel,
-    transcriptionModel: config.openaiTranscriptionModel,
+    transcriptionModel: config.openaiStandardTranscriptionModel,
   })),
 }));
 

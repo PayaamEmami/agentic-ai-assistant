@@ -53,7 +53,8 @@ const envSchema = z.object({
   OPENAI_EMBEDDING_MODEL: z.string().min(1),
   OPENAI_REALTIME_MODEL: z.string().min(1),
   OPENAI_REALTIME_VOICE: z.string().min(1),
-  OPENAI_TRANSCRIPTION_MODEL: z.string().min(1),
+  OPENAI_TRANSCRIPTION_STANDARD_MODEL: z.string().min(1),
+  OPENAI_TRANSCRIPTION_STREAMING_MODEL: z.string().min(1).default('gpt-live-transcribe'),
 
   // Apps / OAuth
   GITHUB_TOKEN: z.string().optional(),
@@ -100,7 +101,8 @@ const openAiEnvSchema = envSchema.pick({
   OPENAI_API_KEY: true,
   OPENAI_MODEL: true,
   OPENAI_EMBEDDING_MODEL: true,
-  OPENAI_TRANSCRIPTION_MODEL: true,
+  OPENAI_TRANSCRIPTION_STANDARD_MODEL: true,
+  OPENAI_TRANSCRIPTION_STREAMING_MODEL: true,
   LLM_PRICING_OVERRIDES_JSON: true,
 });
 

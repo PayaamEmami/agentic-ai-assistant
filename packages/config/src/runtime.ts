@@ -29,7 +29,8 @@ export interface ApiConfig {
   openaiEmbeddingModel: string;
   openaiRealtimeModel: string;
   openaiRealtimeVoice: string;
-  openaiTranscriptionModel: string;
+  openaiStandardTranscriptionModel: string;
+  openaiStreamingTranscriptionModel: string;
   jwtSecret: string;
   internalServiceSecret: string;
   apiInstanceId: string;
@@ -65,7 +66,7 @@ export interface WorkerConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
-  openaiTranscriptionModel: string;
+  openaiStandardTranscriptionModel: string;
   internalServiceSecret: string;
   apiInternalBaseUrl: string;
   workerObservabilityHost: string;
@@ -126,7 +127,8 @@ export function loadApiConfig(): ApiConfig {
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
     openaiRealtimeModel: env.OPENAI_REALTIME_MODEL,
     openaiRealtimeVoice: env.OPENAI_REALTIME_VOICE,
-    openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    openaiStandardTranscriptionModel: env.OPENAI_TRANSCRIPTION_STANDARD_MODEL,
+    openaiStreamingTranscriptionModel: env.OPENAI_TRANSCRIPTION_STREAMING_MODEL,
     jwtSecret: env.JWT_SECRET,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInstanceId: buildApiInstanceId(env),
@@ -165,7 +167,7 @@ export function loadWorkerConfig(): WorkerConfig {
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
-    openaiTranscriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    openaiStandardTranscriptionModel: env.OPENAI_TRANSCRIPTION_STANDARD_MODEL,
     internalServiceSecret: env.INTERNAL_SERVICE_SECRET,
     apiInternalBaseUrl: buildApiInternalBaseUrl(env),
     workerObservabilityHost: env.WORKER_OBSERVABILITY_HOST,
@@ -183,13 +185,13 @@ export function openAIProviderModelConfigFromApiConfig(
     ApiConfig,
     | 'openaiModel'
     | 'openaiEmbeddingModel'
-    | 'openaiTranscriptionModel'
+    | 'openaiStandardTranscriptionModel'
   >,
 ): OpenAIProviderModelConfig {
   return {
     model: config.openaiModel,
     embeddingModel: config.openaiEmbeddingModel,
-    transcriptionModel: config.openaiTranscriptionModel,
+    transcriptionModel: config.openaiStandardTranscriptionModel,
   };
 }
 
@@ -198,7 +200,7 @@ export function openAIProviderModelConfigFromWorkerConfig(
     WorkerConfig,
     | 'openaiModel'
     | 'openaiEmbeddingModel'
-    | 'openaiTranscriptionModel'
+    | 'openaiStandardTranscriptionModel'
   >,
 ): OpenAIProviderModelConfig {
   return openAIProviderModelConfigFromApiConfig(config);
@@ -208,6 +210,6 @@ export function openAIProviderModelConfigFromEnv(env: OpenAiEnv): OpenAIProvider
   return {
     model: env.OPENAI_MODEL,
     embeddingModel: env.OPENAI_EMBEDDING_MODEL,
-    transcriptionModel: env.OPENAI_TRANSCRIPTION_MODEL,
+    transcriptionModel: env.OPENAI_TRANSCRIPTION_STANDARD_MODEL,
   };
 }

@@ -23,6 +23,7 @@ import { uploadRoutes } from './routes/upload.js';
 import { approvalRoutes } from './routes/approvals.js';
 import { personalizationRoutes } from './routes/personalization.js';
 import { voiceRoutes } from './routes/voice.js';
+import { listenerRoutes } from './routes/listener.js';
 import { appRoutes } from './routes/apps.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
@@ -154,6 +155,10 @@ export async function buildServer(
     personalizationService: services.personalizationService,
   });
   await app.register(voiceRoutes, { prefix: '/api', voiceService: services.voiceService });
+  await app.register(listenerRoutes, {
+    prefix: '/api',
+    listenerService: services.listenerService,
+  });
   await app.register(appRoutes, {
     prefix: '/api',
     appService: services.appService,

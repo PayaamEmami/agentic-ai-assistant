@@ -5,6 +5,7 @@ import { chatApi } from './chat';
 import { personalizationApi } from './personalization';
 import { uploadApi } from './upload';
 import { voiceApi } from './voice';
+import { listenerApi } from './listener';
 
 export {
   API_BASE,
@@ -36,5 +37,6 @@ export const api = {
   approvals: approvalsApi,
   apps: appsApi,
   voice: voiceApi,
+  listener: listenerApi,
   personalization: personalizationApi,
 };

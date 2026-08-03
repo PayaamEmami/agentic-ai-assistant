@@ -194,7 +194,7 @@ export class VoiceService {
     ]);
     const model = this.config.openaiRealtimeModel;
     const voice = this.config.openaiRealtimeVoice;
-    const transcriptionModel = this.config.openaiTranscriptionModel;
+    const transcriptionModel = this.config.openaiStandardTranscriptionModel;
     const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
     const sessionConfig = buildRealtimeSessionConfig(
       model,

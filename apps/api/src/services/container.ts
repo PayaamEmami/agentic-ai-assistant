@@ -5,6 +5,7 @@ import { ApprovalService } from './approval/index.js';
 import { AppService } from './app/index.js';
 import { configureAppSyncQueue } from './app/index.js';
 import { ChatService } from './chat/index.js';
+import { ListenerService } from './listener/index.js';
 import { PersonalizationService } from './personalization/index.js';
 import { RetrievalBridge } from './retrieval/index.js';
 import { configureToolExecutionQueue } from './tools/index.js';
@@ -15,6 +16,7 @@ export interface ApiServices {
   approvalService: ApprovalService;
   appService: AppService;
   chatService: ChatService;
+  listenerService: ListenerService;
   personalizationService: PersonalizationService;
   uploadService: UploadService;
   voiceService: VoiceService;
@@ -45,6 +47,7 @@ export function buildApiServices(config: AppConfig): ApiServices {
       retrievalBridge,
       enqueueToolExecutionJob,
     }),
+    listenerService: new ListenerService(config, chatProvider),
     personalizationService,
     uploadService: new UploadService(config, embeddingProvider, {
       embeddingModel: config.openaiEmbeddingModel,

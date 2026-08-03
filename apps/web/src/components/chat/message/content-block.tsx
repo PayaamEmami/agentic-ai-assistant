@@ -121,8 +121,22 @@ export function ContentBlock({
   }
 
   if (block.type === 'transcript') {
+    const duration =
+      typeof block.durationMs === 'number' && block.durationMs > 0
+        ? `${Math.max(1, Math.round(block.durationMs / 60000))} min`
+        : null;
     return (
-      <p className="text-xs italic text-foreground-muted">Transcript: {block.text}</p>
+      <details
+        className="min-w-[16rem] max-w-full rounded-lg border border-border-subtle bg-surface-input/60"
+        open={block.text.length < 800}
+      >
+        <summary className="cursor-pointer select-none list-none px-3 py-2 text-xs font-medium text-foreground-muted">
+          Transcript{duration ? ` · ${duration}` : ''}
+        </summary>
+        <p className="max-h-80 select-text overflow-y-auto whitespace-pre-wrap border-t border-border-subtle px-3 py-3 text-sm leading-relaxed text-foreground">
+          {block.text || 'No speech was captured.'}
+        </p>
+      </details>
     );
   }
 

@@ -42,7 +42,8 @@ function testConfig(): AppConfig {
     openaiEmbeddingModel: 'embedding-test',
     openaiRealtimeModel: 'realtime-test',
     openaiRealtimeVoice: 'alloy',
-    openaiTranscriptionModel: 'transcribe-test',
+    openaiStandardTranscriptionModel: 'transcribe-test',
+    openaiStreamingTranscriptionModel: 'listener-transcribe-test',
     jwtSecret: 'test-secret',
     internalServiceSecret: 'internal-secret',
     apiInstanceId: 'api-test',
@@ -95,6 +96,12 @@ function testServices(overrides: Partial<ApiServices> = {}): ApiServices {
       completeTurn: vi.fn(),
       submitToolCall: vi.fn(),
       interruptSession: vi.fn(),
+    },
+    listenerService: {
+      createSession: vi.fn(),
+      answerSession: vi.fn(),
+      appendTranscript: vi.fn(),
+      explain: vi.fn(),
     },
     ...overrides,
   } as unknown as ApiServices;
@@ -197,6 +204,46 @@ describe('buildServer', () => {
 
       expect(response.statusCode).toBe(401);
       expect(services.appService.listApps).not.toHaveBeenCalled();
+    });
+
+    it('rejects Listener Mode without a bearer token', async () => {
+      const services = testServices();
+      const app = await createTestServer(services);
+      apps.push(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/listener/session',
+        payload: { source: 'microphone' },
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(services.listenerService.createSession).not.toHaveBeenCalled();
+    });
+
+    it('creates an authenticated Listener Mode session', async () => {
+      const services = testServices();
+      services.listenerService.createSession = vi.fn().mockResolvedValue({
+        sessionId: '44444444-4444-4444-8444-444444444444',
+        conversationId: '22222222-2222-4222-8222-222222222222',
+        transcriptMessageId: '33333333-3333-4333-8333-333333333333',
+        model: 'listener-transcribe-test',
+      });
+      const app = await createTestServer(services);
+      apps.push(app);
+
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/listener/session',
+        headers: { authorization: 'Bearer test-token' },
+        payload: { source: 'browser_tab' },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(services.listenerService.createSession).toHaveBeenCalledWith(
+        TEST_USER.id,
+        'browser_tab',
+      );
     });
 
     it('serves /api/apps with a bearer token', async () => {
