@@ -38,6 +38,49 @@ Provider apps connect once per external provider and expose separate internal ca
 - **Knowledge** — Used for sync, indexing, and retrieval, such as using docs or repository context for RAG
 - **Tools** — Used for live tool access and side-effectful operations, such as editing docs in Google Drive or making code changes in a GitHub repository
 
+## Architecture
+
+AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage, and treats the chat model as a swappable backend. The Next.js web app talks to a Fastify API over REST and WebSocket. Chat turns run through a multi-agent orchestrator. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
+
+```mermaid
+flowchart TB
+  browser[Browser]
+
+  subgraph runtime [Application]
+    web["Next.js web<br/>chat / voice / listener"]
+    api["Fastify API<br/>REST + WebSocket"]
+    worker["BullMQ worker"]
+  end
+
+  subgraph data [Data]
+    pg[("PostgreSQL + pgvector")]
+    redis[(Redis)]
+  end
+
+  subgraph external [External]
+    openai[OpenAI]
+    providers["GitHub / Google"]
+  end
+
+  browser --> web
+  web -->|"REST + WebSocket"| api
+  web -.->|"WebRTC realtime"| openai
+  api --> pg
+  api --> redis
+  api --> openai
+  api --> providers
+  worker --> redis
+  worker --> pg
+  worker --> openai
+  worker --> providers
+```
+
+Text chat streams tokens and tool events over WebSocket. When an agent stages a tool call, the API records it, requests approval if needed, and enqueues execution on the worker. After a non-voice tool finishes, a chat-continuation job returns to the API so the orchestrator can continue the turn. Connected apps split into knowledge (sync, index, retrieve) and tools (live reads and writes against GitHub and Google).
+
+Shared packages own the seams between apps: agent orchestration, the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat models can be swapped without changing those layers. Voice and Listener Mode use a realtime path and do not go through the chat-provider gateway.
+
+Production runs the web, API, worker, and data services on a single host behind a reverse proxy. See the infrastructure docs for deploy details.
+
 ## Local Development Setup
 
 ### Prerequisites
