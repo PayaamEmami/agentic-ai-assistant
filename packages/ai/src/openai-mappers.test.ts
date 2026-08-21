@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  buildChatCompletionCreateParams,
   extractTextContent,
   mapFinishReason,
   mapMessages,
@@ -74,5 +75,62 @@ describe('mapFinishReason', () => {
     expect(mapFinishReason('length')).toBe('length');
     expect(mapFinishReason('something-else')).toBe('stop');
     expect(mapFinishReason(null)).toBe('stop');
+  });
+});
+
+describe('buildChatCompletionCreateParams', () => {
+  const messages = [{ role: 'user' as const, content: 'hi' }];
+  const tools = [
+    {
+      type: 'function' as const,
+      function: { name: 'time_now', description: 'Get time', parameters: {} },
+    },
+  ];
+
+  it('disables reasoning for tools and uses max_completion_tokens', () => {
+    expect(
+      buildChatCompletionCreateParams({
+        model: 'gpt-5.6-luna',
+        messages,
+        maxTokens: 1200,
+        tools,
+      }),
+    ).toEqual({
+      model: 'gpt-5.6-luna',
+      messages,
+      max_completion_tokens: 1200,
+      tools,
+      reasoning_effort: 'none',
+    });
+  });
+
+  it('does not force reasoning_effort when no tools are provided', () => {
+    expect(
+      buildChatCompletionCreateParams({
+        model: 'gpt-5.6-luna',
+        messages,
+      }),
+    ).toEqual({
+      model: 'gpt-5.6-luna',
+      messages,
+    });
+  });
+
+  it('includes stream options for streaming requests', () => {
+    expect(
+      buildChatCompletionCreateParams({
+        model: 'gpt-5.6-luna',
+        messages,
+        tools,
+        stream: true,
+      }),
+    ).toEqual({
+      model: 'gpt-5.6-luna',
+      messages,
+      tools,
+      reasoning_effort: 'none',
+      stream: true,
+      stream_options: { include_usage: true },
+    });
   });
 });

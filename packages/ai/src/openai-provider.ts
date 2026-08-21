@@ -3,6 +3,7 @@ import type { OpenAIProviderModelConfig } from '@aaa/config';
 import { estimateModelCost, withSpan } from '@aaa/observability';
 import type { ModelProvider } from './model-provider.js';
 import {
+  buildChatCompletionCreateParams,
   extractTextContent,
   mapFinishReason,
   mapMessages,
@@ -45,13 +46,12 @@ export class OpenAIProvider implements ModelProvider {
         },
         () =>
           this.client.chat.completions.create(
-            {
+            buildChatCompletionCreateParams({
               model,
               messages: mapMessages(request.messages),
-              temperature: request.temperature,
-              max_tokens: request.maxTokens,
+              maxTokens: request.maxTokens,
               tools: preparedTools.tools,
-            },
+            }),
             request.signal ? { signal: request.signal } : undefined,
           ),
       );
@@ -107,15 +107,13 @@ export class OpenAIProvider implements ModelProvider {
         },
         () =>
           this.client.chat.completions.create(
-            {
+            buildChatCompletionCreateParams({
               model,
               messages: mapMessages(request.messages),
-              temperature: request.temperature,
-              max_tokens: request.maxTokens,
+              maxTokens: request.maxTokens,
               tools: preparedTools.tools,
               stream: true,
-              stream_options: { include_usage: true },
-            },
+            }),
             request.signal ? { signal: request.signal } : undefined,
           ),
       );

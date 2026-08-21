@@ -196,3 +196,46 @@ export function mapFinishReason(
       return 'stop';
   }
 }
+
+interface ChatCompletionRequestFields {
+  model: string;
+  messages: OpenAI.ChatCompletionMessageParam[];
+  maxTokens?: number;
+  tools?: OpenAI.ChatCompletionTool[];
+}
+
+/**
+ * Chat Completions is pinned to GPT-5.6+: use max_completion_tokens, and
+ * disable reasoning whenever function tools are present. Agents still send
+ * native tools on every text-chat turn.
+ */
+export function buildChatCompletionCreateParams(
+  request: ChatCompletionRequestFields & { stream: true },
+): OpenAI.ChatCompletionCreateParamsStreaming;
+export function buildChatCompletionCreateParams(
+  request: ChatCompletionRequestFields & { stream?: false },
+): OpenAI.ChatCompletionCreateParamsNonStreaming;
+export function buildChatCompletionCreateParams(
+  request: ChatCompletionRequestFields & { stream?: boolean },
+): OpenAI.ChatCompletionCreateParams {
+  const params: Record<string, unknown> = {
+    model: request.model,
+    messages: request.messages,
+  };
+
+  if (request.maxTokens !== undefined) {
+    params.max_completion_tokens = request.maxTokens;
+  }
+
+  if (request.tools && request.tools.length > 0) {
+    params.tools = request.tools;
+    params.reasoning_effort = 'none';
+  }
+
+  if (request.stream) {
+    params.stream = true;
+    params.stream_options = { include_usage: true };
+  }
+
+  return params as unknown as OpenAI.ChatCompletionCreateParams;
+}
