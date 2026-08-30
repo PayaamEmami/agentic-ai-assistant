@@ -42,3 +42,28 @@ export type {
 
 export { appSyncRunRepository } from './app-sync-runs.js';
 export type { AppSyncRun, AppSyncRunRepository } from './app-sync-runs.js';
+
+export { automationScheduleRepository } from './automation-schedules.js';
+export type {
+  AutomationSchedule,
+  AutomationScheduleInput,
+  AutomationScheduleRepository,
+  AutomationScheduleUpdate,
+} from './automation-schedules.js';
+
+export { automationRunRepository } from './automation-runs.js';
+export type {
+  AutomationRun,
+  AutomationRunCreateInput,
+  AutomationRunRepository,
+  AutomationRunStatus,
+  AutomationRunUpdate,
+} from './automation-runs.js';
+
+export { automationRunEventRepository } from './automation-run-events.js';
+export type {
+  AutomationRunEvent,
+  AutomationRunEventInput,
+  AutomationRunEventKind,
+  AutomationRunEventRepository,
+} from './automation-run-events.js';

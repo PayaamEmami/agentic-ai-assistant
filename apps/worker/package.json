@@ -16,6 +16,7 @@
     "@aaa/ai": "workspace:*",
     "@aaa/config": "workspace:*",
     "@aaa/knowledge-sources": "workspace:*",
+    "@aaa/mcp": "workspace:*",
     "@aaa/db": "workspace:*",
     "@aaa/observability": "workspace:*",
     "@aaa/queues": "workspace:*",

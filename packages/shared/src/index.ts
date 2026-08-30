@@ -114,6 +114,18 @@ export {
   GitHubRepositoryDto,
   GitHubRepositoriesResponse,
   GitHubRepoSelectionRequest,
+  AutomationRunStatusDto,
+  AutomationRunEventKindDto,
+  AutomationScheduleDto,
+  CreateAutomationScheduleRequest,
+  UpdateAutomationScheduleRequest,
+  AutomationRunDto,
+  AutomationRunEventDto,
+  AutomationRunNowRequest,
+  ConnectMcpServerRequest,
+  McpConnectionStatusDto,
+  McpConnectionTestDto,
+  AutomationBoardListDto,
   PersonalizationProfileDto,
   MemoryItemDto,
   PersonalizationResponse,
@@ -146,6 +158,8 @@ export type {
   ApprovalRequestedEvent,
   ApprovalResolvedEvent,
   CitationEvent,
+  AutomationRunStatusEvent,
+  AutomationRunActivityEvent,
   ErrorEvent,
 } from './events.js';
 
@@ -166,4 +180,21 @@ export type {
   EmbeddingJobData,
   ToolExecutionJobData,
   ChatContinuationJobData,
+  AutomationJobData,
 } from './queues.js';
+export {
+  AUTOMATION_RUN_EVENT_KINDS,
+  AUTOMATION_RUN_STAGE_LABELS,
+  AUTOMATION_RUN_STAGES,
+  AUTOMATION_RUN_STATUSES,
+  InvalidCronExpressionError,
+  computeNextRunAt,
+  isValidCronExpression,
+  isValidTimezone,
+  startOfDayInTimeZone,
+} from './automation.js';
+export type {
+  AutomationRunEventKind,
+  AutomationRunStage,
+  AutomationRunStatus,
+} from './automation.js';

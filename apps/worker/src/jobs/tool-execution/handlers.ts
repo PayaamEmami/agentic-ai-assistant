@@ -1,7 +1,13 @@
-import { CodingTaskRunner } from '@aaa/tool-providers';
+import { isMcpToolName, toRemoteMcpToolName, unwrapMcpToolData } from '@aaa/mcp';
 import type { ToolProgressEvent } from '@aaa/shared';
+import { CodingTaskRunner } from '@aaa/tool-providers';
 import { publishToolEvent, updateInlineToolResult } from './events.js';
-import { resolveGitHubRepo, withGitHubProvider, withGoogleProvider } from './providers.js';
+import {
+  resolveGitHubRepo,
+  withGitHubProvider,
+  withGoogleProvider,
+  withMcpClient,
+} from './providers.js';
 import type { ToolExecutionResult, ToolHandler } from './types.js';
 import {
   asNumber,
@@ -39,6 +45,17 @@ const nativeToolHandlers: Record<string, ToolHandler> = {
 };
 
 const githubToolHandlers: Record<string, ToolHandler> = {
+  'github.list_repositories': ({ userId }) =>
+    withGitHubProvider(userId, async (provider) => ({
+      repositories: (await provider.listRepositories()).map((repo) => ({
+        fullName: repo.fullName,
+        name: repo.name,
+        description: repo.description,
+        language: repo.language,
+        defaultBranch: repo.defaultBranch,
+        private: repo.private,
+      })),
+    })),
   'github.get_repository': ({ userId, input }) =>
     withGitHubProvider(userId, async (provider) =>
       provider.getRepository(await resolveGitHubRepo(requireString(input, 'repo'), provider)),
@@ -226,6 +243,17 @@ const toolHandlers: Record<string, ToolHandler> = {
   ...googleToolHandlers,
 };
 
+/**
+ * MCP tools are discovered at runtime, so they cannot be enumerated in the
+ * handler map. They are dispatched by their `mcp.` prefix instead, with the
+ * namespaced name translated back to the remote server's tool name.
+ */
+const mcpToolHandler: ToolHandler = ({ userId, toolName, input }) =>
+  withMcpClient(userId, async (client) => {
+    const result = await client.callTool(toRemoteMcpToolName(toolName), input);
+    return unwrapMcpToolData(result);
+  });
+
 export async function executeTool(
   userId: string,
   conversationId: string,
@@ -234,7 +262,7 @@ export async function executeTool(
   input: Record<string, unknown>,
   assistantMessageId: string | null,
 ): Promise<ToolExecutionResult> {
-  const handler = toolHandlers[toolName];
+  const handler = isMcpToolName(toolName) ? mcpToolHandler : toolHandlers[toolName];
   if (!handler) {
     return { success: false, result: null, error: `Unknown tool: ${toolName}` };
   }

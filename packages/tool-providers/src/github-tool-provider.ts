@@ -24,6 +24,8 @@ interface GitHubReviewCommentReplyResponse {
   body: string;
 }
 
+export type { GitHubRepository };
+
 /** @deprecated Use `GitHubRepository` from `@aaa/integrations`. */
 export type GitHubRepositoryReference = GitHubRepository;
 

@@ -7,6 +7,7 @@ export * from './dto/chat.js';
 export * from './dto/voice.js';
 export * from './dto/listener.js';
 export * from './dto/apps.js';
+export * from './dto/automation.js';
 export * from './dto/personalization.js';
 export * from './dto/observability.js';
 export * from './dto/system.js';

@@ -4,17 +4,19 @@ import type { AppConfig } from '../config.js';
 import { ApprovalService } from './approval/index.js';
 import { AppService } from './app/index.js';
 import { configureAppSyncQueue } from './app/index.js';
+import { AutomationService, configureAutomationQueue } from './automation/index.js';
 import { ChatService } from './chat/index.js';
 import { ListenerService } from './listener/index.js';
 import { PersonalizationService } from './personalization/index.js';
 import { RetrievalBridge } from './retrieval/index.js';
-import { configureToolExecutionQueue } from './tools/index.js';
+import { configureMcpToolCache, configureToolExecutionQueue } from './tools/index.js';
 import { UploadService } from './upload/index.js';
 import { VoiceService } from './voice/index.js';
 
 export interface ApiServices {
   approvalService: ApprovalService;
   appService: AppService;
+  automationService: AutomationService;
   chatService: ChatService;
   listenerService: ListenerService;
   personalizationService: PersonalizationService;
@@ -36,10 +38,13 @@ export function buildApiServices(config: AppConfig): ApiServices {
   });
   const enqueueToolExecutionJob = configureToolExecutionQueue(config);
   const enqueueAppSyncJob = configureAppSyncQueue(config);
+  configureMcpToolCache(config);
+  configureAutomationQueue(config);
 
   return {
     approvalService: new ApprovalService({ enqueueToolExecutionJob }),
     appService: new AppService(config, { enqueueAppSyncJob }),
+    automationService: new AutomationService(),
     chatService: new ChatService({
       config,
       modelProvider: chatProvider,

@@ -35,3 +35,11 @@ export interface ChatContinuationJobData {
   conversationId: string;
   correlationId: string;
 }
+
+export interface AutomationJobData {
+  /** Pre-created run row, so the UI can show a queued run before the job starts. */
+  runId: string;
+  scheduleId: string;
+  userId: string;
+  correlationId: string;
+}

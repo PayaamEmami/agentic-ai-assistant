@@ -1,4 +1,5 @@
 export { createPool, getPool, closePool, pingDatabase } from './client.js';
+export { isPgUniqueViolation } from './errors.js';
 
 export {
   userRepository,
@@ -15,6 +16,9 @@ export {
   memoryRepository,
   appCapabilityConfigRepository,
   appSyncRunRepository,
+  automationScheduleRepository,
+  automationRunRepository,
+  automationRunEventRepository,
 } from './repositories/index.js';
 export type {
   User,
@@ -49,4 +53,15 @@ export type {
   AppCapabilityConfigRepository,
   AppSyncRun,
   AppSyncRunRepository,
+  AutomationSchedule,
+  AutomationScheduleInput,
+  AutomationScheduleUpdate,
+  AutomationScheduleRepository,
+  AutomationRun,
+  AutomationRunCreateInput,
+  AutomationRunUpdate,
+  AutomationRunRepository,
+  AutomationRunEvent,
+  AutomationRunEventInput,
+  AutomationRunEventRepository,
 } from './repositories/index.js';

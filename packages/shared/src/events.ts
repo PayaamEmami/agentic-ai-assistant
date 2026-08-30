@@ -102,6 +102,33 @@ export interface ErrorEvent {
   message: string;
 }
 
+/**
+ * Automation events are addressed by `conversationId` like every other realtime
+ * event, so they reuse the existing per-conversation subscription and its
+ * ownership check. Each run owns a hidden conversation for exactly this reason.
+ */
+export interface AutomationRunStatusEvent {
+  type: 'automation.run.status';
+  conversationId: string;
+  runId: string;
+  status: 'queued' | 'running' | 'completed' | 'skipped' | 'failed';
+  stage: string | null;
+  pullRequestUrl?: string | null;
+  skipReason?: string | null;
+  error?: string | null;
+}
+
+export interface AutomationRunActivityEvent {
+  type: 'automation.run.event';
+  conversationId: string;
+  runId: string;
+  seq: number;
+  at: string;
+  kind: 'stage' | 'thought' | 'progress' | 'result';
+  stage: string | null;
+  message: string;
+}
+
 export type RealtimeEvent =
   | AssistantTextEvent
   | AssistantStatusEvent
@@ -114,4 +141,6 @@ export type RealtimeEvent =
   | ApprovalRequestedEvent
   | ApprovalResolvedEvent
   | CitationEvent
+  | AutomationRunStatusEvent
+  | AutomationRunActivityEvent
   | ErrorEvent;

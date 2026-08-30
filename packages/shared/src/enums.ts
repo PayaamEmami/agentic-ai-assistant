@@ -42,6 +42,7 @@ export type SourceKind = (typeof SourceKind)[keyof typeof SourceKind];
 export const AppKind = {
   GitHub: 'github',
   Google: 'google',
+  Mcp: 'mcp',
 } as const;
 export type AppKind = (typeof AppKind)[keyof typeof AppKind];
 

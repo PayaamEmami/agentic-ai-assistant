@@ -10,8 +10,13 @@ import {
   stopChatContinuationWorker,
 } from './services/chat/index.js';
 import { stopToolEventRelay, startToolEventRelay } from './services/tools/index.js';
-import { closeToolExecutionQueue } from './services/tools/index.js';
+import { closeMcpToolCache, closeToolExecutionQueue } from './services/tools/index.js';
 import { closeAppSyncQueue } from './services/app/index.js';
+import {
+  closeAutomationQueue,
+  startAutomationEventRelay,
+  stopAutomationEventRelay,
+} from './services/automation/index.js';
 
 async function main() {
   const config = loadConfig();
@@ -19,6 +24,7 @@ async function main() {
   await initializeApiTelemetry();
   getPool();
   await startToolEventRelay();
+  await startAutomationEventRelay();
   const server = await buildServer(config, services);
   startChatContinuationWorker(config, services.chatService);
   let shuttingDown = false;
@@ -44,7 +50,10 @@ async function main() {
       await stopChatContinuationWorker();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
+      await closeMcpToolCache();
+      await closeAutomationQueue();
       await stopToolEventRelay();
+      await stopAutomationEventRelay();
       await closePool();
       await shutdownTracing();
       logger.info(
@@ -101,9 +110,12 @@ async function main() {
       'Failed to start server',
     );
     await closeToolExecutionQueue();
+    await closeMcpToolCache();
+    await closeAutomationQueue();
     await closeAppSyncQueue();
     await stopChatContinuationWorker();
     await stopToolEventRelay();
+    await stopAutomationEventRelay();
     await closePool();
     await shutdownTracing();
     process.exit(1);

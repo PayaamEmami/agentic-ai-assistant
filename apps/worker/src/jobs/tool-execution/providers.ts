@@ -1,5 +1,6 @@
 import { appCapabilityConfigRepository } from '@aaa/db';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
+import { McpClient } from '@aaa/mcp';
 import { GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import type { ToolExecutionResult } from './types.js';
 import { asString, requireString } from './validation.js';
@@ -46,24 +47,65 @@ export async function resolveGitHubRepo(
   );
 }
 
+/** Reads the user's GitHub access token, throwing when the app is not connected. */
+export async function resolveGitHubToken(userId: string): Promise<string> {
+  const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
+    userId,
+    'github',
+    'tools',
+  );
+  if (!config) {
+    throw new Error('GitHub app is not connected');
+  }
+
+  return requireString(decryptCredentials(config.encryptedCredentials), 'accessToken');
+}
+
 export async function withGitHubProvider(
   userId: string,
   handler: (provider: GitHubToolProvider, token: string) => Promise<unknown>,
 ): Promise<ToolExecutionResult> {
   try {
-    const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
-      userId,
-      'github',
-      'tools',
-    );
-    if (!config) {
-      throw new Error('GitHub app is not connected');
-    }
-
-    const credentials = decryptCredentials(config.encryptedCredentials);
-    const token = requireString(credentials, 'accessToken');
+    const token = await resolveGitHubToken(userId);
     const provider = new GitHubToolProvider(token);
     return { success: true, result: await handler(provider, token) };
+  } catch (error) {
+    return {
+      success: false,
+      result: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+/**
+ * Builds an MCP client from the user's stored connection. Kept separate from
+ * `withMcpClient` so automation jobs can reuse the client without the
+ * ToolExecutionResult wrapper.
+ */
+export async function resolveMcpClient(userId: string): Promise<McpClient> {
+  const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
+    userId,
+    'mcp',
+    'tools',
+  );
+  if (!config || config.status !== 'connected') {
+    throw new Error('No MCP server is connected');
+  }
+
+  const credentials = decryptCredentials(config.encryptedCredentials);
+  return new McpClient({
+    serverUrl: requireString(config.settings, 'serverUrl'),
+    apiKey: requireString(credentials, 'apiKey'),
+  });
+}
+
+export async function withMcpClient(
+  userId: string,
+  handler: (client: McpClient) => Promise<unknown>,
+): Promise<ToolExecutionResult> {
+  try {
+    return { success: true, result: await handler(await resolveMcpClient(userId)) };
   } catch (error) {
     return {
       success: false,

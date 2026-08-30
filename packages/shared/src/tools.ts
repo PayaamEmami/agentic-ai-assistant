@@ -68,6 +68,17 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
     requiresApproval: true,
   },
   {
+    name: 'github.list_repositories',
+    description:
+      'List every GitHub repository accessible to the authenticated tools connection, with its full owner/repo name, description, and primary language. Use this to decide which repository a piece of work belongs in.',
+    parameters: {
+      type: 'object',
+      properties: {},
+      additionalProperties: false,
+    },
+    requiresApproval: false,
+  },
+  {
     name: 'github.get_repository',
     description: 'Read metadata for a GitHub repository using the live tool connection.',
     parameters: {

@@ -1,12 +1,18 @@
 import type { ConnectionOptions } from 'bullmq';
 import { QUEUE_JOB_OPTIONS, QUEUE_NAMES, parseRedisUrl, type WorkerConfig } from '@aaa/config';
 import { createQueueProducer, type QueueProducer } from '@aaa/queues';
-import type { AppSyncJobData, EmbeddingJobData, IngestionJobData } from '@aaa/shared';
+import type {
+  AppSyncJobData,
+  AutomationJobData,
+  EmbeddingJobData,
+  IngestionJobData,
+} from '@aaa/shared';
 
 interface JobQueueProducers {
   appSync: QueueProducer<AppSyncJobData>;
   ingestion: QueueProducer<IngestionJobData>;
   embedding: QueueProducer<EmbeddingJobData>;
+  automation: QueueProducer<AutomationJobData>;
 }
 
 let producers: JobQueueProducers | null = null;
@@ -79,6 +85,32 @@ function createJobQueueProducers(connection: ConnectionOptions): JobQueueProduce
         }),
       },
     }),
+    automation: createQueueProducer<AutomationJobData>({
+      queueName: QUEUE_NAMES.automation,
+      jobName: 'automation-board-task',
+      component: 'worker-job-queues',
+      spanName: 'queue.automation.enqueue',
+      connection,
+      jobOptions: QUEUE_JOB_OPTIONS[QUEUE_NAMES.automation],
+      fallbackCorrelationId: (job) => `automation-${job.runId}`,
+      // The run row is created before enqueueing, so its id also deduplicates
+      // the job if a scheduler tick is retried.
+      jobId: (job) => `automation-run-${job.runId}`,
+      spanAttributes: (job) => ({
+        'aaa.automation.run_id': job.runId,
+        'aaa.automation.schedule_id': job.scheduleId,
+      }),
+      log: {
+        event: 'automation.run.enqueued',
+        message: 'Automation run enqueued',
+        context: (job) => ({
+          automationRunId: job.runId,
+        }),
+        fields: (job) => ({
+          scheduleId: job.scheduleId,
+        }),
+      },
+    }),
   };
 }
 
@@ -105,6 +137,10 @@ export async function enqueueEmbeddingJob(job: EmbeddingJobData): Promise<void> 
   await getProducers().embedding.enqueue(job);
 }
 
+export async function enqueueAutomationJob(job: AutomationJobData): Promise<void> {
+  await getProducers().automation.enqueue(job);
+}
+
 export async function closeJobQueues(): Promise<void> {
   if (!producers) {
     return;
@@ -112,5 +148,10 @@ export async function closeJobQueues(): Promise<void> {
 
   const current = producers;
   producers = null;
-  await Promise.all([current.appSync.close(), current.ingestion.close(), current.embedding.close()]);
+  await Promise.all([
+    current.appSync.close(),
+    current.ingestion.close(),
+    current.embedding.close(),
+    current.automation.close(),
+  ]);
 }

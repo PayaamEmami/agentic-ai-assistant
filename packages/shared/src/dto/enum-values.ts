@@ -9,6 +9,8 @@ export const AttachmentKindValues = [
   AttachmentKind.File,
 ] as const;
 
+// OAuth-connected apps only. MCP is stored as app_kind='mcp' but is configured
+// through the automation routes, not the GitHub/Google OAuth app flow.
 export const AppKindValues = [AppKind.GitHub, AppKind.Google] as const;
 
 export const AppCapabilityValues = [AppCapability.Knowledge, AppCapability.Tools] as const;

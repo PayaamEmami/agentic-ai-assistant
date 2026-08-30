@@ -16,6 +16,7 @@ export const QUEUE_NAMES = {
   appSync: 'app-sync',
   toolExecution: 'tool-execution',
   chatContinuation: 'chat-continuation',
+  automation: 'automation',
 } as const;
 
 export const QUEUE_JOB_OPTIONS = {
@@ -48,6 +49,13 @@ export const QUEUE_JOB_OPTIONS = {
     backoff: { type: 'exponential', delay: 1_000 },
     removeOnComplete: 100,
     removeOnFail: 500,
+  },
+  // Automation runs write code and open pull requests, so a retry would redo
+  // side effects rather than recover. Failures surface on the run record instead.
+  [QUEUE_NAMES.automation]: {
+    attempts: 1,
+    removeOnComplete: 50,
+    removeOnFail: 200,
   },
 } as const;
 

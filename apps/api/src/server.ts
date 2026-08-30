@@ -25,6 +25,7 @@ import { personalizationRoutes } from './routes/personalization.js';
 import { voiceRoutes } from './routes/voice.js';
 import { listenerRoutes } from './routes/listener.js';
 import { appRoutes } from './routes/apps.js';
+import { automationRoutes } from './routes/automation.js';
 import { clientLogRoutes } from './routes/client-logs.js';
 import { clientTelemetryRoutes } from './routes/client-telemetry.js';
 import { wsHandler } from './ws/handler.js';
@@ -163,6 +164,10 @@ export async function buildServer(
     prefix: '/api',
     appService: services.appService,
     webBaseUrl: config.webBaseUrl,
+  });
+  await app.register(automationRoutes, {
+    prefix: '/api',
+    automationService: services.automationService,
   });
   await app.register(clientLogRoutes, { prefix: '/api' });
   await app.register(clientTelemetryRoutes, { prefix: '/api' });

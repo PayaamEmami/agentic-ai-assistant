@@ -6,7 +6,10 @@ import { promisify } from 'node:util';
 import { type ChatProvider, createChatProvider } from '@aaa/ai';
 import { loadOpenAiEnv, openAIProviderModelConfigFromEnv } from '@aaa/config';
 import type { ToolProgressEvent } from '@aaa/shared';
-import { GitHubToolProvider } from './github-tool-provider.js';
+import {
+  GitHubToolProvider,
+  type GitHubPullRequestSummary,
+} from './github-tool-provider.js';
 
 const execFileAsync = promisify(execFile);
 const MAX_FILE_CONTEXT = 12;
@@ -33,6 +36,24 @@ export interface GitHubCodingTaskInput {
   baseBranch?: string;
   targetPullNumber?: number;
   validationCommands?: string[];
+  /**
+   * Opens the pull request as a draft. Automation runs use this so unattended
+   * changes cannot be merged without a human opening them for review first.
+   */
+  draft?: boolean;
+  /**
+   * Skip model-supplied validation commands. Automation uses this so unattended
+   * runs cannot exec arbitrary binaries chosen by the planner.
+   */
+  skipValidation?: boolean;
+}
+
+export interface CodingTaskResult {
+  repo: string;
+  branch: string;
+  pullRequest: GitHubPullRequestSummary;
+  validationResults: unknown;
+  changedFiles: string[];
 }
 
 export interface CodingTaskProgressReporter {
@@ -67,7 +88,7 @@ export class CodingTaskRunner {
     this.toolExecutionId = input.toolExecutionId;
   }
 
-  async run(input: GitHubCodingTaskInput): Promise<unknown> {
+  async run(input: GitHubCodingTaskInput): Promise<CodingTaskResult> {
     const workspaceRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'aaa-coding-'));
     try {
       await this.report('clone', `Cloning ${input.repo}`);
@@ -77,7 +98,7 @@ export class CodingTaskRunner {
           : null;
       const baseBranch = targetPr?.base.ref ?? input.baseBranch ?? 'main';
       const branchName = targetPr?.head.ref ?? `aaa/${this.toolExecutionId}`;
-      const repoUrl = `https://x-access-token:${this.githubToken}@github.com/${input.repo}.git`;
+      const repoUrl = `https://github.com/${input.repo}.git`;
 
       await this.execGit([
         'clone',
@@ -104,11 +125,16 @@ export class CodingTaskRunner {
       await this.report('edit', 'Applying code changes');
       await this.applyPlan(workspaceRoot, plan);
 
-      await this.report('validate', 'Running validation commands');
-      const validationResults = await this.runValidation(
-        workspaceRoot,
-        input.validationCommands ?? plan.validationCommands ?? [],
-      );
+      let validationResults: unknown = [];
+      if (input.skipValidation) {
+        await this.report('validate', 'Skipping validation for unattended automation');
+      } else {
+        await this.report('validate', 'Running validation commands');
+        validationResults = await this.runValidation(
+          workspaceRoot,
+          input.validationCommands ?? plan.validationCommands ?? [],
+        );
+      }
 
       await this.report('commit', 'Creating git commit');
       await this.execGit(['add', '--all'], workspaceRoot);
@@ -135,6 +161,7 @@ export class CodingTaskRunner {
             body: plan.prBody,
             head: branchName,
             base: baseBranch,
+            draft: input.draft,
           });
 
       await this.report('done', 'Coding task completed');
@@ -187,7 +214,12 @@ export class CodingTaskRunner {
     });
 
     const content = completion.content?.trim() ?? '';
-    const parsed = JSON.parse(content) as Partial<CodingPlan>;
+    let parsed: Partial<CodingPlan>;
+    try {
+      parsed = parseJsonObject(content) as Partial<CodingPlan>;
+    } catch {
+      throw new Error('Coding task model returned a response that was not valid JSON');
+    }
     if (
       !parsed ||
       typeof parsed.commitMessage !== 'string' ||
@@ -328,12 +360,37 @@ export class CodingTaskRunner {
     return results;
   }
 
+  private gitAuthArgs(): string[] {
+    return ['-c', `http.extraHeader=AUTHORIZATION: bearer ${this.githubToken}`];
+  }
+
+  private redactGitError(error: unknown): Error {
+    const replace = (text: string) =>
+      text
+        .split(this.githubToken)
+        .join('[redacted]')
+        .replace(/x-access-token:[^@\s]+/gi, 'x-access-token:[redacted]')
+        .replace(/bearer\s+\S+/gi, 'bearer [redacted]');
+
+    if (error instanceof Error) {
+      const redacted = new Error(replace(error.message));
+      redacted.name = error.name;
+      return redacted;
+    }
+
+    return new Error(replace(String(error)));
+  }
+
   private async execGit(args: string[], cwd?: string): Promise<{ stdout: string; stderr: string }> {
-    return execFileAsync('git', args, {
-      cwd,
-      windowsHide: true,
-      maxBuffer: 1024 * 1024,
-    });
+    try {
+      return await execFileAsync('git', [...this.gitAuthArgs(), ...args], {
+        cwd,
+        windowsHide: true,
+        maxBuffer: 1024 * 1024,
+      });
+    } catch (error) {
+      throw this.redactGitError(error);
+    }
   }
 
   private async report(phase: ToolProgressEvent['phase'], message: string): Promise<void> {
@@ -343,4 +400,9 @@ export class CodingTaskRunner {
 
 function splitCommand(command: string): string[] {
   return command.match(/(?:[^\s"]+|"[^"]*")+/g)?.map((part) => part.replace(/^"|"$/g, '')) ?? [];
+}
+
+function parseJsonObject(raw: string): unknown {
+  const json = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  return JSON.parse(json);
 }

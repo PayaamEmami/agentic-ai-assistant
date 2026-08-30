@@ -9,6 +9,7 @@ import {
 } from './lib/chat-continuation-queue.js';
 import { closeJobQueues, initializeJobQueues } from './lib/job-queues.js';
 import { startAppSyncScheduler } from './lib/sync-scheduler.js';
+import { startAutomationScheduler } from './lib/automation-scheduler.js';
 import { initializeWorkerTelemetry, startWorkerObservabilityServer } from './lib/telemetry.js';
 import { shutdownTracing } from '@aaa/observability';
 
@@ -33,6 +34,7 @@ async function main() {
   initializeChatContinuationQueue(config);
   const workers = createWorkers(config);
   const syncScheduler = startAppSyncScheduler(config);
+  const automationScheduler = startAutomationScheduler(config);
   logger.info(
     {
       event: 'worker.started',
@@ -53,6 +55,7 @@ async function main() {
       'Shutting down workers',
     );
     clearInterval(syncScheduler);
+    automationScheduler.stop();
     observability.stopPolling();
     await new Promise<void>((resolve, reject) => {
       observability.server.close((error) => {

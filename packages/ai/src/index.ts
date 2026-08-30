@@ -45,6 +45,17 @@ export {
   ToolAgent,
   CodingAgent,
   VerifierAgent,
+  AutomationPlannerAgent,
+  AUTOMATION_MAX_REPOS,
+  AUTOMATION_MIN_CONFIDENCE,
+} from './agents/index.js';
+export type {
+  AutomationCandidateCard,
+  AutomationCandidateRepo,
+  AutomationPlan,
+  AutomationPlanAbstention,
+  AutomationPlanRequest,
+  AutomationPlanSelection,
 } from './agents/index.js';
 
 export { AgentOrchestrator } from './orchestrator.js';

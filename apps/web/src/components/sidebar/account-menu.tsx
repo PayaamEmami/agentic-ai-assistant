@@ -1,7 +1,8 @@
 'use client';
 
-import { type RefObject } from 'react';
-import { AppsIcon, PersonalizationIcon, SignOutIcon } from '@/components/icons';
+import { type ReactNode, type RefObject } from 'react';
+import { AppsIcon, AutomationIcon, PersonalizationIcon, SignOutIcon } from '@/components/icons';
+import { cn } from '@/lib/cn';
 
 interface SidebarUser {
   email?: string | null;
@@ -11,6 +12,7 @@ interface SidebarUser {
 interface AccountMenuProps {
   collapsed: boolean;
   isAppsPage: boolean;
+  isAutomationPage: boolean;
   isOpen: boolean;
   isPersonalizationPage: boolean;
   menuRef: RefObject<HTMLDivElement | null>;
@@ -34,9 +36,45 @@ function getInitials(value: string | null | undefined) {
   return `${parts[0]?.[0] ?? ''}${parts[1]?.[0] ?? ''}`.toUpperCase();
 }
 
+function MenuItem({
+  active = false,
+  children,
+  className,
+  danger = false,
+  icon,
+  onClick,
+}: {
+  active?: boolean;
+  children: ReactNode;
+  className?: string;
+  danger?: boolean;
+  icon: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition',
+        danger
+          ? 'text-foreground-muted hover:bg-surface-hover hover:text-error'
+          : active
+            ? 'bg-surface-accent text-foreground'
+            : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground',
+        className,
+      )}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
 export function AccountMenu({
   collapsed,
   isAppsPage,
+  isAutomationPage,
   isOpen,
   isPersonalizationPage,
   menuRef,
@@ -56,38 +94,32 @@ export function AccountMenu({
             collapsed ? 'left-2 w-64' : 'left-2 right-2'
           }`}
         >
-          <button
-            type="button"
+          <MenuItem
+            active={isPersonalizationPage}
+            icon={<PersonalizationIcon />}
             onClick={() => onNavigate('/chat/personalization')}
-            className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-              isPersonalizationPage
-                ? 'bg-surface-accent text-foreground'
-                : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-            }`}
           >
-            <PersonalizationIcon />
             Personalization
-          </button>
-          <button
-            type="button"
+          </MenuItem>
+          <MenuItem
+            active={isAppsPage}
+            className="mt-1"
+            icon={<AppsIcon />}
             onClick={() => onNavigate('/chat/apps')}
-            className={`mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm transition ${
-              isAppsPage
-                ? 'bg-surface-accent text-foreground'
-                : 'text-foreground-muted hover:bg-surface-hover hover:text-foreground'
-            }`}
           >
-            <AppsIcon />
             Apps
-          </button>
-          <button
-            type="button"
-            onClick={onLogout}
-            className="mt-1 flex w-full items-center gap-3 rounded-2xl px-3 py-2 text-left text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-error"
+          </MenuItem>
+          <MenuItem
+            active={isAutomationPage}
+            className="mt-1"
+            icon={<AutomationIcon />}
+            onClick={() => onNavigate('/chat/automation')}
           >
-            <SignOutIcon />
+            Automation
+          </MenuItem>
+          <MenuItem className="mt-1" danger icon={<SignOutIcon />} onClick={onLogout}>
             Sign out
-          </button>
+          </MenuItem>
         </div>
       ) : null}
       <button

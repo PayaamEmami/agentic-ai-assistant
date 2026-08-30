@@ -56,6 +56,8 @@ describe('GitHubApiClient.listRepositories', () => {
       owner: 'owner',
       defaultBranch: 'develop',
       private: true,
+      description: null,
+      language: null,
     });
   });
 

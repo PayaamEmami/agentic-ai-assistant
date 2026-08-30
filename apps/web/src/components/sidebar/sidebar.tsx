@@ -54,6 +54,7 @@ export function Sidebar({
   const accountMenuRef = useRef<HTMLDivElement | null>(null);
   const isPersonalizationPage = pathname === '/chat/personalization';
   const isAppsPage = pathname === '/chat/apps';
+  const isAutomationPage = pathname === '/chat/automation';
 
   useEffect(() => {
     setIsAccountMenuOpen(false);
@@ -325,6 +326,7 @@ export function Sidebar({
       <AccountMenu
         collapsed={collapsed}
         isAppsPage={isAppsPage}
+        isAutomationPage={isAutomationPage}
         isOpen={isAccountMenuOpen}
         isPersonalizationPage={isPersonalizationPage}
         menuRef={accountMenuRef}

@@ -19,6 +19,9 @@ export interface GitHubRepository {
   owner: string;
   defaultBranch: string;
   private: boolean;
+  /** Present for repository listings; used when reasoning about repo choice. */
+  description: string | null;
+  language: string | null;
 }
 
 export interface GitHubFileContent {
@@ -34,6 +37,8 @@ interface GitHubRepositoryApiResponse {
   private: boolean;
   default_branch: string;
   owner: { login: string };
+  description?: string | null;
+  language?: string | null;
 }
 
 interface GitHubContentApiResponse {
@@ -71,6 +76,8 @@ function toGitHubRepository(repo: GitHubRepositoryApiResponse): GitHubRepository
     owner: repo.owner.login,
     defaultBranch: repo.default_branch,
     private: repo.private,
+    description: repo.description ?? null,
+    language: repo.language ?? null,
   };
 }
 

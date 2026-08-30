@@ -1,5 +1,6 @@
 import { appsApi } from './apps';
 import { approvalsApi } from './approvals';
+import { automationApi } from './automation';
 import { authApi } from './auth';
 import { chatApi } from './chat';
 import { personalizationApi } from './personalization';
@@ -25,6 +26,14 @@ export type {
   GitHubRepositorySummary,
 } from './apps';
 export type {
+  AutomationBoard,
+  AutomationRun,
+  AutomationRunEvent,
+  AutomationSchedule,
+  McpConnectionStatus,
+  McpConnectionTest,
+} from './automation';
+export type {
   PersonalizationMemory,
   PersonalizationMemoryKind,
   PersonalizationProfile,
@@ -36,6 +45,7 @@ export const api = {
   upload: uploadApi,
   approvals: approvalsApi,
   apps: appsApi,
+  automation: automationApi,
   voice: voiceApi,
   listener: listenerApi,
   personalization: personalizationApi,

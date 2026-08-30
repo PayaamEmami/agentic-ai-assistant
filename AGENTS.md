@@ -49,6 +49,7 @@ See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deplo
 │   ├── memory/               # Preferences, personalization, memory
 │   ├── db/                   # Database schema, migrations, repositories
 │   ├── config/               # Environment parsing, constants
+│   ├── mcp/                  # Streamable HTTP MCP client
 │   └── observability/        # Logging, tracing, metrics, sanitization
 ├── infra/
 │   └── aws-ec2/              # EC2 provisioning script and cloud-init user-data
@@ -72,6 +73,8 @@ When deciding where a change belongs:
 - Native tool provider behavior: check `packages/tool-providers`
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
+- Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`
+- Scheduled board automation: check `apps/worker/src/jobs/automation/`, `apps/api/src/routes/automation.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 
 ## Model Providers
@@ -93,6 +96,16 @@ Intentional coupling (out of scope for provider swaps):
 - Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`.
 - Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
+
+## Task Board Automation
+
+The assistant can connect to the personal `tools` task board over MCP and run a scheduled coding job:
+
+- MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL in `settings`, API key in `encrypted_credentials`).
+- Schedules and run history live in `automation_schedules`, `automation_runs`, and append-only `automation_run_events`.
+- The worker `automation` queue is ticked by `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`). Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat so a live coding job is not killed early. At most one in-flight run is allowed per schedule.
+- Each run creates a hidden `conversations.is_automation` row so activity can stream over the existing WebSocket without appearing in the sidebar.
+- Settings UI is `/chat/automation` (account menu). Start new schedules in dry-run.
 
 ## Local Workflow
 
