@@ -1,6 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AttachmentIcon,
@@ -13,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat';
+import { extractTransferFiles } from '@/lib/chat/transfer-files';
 import { reportClientError } from '@/lib/client-logging';
 import { useLiveVoiceSession } from '@/lib/voice';
 
@@ -22,23 +32,8 @@ function isIndexableDocument(file: File): boolean {
   return file.type.startsWith('text/') || INDEXABLE_MIME_TYPES.has(file.type);
 }
 
-function inferPastedFileName(file: File): string {
-  if (file.name) {
-    return file.name;
-  }
-
-  const extension = file.type.split('/')[1] ?? 'png';
-  return `pasted-${Date.now()}.${extension}`;
-}
-
-function extractPastedFiles(clipboardData: DataTransfer): File[] {
-  return Array.from(clipboardData.items)
-    .filter((item) => item.kind === 'file')
-    .map((item) => item.getAsFile())
-    .filter((file): file is File => file !== null)
-    .map((file) =>
-      file.name ? file : new File([file], inferPastedFileName(file), { type: file.type }),
-    );
+export interface InputBarHandle {
+  addFiles: (files: File[]) => Promise<void>;
 }
 
 function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): string {
@@ -49,7 +44,7 @@ function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): stri
   return 'Attached files';
 }
 
-export function InputBar() {
+export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
   const router = useRouter();
   const {
     sendMessage,
@@ -122,28 +117,35 @@ export function InputBar() {
     fileInputRef.current?.click();
   };
 
-  const uploadFiles = async (files: File[]) => {
-    for (const file of files) {
-      try {
-        const attachment = await uploadAttachment(file, {
-          indexForRag: isIndexableDocument(file),
-        });
-        setAttachments((previous) => [...previous, attachment]);
-      } catch (error) {
-        void reportClientError({
-          event: 'client.upload.failed',
-          component: 'input-bar',
-          message: 'Attachment upload failed',
-          error,
-          context: {
-            fileName: file.name,
-            mimeType: file.type,
-            sizeBytes: file.size,
-          },
-        });
+  const uploadFiles = useCallback(
+    async (files: File[]) => {
+      for (const file of files) {
+        try {
+          const attachment = await uploadAttachment(file, {
+            indexForRag: isIndexableDocument(file),
+          });
+          setAttachments((previous) => [...previous, attachment]);
+        } catch (error) {
+          void reportClientError({
+            event: 'client.upload.failed',
+            component: 'input-bar',
+            message: 'Attachment upload failed',
+            error,
+            context: {
+              fileName: file.name,
+              mimeType: file.type,
+              sizeBytes: file.size,
+            },
+          });
+        }
       }
-    }
-  };
+
+      setFocusRequestId((value) => value + 1);
+    },
+    [uploadAttachment],
+  );
+
+  useImperativeHandle(ref, () => ({ addFiles: uploadFiles }), [uploadFiles]);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []);
@@ -157,7 +159,7 @@ export function InputBar() {
   };
 
   const handlePaste = async (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const files = extractPastedFiles(event.clipboardData);
+    const files = extractTransferFiles(event.clipboardData, 'pasted');
     if (files.length === 0) {
       return;
     }
@@ -335,7 +337,7 @@ export function InputBar() {
       {liveVoice.error ? <p className="mt-3 text-xs text-error">{liveVoice.error}</p> : null}
     </form>
   );
-}
+});
 
 function VoiceActivityBar({
   levels,

@@ -2,7 +2,13 @@
 
 import { memo } from 'react';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+
+import 'katex/dist/katex.min.css';
+
+import { normalizeMathDelimiters } from './math';
 
 const markdownComponents: Components = {
   p: ({ children }) => <p className="leading-relaxed break-words">{children}</p>,
@@ -94,9 +100,13 @@ function MarkdownImpl({ children }: { children: string }) {
   }
 
   return (
-    <div className="min-w-0 space-y-2 break-words">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-        {children}
+    <div className="chat-markdown min-w-0 space-y-2 break-words">
+      <ReactMarkdown
+        remarkPlugins={[remarkMath, remarkGfm]}
+        rehypePlugins={[[rehypeKatex, { throwOnError: false, output: 'html' }]]}
+        components={markdownComponents}
+      >
+        {normalizeMathDelimiters(children)}
       </ReactMarkdown>
     </div>
   );
