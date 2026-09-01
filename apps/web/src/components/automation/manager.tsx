@@ -23,13 +23,13 @@ export function AutomationManager() {
     deleteSchedule,
     runNow,
   } = useAutomationSchedules();
-  const [mcpConnected, setMcpConnected] = useState(false);
+  const [taskBoardConnected, setTaskBoardConnected] = useState(false);
   const [boards, setBoards] = useState<AutomationBoard[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
   const loadBoards = useCallback(async () => {
-    if (!mcpConnected) {
+    if (!taskBoardConnected) {
       setBoards([]);
       return;
     }
@@ -40,7 +40,7 @@ export function AutomationManager() {
     } catch {
       setBoards([]);
     }
-  }, [mcpConnected]);
+  }, [taskBoardConnected]);
 
   useEffect(() => {
     void loadBoards();
@@ -50,7 +50,7 @@ export function AutomationManager() {
 
   return (
     <div className="space-y-10">
-      <McpConnectionSection onConnectedChange={setMcpConnected} />
+      <McpConnectionSection onTaskBoardConnectedChange={setTaskBoardConnected} />
 
       <section className="space-y-4 border-t border-border pt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -67,13 +67,13 @@ export function AutomationManager() {
               setCreating(true);
               setEditingId(null);
             }}
-            disabled={!mcpConnected || busy}
+            disabled={!taskBoardConnected || busy}
           >
             New schedule
           </Button>
         </div>
 
-        {!mcpConnected ? (
+        {!taskBoardConnected ? (
           <Alert variant="warning">
             Connect the task board MCP server before creating a schedule.
           </Alert>
@@ -110,7 +110,7 @@ export function AutomationManager() {
             <ScheduleForm
               boards={boards}
               busy={busy}
-              disabled={!mcpConnected}
+              disabled={!taskBoardConnected}
               submitLabel="Create schedule"
               onCancel={() => setCreating(false)}
               onSubmit={async (input) => {

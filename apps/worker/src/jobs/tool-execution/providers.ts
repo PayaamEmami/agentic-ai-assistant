@@ -1,6 +1,13 @@
 import { appCapabilityConfigRepository } from '@aaa/db';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
-import { McpClient } from '@aaa/mcp';
+import {
+  CRS_MCP_CAPABILITY,
+  CRS_MCP_TIMEOUT_MS,
+  McpClient,
+  TASK_BOARD_MCP_CAPABILITY,
+  isTaskBoardMcpCapability,
+  mcpCapabilityForToolName,
+} from '@aaa/mcp';
 import { GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import type { ToolExecutionResult } from './types.js';
 import { asString, requireString } from './validation.js';
@@ -79,33 +86,54 @@ export async function withGitHubProvider(
 }
 
 /**
- * Builds an MCP client from the user's stored connection. Kept separate from
+ * Builds an MCP client from a stored connection. Kept separate from
  * `withMcpClient` so automation jobs can reuse the client without the
  * ToolExecutionResult wrapper.
  */
-export async function resolveMcpClient(userId: string): Promise<McpClient> {
-  const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
-    userId,
-    'mcp',
-    'tools',
-  );
-  if (!config || config.status !== 'connected') {
-    throw new Error('No MCP server is connected');
+export async function resolveMcpClient(
+  userId: string,
+  capability: string = TASK_BOARD_MCP_CAPABILITY,
+): Promise<McpClient> {
+  const configs = await appCapabilityConfigRepository.listByUserAndApp(userId, 'mcp');
+  const connected = configs.filter((entry) => entry.status === 'connected');
+  const hasTaskBoard = connected.some((entry) => entry.capability === TASK_BOARD_MCP_CAPABILITY);
+  const config = connected.find((entry) => {
+    if (isTaskBoardMcpCapability(capability)) {
+      if (hasTaskBoard) {
+        return entry.capability === TASK_BOARD_MCP_CAPABILITY;
+      }
+      return isTaskBoardMcpCapability(entry.capability);
+    }
+    return entry.capability === capability;
+  });
+
+  if (!config) {
+    throw new Error(
+      isTaskBoardMcpCapability(capability)
+        ? 'No task board MCP server is connected'
+        : `No MCP server is connected for "${capability}"`,
+    );
   }
 
   const credentials = decryptCredentials(config.encryptedCredentials);
   return new McpClient({
     serverUrl: requireString(config.settings, 'serverUrl'),
     apiKey: requireString(credentials, 'apiKey'),
+    timeoutMs: config.capability === CRS_MCP_CAPABILITY ? CRS_MCP_TIMEOUT_MS : undefined,
   });
 }
 
 export async function withMcpClient(
   userId: string,
+  toolName: string,
   handler: (client: McpClient) => Promise<unknown>,
 ): Promise<ToolExecutionResult> {
   try {
-    return { success: true, result: await handler(await resolveMcpClient(userId)) };
+    const capability = mcpCapabilityForToolName(toolName);
+    if (!capability) {
+      throw new Error(`Not an MCP tool: ${toolName}`);
+    }
+    return { success: true, result: await handler(await resolveMcpClient(userId, capability)) };
   } catch (error) {
     return {
       success: false,

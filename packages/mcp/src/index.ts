@@ -1,7 +1,15 @@
 export { McpClient, unwrapMcpToolData } from './client.js';
 export {
+  CRS_MCP_CAPABILITY,
+  CRS_MCP_TIMEOUT_MS,
+  LEGACY_MCP_CAPABILITY,
   MCP_TOOL_PREFIX,
+  TASK_BOARD_MCP_CAPABILITY,
+  inferMcpCapability,
   isMcpToolName,
+  isTaskBoardMcpCapability,
+  isValidMcpCapabilitySlug,
+  mcpCapabilityForToolName,
   toNamespacedMcpToolName,
   toRemoteMcpToolName,
 } from './names.js';

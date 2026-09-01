@@ -219,14 +219,36 @@ export async function automationRoutes(
       return reply.status(200).send(result);
     });
 
-    userApp.delete('/automation/mcp', async (request, reply) => {
-      const disconnected = await automationService.disconnectMcpServer(request.user!.id);
-      return reply.status(200).send({ disconnected });
-    });
+    userApp.delete<{ Querystring: { capability?: string } }>(
+      '/automation/mcp',
+      async (request, reply) => {
+        const capability = request.query.capability?.trim();
+        if (!capability) {
+          return sendValidationError(reply, 'Query parameter "capability" is required.');
+        }
 
-    userApp.post('/automation/mcp/test', async (request, reply) => {
-      const result = await automationService.testSavedMcpConnection(request.user!.id);
-      return reply.status(200).send(result);
-    });
+        const disconnected = await automationService.disconnectMcpServer(
+          request.user!.id,
+          capability,
+        );
+        return reply.status(200).send({ disconnected });
+      },
+    );
+
+    userApp.post<{ Querystring: { capability?: string } }>(
+      '/automation/mcp/test',
+      async (request, reply) => {
+        const capability = request.query.capability?.trim();
+        if (!capability) {
+          return sendValidationError(reply, 'Query parameter "capability" is required.');
+        }
+
+        const result = await automationService.testSavedMcpConnection(
+          request.user!.id,
+          capability,
+        );
+        return reply.status(200).send(result);
+      },
+    );
   });
 }

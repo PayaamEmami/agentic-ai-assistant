@@ -80,17 +80,29 @@ export type AutomationRunNowRequest = z.infer<typeof AutomationRunNowRequest>;
 export const ConnectMcpServerRequest = z.object({
   serverUrl: z.string().url().max(500),
   apiKey: z.string().min(1).max(500),
+  capability: z
+    .string()
+    .regex(/^[a-z][a-z0-9-]{0,63}$/, 'MCP capability must be a lowercase slug')
+    .optional(),
 });
 export type ConnectMcpServerRequest = z.infer<typeof ConnectMcpServerRequest>;
 
 export const McpConnectionStatusDto = z.object({
+  capability: z.string(),
+  serverUrl: z.string(),
+  serverName: z.string().nullable(),
   connected: z.boolean(),
-  serverUrl: z.string().nullable(),
 });
 export type McpConnectionStatusDto = z.infer<typeof McpConnectionStatusDto>;
 
+export const McpConnectionListDto = z.object({
+  connections: z.array(McpConnectionStatusDto),
+});
+export type McpConnectionListDto = z.infer<typeof McpConnectionListDto>;
+
 export const McpConnectionTestDto = z.object({
   connected: z.boolean(),
+  capability: z.string().optional(),
   serverName: z.string().optional(),
   serverVersion: z.string().optional(),
   tools: z.array(z.string()),

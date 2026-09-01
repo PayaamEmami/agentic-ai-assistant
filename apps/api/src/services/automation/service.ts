@@ -1,5 +1,11 @@
 import { encryptCredentials } from '@aaa/knowledge-sources';
-import { assertPublicHttpsUrl, McpError } from '@aaa/mcp';
+import {
+  assertPublicHttpsUrl,
+  inferMcpCapability,
+  isValidMcpCapabilitySlug,
+  McpError,
+  TASK_BOARD_MCP_CAPABILITY,
+} from '@aaa/mcp';
 import { computeNextRunAt, isValidCronExpression, isValidTimezone } from '@aaa/shared';
 import {
   appCapabilityConfigRepository,
@@ -15,7 +21,7 @@ import {
   type AutomationScheduleUpdate,
 } from '@aaa/db';
 import { AppError } from '../../lib/errors.js';
-import { createMcpClient, getMcpConnection, invalidateMcpToolCache } from '../tools/index.js';
+import { createMcpClient, getMcpConnection, getMcpConnections, invalidateMcpToolCache } from '../tools/index.js';
 import { enqueueAutomationJob } from './queue.js';
 
 export class AutomationValidationError extends AppError {
@@ -27,10 +33,18 @@ export class AutomationValidationError extends AppError {
 
 export interface McpConnectionTestResult {
   connected: boolean;
+  capability?: string;
   serverName?: string;
   serverVersion?: string;
   tools: string[];
   error?: string;
+}
+
+export interface McpConnectionStatusItem {
+  capability: string;
+  serverUrl: string;
+  serverName: string | null;
+  connected: boolean;
 }
 
 export interface AutomationBoardSummary {
@@ -234,46 +248,76 @@ export class AutomationService {
     return run;
   }
 
-  /** Saves the MCP server connection and verifies it by listing its tools. */
+  /** Saves an MCP server connection and verifies it by listing its tools. */
   async connectMcpServer(
     userId: string,
-    input: { serverUrl: string; apiKey: string },
+    input: { serverUrl: string; apiKey: string; capability?: string },
   ): Promise<McpConnectionTestResult> {
     const serverUrl = assertSafeMcpUrl(input.serverUrl);
     if (!input.apiKey.trim()) {
       throw new AutomationValidationError('An MCP API key is required.');
     }
 
-    const test = await this.testMcpConnection({ serverUrl, apiKey: input.apiKey.trim() });
+    const test = await this.testMcpConnection({
+      capability: input.capability?.trim() || TASK_BOARD_MCP_CAPABILITY,
+      serverUrl,
+      apiKey: input.apiKey.trim(),
+    });
     if (!test.connected) {
       return test;
+    }
+
+    const capability =
+      input.capability?.trim() ||
+      inferMcpCapability({ serverName: test.serverName, tools: test.tools });
+    if (!capability || !isValidMcpCapabilitySlug(capability)) {
+      throw new AutomationValidationError(
+        'Could not tell which MCP this is. Pass capability "task-board" or "crs".',
+      );
     }
 
     await appCapabilityConfigRepository.upsert(
       userId,
       'mcp',
-      'tools',
+      capability,
       'connected',
       encryptCredentials({ apiKey: input.apiKey.trim() }),
-      { serverUrl },
+      { serverUrl, serverName: test.serverName ?? null },
     );
-    await invalidateMcpToolCache(userId);
 
-    return test;
+    if (capability === TASK_BOARD_MCP_CAPABILITY) {
+      const legacy = await appCapabilityConfigRepository.findByUserAppAndCapability(
+        userId,
+        'mcp',
+        'tools',
+      );
+      if (legacy) {
+        await appCapabilityConfigRepository.delete(legacy.id);
+      }
+    }
+
+    await invalidateMcpToolCache(userId, capability);
+
+    return { ...test, capability };
   }
 
-  async disconnectMcpServer(userId: string): Promise<boolean> {
+  async disconnectMcpServer(userId: string, capability: string): Promise<boolean> {
+    const connection = await getMcpConnection(userId, capability);
+    if (!connection) {
+      return false;
+    }
+
     const config = await appCapabilityConfigRepository.findByUserAppAndCapability(
       userId,
       'mcp',
-      'tools',
+      connection.capability,
     );
     if (!config) {
       return false;
     }
 
     await appCapabilityConfigRepository.delete(config.id);
-    await invalidateMcpToolCache(userId);
+    await invalidateMcpToolCache(userId, connection.capability);
     return true;
   }
 
@@ -282,11 +326,16 @@ export class AutomationService {
    * settings UI can show the server's own error message.
    */
   async testMcpConnection(connection: {
+    capability?: string;
     serverUrl: string;
     apiKey: string;
   }): Promise<McpConnectionTestResult> {
     try {
-      const { serverInfo, tools } = await createMcpClient(connection).testConnection();
+      const { serverInfo, tools } = await createMcpClient({
+        capability: connection.capability ?? TASK_BOARD_MCP_CAPABILITY,
+        serverUrl: connection.serverUrl,
+        apiKey: connection.apiKey,
+      }).testConnection();
       return {
         connected: true,
         serverName: serverInfo.name,
@@ -302,31 +351,37 @@ export class AutomationService {
     }
   }
 
-  async testSavedMcpConnection(userId: string): Promise<McpConnectionTestResult> {
-    const connection = await getMcpConnection(userId);
+  async testSavedMcpConnection(
+    userId: string,
+    capability: string,
+  ): Promise<McpConnectionTestResult> {
+    const connection = await getMcpConnection(userId, capability);
     if (!connection) {
       return { connected: false, tools: [], error: 'No MCP server is connected.' };
     }
 
-    return this.testMcpConnection(connection);
+    const result = await this.testMcpConnection(connection);
+    return { ...result, capability: connection.capability };
   }
 
-  async getMcpStatus(
-    userId: string,
-  ): Promise<{ connected: boolean; serverUrl: string | null }> {
-    const connection = await getMcpConnection(userId);
+  async getMcpStatus(userId: string): Promise<{ connections: McpConnectionStatusItem[] }> {
+    const connections = await getMcpConnections(userId);
     return {
-      connected: connection !== null,
-      serverUrl: connection?.serverUrl ?? null,
+      connections: connections.map((connection) => ({
+        capability: connection.capability,
+        serverUrl: connection.serverUrl,
+        serverName: connection.serverName ?? null,
+        connected: true,
+      })),
     };
   }
 
   /**
-   * Lists boards from the connected MCP server so the settings form can offer
+   * Lists boards from the task-board MCP server so the settings form can offer
    * real pickers instead of asking the user to type opaque IDs.
    */
   async listBoards(userId: string): Promise<AutomationBoardSummary[]> {
-    const connection = await getMcpConnection(userId);
+    const connection = await getMcpConnection(userId, TASK_BOARD_MCP_CAPABILITY);
     if (!connection) {
       return [];
     }

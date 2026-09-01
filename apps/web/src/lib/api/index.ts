@@ -30,6 +30,7 @@ export type {
   AutomationRun,
   AutomationRunEvent,
   AutomationSchedule,
+  McpConnectionList,
   McpConnectionStatus,
   McpConnectionTest,
 } from './automation';

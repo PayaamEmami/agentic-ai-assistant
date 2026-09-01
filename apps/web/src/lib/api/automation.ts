@@ -4,6 +4,7 @@ import type {
   AutomationRunEventDto,
   AutomationScheduleDto,
   CreateAutomationScheduleRequest,
+  McpConnectionListDto,
   McpConnectionStatusDto,
   McpConnectionTestDto,
   UpdateAutomationScheduleRequest,
@@ -15,6 +16,7 @@ export type AutomationRun = AutomationRunDto;
 export type AutomationRunEvent = AutomationRunEventDto;
 export type AutomationBoard = AutomationBoardListDto;
 export type McpConnectionStatus = McpConnectionStatusDto;
+export type McpConnectionList = McpConnectionListDto;
 export type McpConnectionTest = McpConnectionTestDto;
 
 export const automationApi = {
@@ -56,20 +58,24 @@ export const automationApi = {
     return request<{ boards: AutomationBoard[] }>('/api/automation/boards');
   },
   getMcpStatus() {
-    return request<McpConnectionStatus>('/api/automation/mcp');
+    return request<McpConnectionList>('/api/automation/mcp');
   },
-  connectMcp(serverUrl: string, apiKey: string) {
+  connectMcp(serverUrl: string, apiKey: string, capability?: string) {
     return request<McpConnectionTest>('/api/automation/mcp', {
       method: 'PUT',
-      body: JSON.stringify({ serverUrl, apiKey }),
+      body: JSON.stringify({ serverUrl, apiKey, capability }),
     });
   },
-  disconnectMcp() {
-    return request<{ disconnected: boolean }>('/api/automation/mcp', {
-      method: 'DELETE',
-    });
+  disconnectMcp(capability: string) {
+    return request<{ disconnected: boolean }>(
+      `/api/automation/mcp?capability=${encodeURIComponent(capability)}`,
+      { method: 'DELETE' },
+    );
   },
-  testMcp() {
-    return request<McpConnectionTest>('/api/automation/mcp/test', { method: 'POST' });
+  testMcp(capability: string) {
+    return request<McpConnectionTest>(
+      `/api/automation/mcp/test?capability=${encodeURIComponent(capability)}`,
+      { method: 'POST' },
+    );
   },
 };

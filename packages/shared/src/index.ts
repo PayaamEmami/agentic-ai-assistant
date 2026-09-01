@@ -124,6 +124,7 @@ export {
   AutomationRunNowRequest,
   ConnectMcpServerRequest,
   McpConnectionStatusDto,
+  McpConnectionListDto,
   McpConnectionTestDto,
   AutomationBoardListDto,
   PersonalizationProfileDto,

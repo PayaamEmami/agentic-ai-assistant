@@ -249,7 +249,7 @@ const toolHandlers: Record<string, ToolHandler> = {
  * namespaced name translated back to the remote server's tool name.
  */
 const mcpToolHandler: ToolHandler = ({ userId, toolName, input }) =>
-  withMcpClient(userId, async (client) => {
+  withMcpClient(userId, toolName, async (client) => {
     const result = await client.callTool(toRemoteMcpToolName(toolName), input);
     return unwrapMcpToolData(result);
   });
