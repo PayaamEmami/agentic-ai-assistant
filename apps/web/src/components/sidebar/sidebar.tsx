@@ -159,25 +159,31 @@ export function Sidebar({
             <h2 className="px-2 py-2 text-sm font-semibold text-foreground">Conversations</h2>
           )}
           <div className={`flex gap-2 ${collapsed ? 'flex-col items-center' : 'items-center'}`}>
+            {collapsed ? (
+              <IconButton
+                onClick={onToggleDesktopCollapse ?? onCloseMobile}
+                title="Expand sidebar"
+                aria-label="Expand sidebar"
+              >
+                <SidebarToggleIcon />
+              </IconButton>
+            ) : null}
             <IconButton
               onClick={() => void openChat(undefined)}
               title="New conversation"
               aria-label="New conversation"
-              className={
-                !currentConversationId
-                  ? 'bg-surface-accent text-foreground hover:bg-surface-accent hover:text-foreground'
-                  : undefined
-              }
             >
-              <PlusIcon />
+              <PlusIcon width={18} height={18} />
             </IconButton>
-            <IconButton
-              onClick={onToggleDesktopCollapse ?? onCloseMobile}
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            >
-              <SidebarToggleIcon />
-            </IconButton>
+            {collapsed ? null : (
+              <IconButton
+                onClick={onToggleDesktopCollapse ?? onCloseMobile}
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <SidebarToggleIcon />
+              </IconButton>
+            )}
           </div>
         </div>
       </div>
