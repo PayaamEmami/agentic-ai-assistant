@@ -26,6 +26,11 @@ function conversationLabel(title: string | null) {
   return title?.trim() || 'Untitled conversation';
 }
 
+function conversationInitial(label: string) {
+  const first = Array.from(label)[0];
+  return (first ?? 'U').toLocaleUpperCase();
+}
+
 export function Sidebar({
   collapsed,
   mobileOpen,
@@ -148,21 +153,24 @@ export function Sidebar({
     >
       <div className={`border-b border-border ${collapsed ? 'p-2' : 'p-4'}`}>
         <div
-          className={`flex items-center gap-2 ${collapsed ? 'justify-center' : 'justify-between'}`}
+          className={`flex gap-2 ${collapsed ? 'flex-col items-center' : 'items-center justify-between'}`}
         >
           {collapsed ? null : (
             <h2 className="px-2 py-2 text-sm font-semibold text-foreground">Conversations</h2>
           )}
-          <div className="flex items-center gap-2">
-            {!collapsed ? (
-              <IconButton
-                onClick={() => void openChat(undefined)}
-                title="New conversation"
-                aria-label="New conversation"
-              >
-                <PlusIcon />
-              </IconButton>
-            ) : null}
+          <div className={`flex gap-2 ${collapsed ? 'flex-col items-center' : 'items-center'}`}>
+            <IconButton
+              onClick={() => void openChat(undefined)}
+              title="New conversation"
+              aria-label="New conversation"
+              className={
+                !currentConversationId
+                  ? 'bg-surface-accent text-foreground hover:bg-surface-accent hover:text-foreground'
+                  : undefined
+              }
+            >
+              <PlusIcon />
+            </IconButton>
             <IconButton
               onClick={onToggleDesktopCollapse ?? onCloseMobile}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -173,8 +181,32 @@ export function Sidebar({
           </div>
         </div>
       </div>
-      <nav className="min-h-0 flex-1 overflow-y-auto p-2">
-        {collapsed ? null : loading.isLoadingConversations &&
+      <nav
+        className={`min-h-0 flex-1 overflow-y-auto p-2 ${collapsed ? 'flex flex-col items-center gap-1' : ''}`}
+      >
+        {collapsed ? (
+          conversations.map((conversation) => {
+            const isActive = currentConversationId === conversation.id;
+            const label = conversationLabel(conversation.title);
+
+            return (
+              <IconButton
+                key={conversation.id}
+                onClick={() => void openChat(conversation.id)}
+                title={label}
+                aria-label={label}
+                aria-current={isActive ? 'page' : undefined}
+                className={
+                  isActive
+                    ? 'bg-surface-accent text-foreground hover:bg-surface-accent hover:text-foreground'
+                    : undefined
+                }
+              >
+                <span className="text-sm font-semibold">{conversationInitial(label)}</span>
+              </IconButton>
+            );
+          })
+        ) : loading.isLoadingConversations &&
           conversations.length === 0 ? (
           <p
             className="p-2 text-sm text-foreground-muted"
