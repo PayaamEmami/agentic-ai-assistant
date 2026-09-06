@@ -4,7 +4,9 @@ import { useCallback, useState } from 'react';
 import { api } from '../api-client';
 import {
   buildConversationTitle,
+  hasSettledAssistantContent,
   mergeConversations,
+  mergeRemoteConversationMessages,
   normalizeConversationSummary,
   normalizeMessage,
   upsertConversation,
@@ -43,10 +45,47 @@ export function useChatConversations({
     }
   }, [setError]);
 
-  const refreshConversation = useCallback(async (conversationId: string) => {
+  const loadConversationMessages = useCallback(async (conversationId: string) => {
     const response = await api.chat.getConversation(conversationId);
-    setMessages(response.messages.map(normalizeMessage));
+    return response.messages.map(normalizeMessage);
   }, []);
+
+  const refreshConversation = useCallback(
+    async (conversationId: string) => {
+      setMessages(await loadConversationMessages(conversationId));
+    },
+    [loadConversationMessages],
+  );
+
+  const syncConversationMessages = useCallback(
+    async (conversationId: string) => {
+      try {
+        const remote = await loadConversationMessages(conversationId);
+        setMessages((previous) => mergeRemoteConversationMessages(previous, remote));
+      } catch {
+        // Live recovery should not clear the in-progress transcript.
+      }
+    },
+    [loadConversationMessages],
+  );
+
+  const pullSettledAssistantTurn = useCallback(
+    async (conversationId: string, assistantMessageId: string) => {
+      try {
+        const remote = await loadConversationMessages(conversationId);
+        const remoteAssistant = remote.find((message) => message.id === assistantMessageId);
+        if (!remoteAssistant || !hasSettledAssistantContent(remoteAssistant)) {
+          return false;
+        }
+
+        setMessages((previous) => mergeRemoteConversationMessages(previous, remote));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [loadConversationMessages],
+  );
 
   const syncConversationState = useCallback(
     async (conversationId: string) => {
@@ -189,6 +228,8 @@ export function useChatConversations({
     isLoadingMessages,
     loadConversations,
     refreshConversation,
+    syncConversationMessages,
+    pullSettledAssistantTurn,
     syncConversationState,
     selectConversation,
     renameConversation,

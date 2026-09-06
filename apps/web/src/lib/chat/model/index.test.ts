@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appendAssistantTextDelta,
+  appendAssistantThinkingDelta,
   buildConversationTitle,
   extractCitations,
+  finalizeAssistantMessage,
+  hasSettledAssistantContent,
   mergeConversations,
+  mergeRemoteConversationMessages,
   normalizeMessage,
   patchMessagesToolResult,
+  setAssistantStage,
   upsertVoiceMessageInList,
   type ChatMessage,
   type ConversationSummary,
@@ -175,6 +181,127 @@ describe('chat model', () => {
       role: 'user',
       content: [{ type: 'text', text: 'hello' }],
     });
+  });
+
+  it('treats non-empty assistant content as settled even without streamed text', () => {
+    expect(
+      hasSettledAssistantContent({
+        id: 'message-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: '' }],
+      }),
+    ).toBe(false);
+    expect(
+      hasSettledAssistantContent({
+        id: 'message-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'status', status: 'interrupted', label: 'Agent stopped' }],
+      }),
+    ).toBe(true);
+  });
+
+  it('finalizes a streaming assistant message even if the socket never delivered text', () => {
+    const streaming: ChatMessage[] = [
+      {
+        id: 'message-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [],
+        presentation: { streaming: true, activeStage: 'routing' },
+      },
+    ];
+
+    const finalized = finalizeAssistantMessage(streaming, 'message-1', {
+      fullText: 'The diagram shows superposition.',
+    });
+
+    expect(finalized[0]).toMatchObject({
+      id: 'message-1',
+      content: [{ type: 'text', text: 'The diagram shows superposition.' }],
+      presentation: { streaming: false, activeStage: 'done' },
+    });
+    expect(
+      appendAssistantTextDelta(finalized, 'message-1', ' late token'),
+    ).toBe(finalized);
+    expect(appendAssistantThinkingDelta(finalized, 'message-1', 'answering', 'hmm')).toBe(
+      finalized,
+    );
+    expect(setAssistantStage(finalized, 'message-1', 'answering')).toBe(finalized);
+    expect(setAssistantStage(streaming, 'message-1', 'done')[0]?.presentation).toMatchObject({
+      streaming: true,
+      activeStage: 'done',
+    });
+  });
+
+  it('inserts a finalized assistant message when the live placeholder was never mounted', () => {
+    const finalized = finalizeAssistantMessage([], 'message-1', { fullText: 'Done.' });
+
+    expect(finalized).toHaveLength(1);
+    expect(finalized[0]).toMatchObject({
+      id: 'message-1',
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Done.' }],
+      presentation: { streaming: false, activeStage: 'done' },
+    });
+  });
+
+  it('merges a remote snapshot without dropping an in-flight local turn', () => {
+    const local: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: 'first' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'partial answer' }],
+        presentation: { streaming: true, activeStage: 'answering' },
+      },
+      {
+        id: 'local-user-pending',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:02.000Z',
+        content: [{ type: 'text', text: 'follow up' }],
+      },
+    ];
+    const remote: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: 'first' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: '' }],
+      },
+    ];
+
+    const merged = mergeRemoteConversationMessages(local, remote);
+
+    expect(merged).toHaveLength(3);
+    expect(merged[1]).toBe(local[1]);
+    expect(merged[2]?.id).toBe('local-user-pending');
+
+    const settledRemote: ChatMessage[] = [
+      remote[0]!,
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'complete answer' }],
+      },
+    ];
+    const settled = mergeRemoteConversationMessages(local, settledRemote);
+    expect(settled[1]?.content).toEqual([{ type: 'text', text: 'complete answer' }]);
+    expect(settled[2]?.id).toBe('local-user-pending');
   });
 });
 

@@ -15,6 +15,7 @@ import {
   appendAssistantTextDelta,
   appendAssistantThinkingDelta,
   extractCitations,
+  finalizeAssistantMessage,
   patchMessagesToolResult,
   setAssistantStage as setAssistantStageInList,
   type AssistantStage,
@@ -74,7 +75,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setCurrentConversationId: conversationsState.setCurrentConversationId,
     setMessages: conversationsState.setMessages,
     loadConversations: conversationsState.loadConversations,
-    refreshConversation: conversationsState.refreshConversation,
+    pullSettledAssistantTurn: conversationsState.pullSettledAssistantTurn,
     loadPendingApprovals: approvals.loadPendingApprovals,
   });
 
@@ -147,6 +148,15 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     [conversationsState.setMessages],
   );
 
+  const finalizeAssistantTurn = useCallback(
+    (messageId: string, options?: { fullText?: string; interrupted?: boolean }) => {
+      conversationsState.setMessages((previous) =>
+        finalizeAssistantMessage(previous, messageId, options),
+      );
+    },
+    [conversationsState.setMessages],
+  );
+
   useEffect(() => {
     void conversationsState.loadConversations();
     void approvals.loadPendingApprovals();
@@ -155,7 +165,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useChatWebSocket({
     token,
     conversationId: conversationsState.currentConversationId,
-    refreshConversation: conversationsState.refreshConversation,
+    syncConversationMessages: conversationsState.syncConversationMessages,
     loadPendingApprovals: approvals.loadPendingApprovals,
     patchToolResult,
     resolveApproval: resolveApprovalFromSocket,
@@ -164,6 +174,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     appendAssistantDelta,
     appendThinkingDelta,
     setAssistantStage,
+    finalizeAssistantTurn,
+    recoverSettledTurn: actions.recoverSettledTurn,
     onTurnSettled: actions.settleActiveRun,
   });
 

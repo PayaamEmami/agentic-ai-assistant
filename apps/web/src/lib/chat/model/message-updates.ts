@@ -17,10 +17,32 @@ function updateMessageById(
     if (message.id !== messageId) {
       return message;
     }
-    changed = true;
-    return update(message);
+    const updated = update(message);
+    if (updated !== message) {
+      changed = true;
+    }
+    return updated;
   });
   return changed ? next : messages;
+}
+
+export function hasSettledAssistantContent(message: ChatMessage): boolean {
+  return message.content.some((block) => {
+    if (block.type === 'text') {
+      return block.text.trim().length > 0;
+    }
+
+    return (
+      block.type === 'thinking' ||
+      block.type === 'status' ||
+      block.type === 'tool_result' ||
+      block.type === 'citation'
+    );
+  });
+}
+
+function isStreamingMessage(message: ChatMessage): boolean {
+  return message.presentation?.streaming === true;
 }
 
 export function appendAssistantTextDelta(
@@ -29,6 +51,10 @@ export function appendAssistantTextDelta(
   delta: string,
 ): ChatMessage[] {
   return updateMessageById(messages, messageId, (message) => {
+    if (!isStreamingMessage(message)) {
+      return message;
+    }
+
     let appended = false;
     const content = message.content.map((block) => {
       if (!appended && block.type === 'text') {
@@ -57,6 +83,10 @@ export function appendAssistantThinkingDelta(
   delta: string,
 ): ChatMessage[] {
   return updateMessageById(messages, messageId, (message) => {
+    if (!isStreamingMessage(message)) {
+      return message;
+    }
+
     const existing = message.content.find(
       (block): block is ThinkingContentBlock => block.type === 'thinking',
     );
@@ -105,14 +135,111 @@ export function setAssistantStage(
   messageId: string,
   stage: AssistantStage,
 ): ChatMessage[] {
-  return updateMessageById(messages, messageId, (message) => ({
-    ...message,
-    presentation: {
-      ...message.presentation,
-      activeStage: stage,
-      streaming: stage !== 'done' ? true : message.presentation?.streaming,
-    },
-  }));
+  return updateMessageById(messages, messageId, (message) => {
+    if (!isStreamingMessage(message)) {
+      return message;
+    }
+
+    return {
+      ...message,
+      presentation: {
+        ...message.presentation,
+        activeStage: stage,
+      },
+    };
+  });
+}
+
+function isOptimisticLocalId(id: string): boolean {
+  return id.startsWith('local-');
+}
+
+export function mergeRemoteConversationMessages(
+  local: ChatMessage[],
+  remote: ChatMessage[],
+): ChatMessage[] {
+  const localById = new Map(local.map((message) => [message.id, message]));
+  const remoteIds = new Set(remote.map((message) => message.id));
+
+  const merged = remote.map((remoteMessage) => {
+    const localMessage = localById.get(remoteMessage.id);
+    if (
+      localMessage?.presentation?.streaming === true &&
+      !hasSettledAssistantContent(remoteMessage)
+    ) {
+      return localMessage;
+    }
+    return remoteMessage;
+  });
+
+  const pendingLocal = local.filter(
+    (message) => !remoteIds.has(message.id) && isOptimisticLocalId(message.id),
+  );
+
+  return pendingLocal.length === 0 ? merged : [...merged, ...pendingLocal];
+}
+
+function withAssistantText(content: MessageContentBlock[], text: string): MessageContentBlock[] {
+  let replaced = false;
+  const next = content.map((block) => {
+    if (!replaced && block.type === 'text') {
+      replaced = true;
+      return { ...block, text };
+    }
+    return block;
+  });
+
+  return replaced ? next : [{ type: 'text', text }, ...content];
+}
+
+export function finalizeAssistantMessage(
+  messages: ChatMessage[],
+  messageId: string,
+  options: { fullText?: string; interrupted?: boolean } = {},
+): ChatMessage[] {
+  const existing = messages.find((message) => message.id === messageId);
+  if (!existing) {
+    const content: MessageContentBlock[] = [];
+    if (options.fullText?.trim()) {
+      content.push({ type: 'text', text: options.fullText });
+    }
+    if (options.interrupted) {
+      content.push({ type: 'status', status: 'interrupted', label: 'Agent stopped' });
+    }
+
+    return [
+      ...messages,
+      {
+        id: messageId,
+        role: 'assistant',
+        content,
+        createdAt: new Date().toISOString(),
+        presentation: { streaming: false, activeStage: 'done' },
+      },
+    ];
+  }
+
+  return updateMessageById(messages, messageId, (message) => {
+    let content = message.content;
+    const hasText = content.some((block) => block.type === 'text' && block.text.trim().length > 0);
+    if (!hasText && options.fullText?.trim()) {
+      content = withAssistantText(content, options.fullText);
+    }
+
+    if (options.interrupted && !content.some((block) => block.type === 'status')) {
+      content = [...content, { type: 'status', status: 'interrupted', label: 'Agent stopped' }];
+    }
+
+    return {
+      ...message,
+      content,
+      presentation: {
+        ...message.presentation,
+        streaming: false,
+        activeStage: 'done',
+      },
+    };
+  });
 }
 
 export function patchMessagesToolResult(

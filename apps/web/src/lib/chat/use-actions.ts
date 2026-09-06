@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type Dispatch,
@@ -30,9 +31,14 @@ interface UseChatActionsOptions {
   setCurrentConversationId: Dispatch<SetStateAction<string | undefined>>;
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   loadConversations: () => Promise<void>;
-  refreshConversation: (conversationId: string) => Promise<void>;
+  pullSettledAssistantTurn: (
+    conversationId: string,
+    assistantMessageId: string,
+  ) => Promise<boolean>;
   loadPendingApprovals: () => Promise<void>;
 }
+
+const SETTLE_POLL_INTERVAL_MS = 4_000;
 
 export function useChatActions({
   currentConversationId,
@@ -41,13 +47,14 @@ export function useChatActions({
   setCurrentConversationId,
   setMessages,
   loadConversations,
-  refreshConversation,
+  pullSettledAssistantTurn,
   loadPendingApprovals,
 }: UseChatActionsOptions) {
   const [isSendingMessage, setIsSendingMessage] = useState(false);
   const [isInterruptingMessage, setIsInterruptingMessage] = useState(false);
   const activeRunIdRef = useRef<string | null>(null);
   const activeRunConversationIdRef = useRef<string | undefined>(undefined);
+  const activeAssistantMessageIdRef = useRef<string | null>(null);
 
   // Clears the active run state. Called when the socket reports the turn is
   // settled (done / interrupted / error), since the HTTP request now returns
@@ -55,9 +62,37 @@ export function useChatActions({
   const settleActiveRun = useCallback(() => {
     activeRunIdRef.current = null;
     activeRunConversationIdRef.current = undefined;
+    activeAssistantMessageIdRef.current = null;
     setIsSendingMessage(false);
     setIsInterruptingMessage(false);
   }, []);
+
+  const recoverSettledTurn = useCallback(async () => {
+    const conversationId = activeRunConversationIdRef.current;
+    const assistantMessageId = activeAssistantMessageIdRef.current;
+    if (!conversationId || !assistantMessageId || !activeRunIdRef.current) {
+      return;
+    }
+
+    const settled = await pullSettledAssistantTurn(conversationId, assistantMessageId);
+    if (settled) {
+      settleActiveRun();
+    }
+  }, [pullSettledAssistantTurn, settleActiveRun]);
+
+  useEffect(() => {
+    if (!isSendingMessage) {
+      return;
+    }
+
+    const interval = window.setInterval(() => {
+      void recoverSettledTurn();
+    }, SETTLE_POLL_INTERVAL_MS);
+
+    return () => {
+      window.clearInterval(interval);
+    };
+  }, [isSendingMessage, recoverSettledTurn]);
 
   const sendMessage = useCallback(
     async (content: string, attachments: UploadedAttachment[] = []) => {
@@ -88,6 +123,7 @@ export function useChatActions({
 
         const timestamp = new Date().toISOString();
         activeRunConversationIdRef.current = response.conversationId;
+        activeAssistantMessageIdRef.current = response.messageId;
         setCurrentConversationId(response.conversationId);
         setConversations((previous) =>
           upsertConversation(previous, {
@@ -152,14 +188,14 @@ export function useChatActions({
       if (conversationId) {
         activeRunConversationIdRef.current = conversationId;
         setCurrentConversationId(conversationId);
-        await Promise.all([refreshConversation(conversationId), loadConversations()]);
+        await Promise.all([recoverSettledTurn(), loadConversations()]);
       }
     } catch (requestError) {
       setIsInterruptingMessage(false);
       setError(requestError instanceof Error ? requestError.message : 'Failed to stop message');
       throw requestError;
     }
-  }, [loadConversations, refreshConversation, setCurrentConversationId, setError]);
+  }, [loadConversations, recoverSettledTurn, setCurrentConversationId, setError]);
 
   return {
     isSendingMessage,
@@ -167,5 +203,6 @@ export function useChatActions({
     sendMessage,
     interruptMessage,
     settleActiveRun,
+    recoverSettledTurn,
   };
 }

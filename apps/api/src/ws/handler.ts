@@ -13,9 +13,15 @@ import {
 import { extractBearerToken, authenticateToken, type AuthUser } from '../middleware/auth.js';
 import { subscribe, unsubscribe } from './connections.js';
 
+const SOCKET_PING_INTERVAL_MS = 25_000;
+
 interface SubscribeMessage {
   type: 'subscribe';
   conversationId: string;
+}
+
+interface PingMessage {
+  type: 'ping';
 }
 
 interface EventMessage {
@@ -23,7 +29,7 @@ interface EventMessage {
   event: RealtimeEvent;
 }
 
-type IncomingWsMessage = SubscribeMessage | EventMessage;
+type IncomingWsMessage = SubscribeMessage | PingMessage | EventMessage;
 
 function getQueryParams(rawUrl: string | undefined): URLSearchParams | null {
   if (!rawUrl) {
@@ -115,9 +121,38 @@ export async function wsHandler(app: FastifyInstance) {
     );
     websocketConnections.inc({ state: 'open' });
     const subscribedConversations = new Set<string>();
+    const pingTimer = setInterval(() => {
+      if (socket.readyState === 1) {
+        try {
+          socket.ping();
+        } catch {
+          clearInterval(pingTimer);
+        }
+      }
+    }, SOCKET_PING_INTERVAL_MS);
 
     socket.on('message', (rawData) => {
       const messageText = rawData.toString();
+      let parsed: IncomingWsMessage;
+      try {
+        parsed = JSON.parse(messageText) as IncomingWsMessage;
+      } catch {
+        websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'rejected' });
+        logger.warn(
+          {
+            event: 'ws.message.rejected',
+            outcome: 'failure',
+          },
+          'Invalid WebSocket message JSON',
+        );
+        return;
+      }
+
+      if (parsed.type === 'ping') {
+        sendSocketMessage(socket, { type: 'pong' });
+        return;
+      }
+
       void withLogContext(
         {
           component: 'ws-handler',
@@ -135,21 +170,6 @@ export async function wsHandler(app: FastifyInstance) {
             },
             async () => {
               websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'received' });
-              let parsed: IncomingWsMessage;
-
-              try {
-                parsed = JSON.parse(messageText) as IncomingWsMessage;
-              } catch {
-                websocketMessagesTotal.inc({ direction: 'inbound', outcome: 'rejected' });
-                logger.warn(
-                  {
-                    event: 'ws.message.rejected',
-                    outcome: 'failure',
-                  },
-                  'Invalid WebSocket message JSON',
-                );
-                return;
-              }
 
               if (parsed.type === 'subscribe') {
                 if (!parsed.conversationId) {
@@ -227,6 +247,7 @@ export async function wsHandler(app: FastifyInstance) {
     });
 
     socket.on('close', () => {
+      clearInterval(pingTimer);
       for (const conversationId of subscribedConversations) {
         unsubscribe(conversationId, socket);
       }
