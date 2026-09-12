@@ -50,6 +50,8 @@ See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deplo
 │   ├── db/                   # Database schema, migrations, repositories
 │   ├── config/               # Environment parsing, constants
 │   ├── mcp/                  # Streamable HTTP MCP client
+│   ├── integrations/         # External integration helpers
+│   ├── queues/               # Shared queue client utilities
 │   └── observability/        # Logging, tracing, metrics, sanitization
 ├── infra/
 │   └── aws-ec2/              # EC2 provisioning script and cloud-init user-data
@@ -59,6 +61,14 @@ See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deplo
 ├── pnpm-workspace.yaml       # pnpm workspace definition
 └── tsconfig.base.json        # Shared TypeScript configuration
 ```
+
+Production ops notes (keep in sync with `infra/aws-ec2/README.md`):
+
+- Prod Compose has no Prometheus/Grafana/Loki stack; observability is local-dev oriented.
+- CD skips CloudFront invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is unset; set `CADDY_SITE_ADDRESS` for origin TLS when not behind CloudFront.
+- CI and Docker images pin the same pnpm version (`9.15.4`).
+- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days; there is still **no automated Postgres backup** — that remains an operational gap.
+- Deploy waits for Docker `healthy` (API/worker `/health/ready`), not merely `running`.
 
 ## Change Routing Guide
 

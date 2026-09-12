@@ -51,6 +51,7 @@ const WORKER_QUEUE_NAMES = [
   QUEUE_NAMES.embedding,
   QUEUE_NAMES.toolExecution,
   QUEUE_NAMES.chatContinuation,
+  QUEUE_NAMES.automation,
 ] as const;
 const queueSnapshots = new Map<string, Queue>();
 

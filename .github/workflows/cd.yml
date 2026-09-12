@@ -70,7 +70,9 @@ jobs:
       DEPLOY_BUCKET: ${{ secrets.DEPLOY_BUCKET }}
       INSTANCE_NAME: ${{ secrets.INSTANCE_NAME }}
       PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL }}
-      CADDY_SITE_ADDRESS: ':80'
+      # Prefer a custom hostname for Caddy TLS when set; fall back to HTTP :80
+      # (typical when CloudFront terminates TLS in front of the origin).
+      CADDY_SITE_ADDRESS: ${{ secrets.CADDY_SITE_ADDRESS || ':80' }}
       ECR_REGISTRY: ${{ secrets.ECR_REGISTRY }}
       IMAGE_TAG: ${{ github.sha }}
     steps:
@@ -147,6 +149,10 @@ jobs:
         env:
           DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
         run: |
+          if [[ -z "${DISTRIBUTION_ID}" ]]; then
+            echo "CLOUDFRONT_DISTRIBUTION_ID not set; skipping cache invalidation."
+            exit 0
+          fi
           aws cloudfront create-invalidation \
             --distribution-id "$DISTRIBUTION_ID" \
             --paths '/*'
