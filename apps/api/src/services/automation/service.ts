@@ -223,6 +223,7 @@ export class AutomationService {
       });
     } catch (error) {
       if (isPgUniqueViolation(error)) {
+        await conversationRepository.delete(conversation.id);
         throw new AutomationValidationError(
           'A run is already in progress for this schedule. Wait for it to finish.',
         );

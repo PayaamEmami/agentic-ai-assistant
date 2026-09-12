@@ -63,6 +63,7 @@ describe('ApprovalService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.findApprovalById.mockResolvedValue(pendingApproval);
+    mocks.decideApproval.mockResolvedValue({ ...pendingApproval, status: 'approved' });
     mocks.findToolExecutionById.mockResolvedValue(toolExecution);
   });
 
@@ -90,7 +91,21 @@ describe('ApprovalService', () => {
     expect(mocks.decideApproval).not.toHaveBeenCalled();
   });
 
+  it('rejects concurrent decisions that lose the atomic pending claim', async () => {
+    mocks.decideApproval.mockResolvedValue(null);
+
+    await expect(
+      new ApprovalService().decide('approval-1', 'user-1', 'approved'),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'ALREADY_DECIDED',
+    });
+    expect(mocks.updateToolExecutionStatus).not.toHaveBeenCalled();
+    expect(mocks.enqueueToolExecutionJob).not.toHaveBeenCalled();
+  });
+
   it('marks approved tool executions pending and enqueues them', async () => {
+    mocks.decideApproval.mockResolvedValue({ ...pendingApproval, status: 'approved' });
     await new ApprovalService().decide('approval-1', 'user-1', 'approved');
 
     expect(mocks.decideApproval).toHaveBeenCalledWith('approval-1', 'approved');
@@ -114,6 +129,7 @@ describe('ApprovalService', () => {
   });
 
   it('marks rejected tool executions failed and broadcasts completion', async () => {
+    mocks.decideApproval.mockResolvedValue({ ...pendingApproval, status: 'rejected' });
     await new ApprovalService().decide('approval-1', 'user-1', 'rejected');
 
     expect(mocks.updateToolExecutionStatus).toHaveBeenCalledWith('tool-execution-1', 'failed', {

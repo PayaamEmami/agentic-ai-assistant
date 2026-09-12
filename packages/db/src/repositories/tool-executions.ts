@@ -37,6 +37,11 @@ export interface ToolExecutionRepository {
     options?: ToolExecutionCreateOptions,
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
+  /**
+   * Atomically move a tool execution into `running` when it is still `pending`.
+   * Returns null when another worker already claimed it or the row is terminal.
+   */
+  claimForExecution(id: string): Promise<ToolExecution | null>;
   setApproval(id: string, approvalId: string): Promise<void>;
   setMessage(id: string, messageId: string): Promise<void>;
   findPendingApproval(conversationId: string): Promise<ToolExecution | null>;
@@ -130,6 +135,18 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        WHERE id = $3`,
       [status, JSON.stringify(output), id],
     );
+  },
+
+  async claimForExecution(id: string): Promise<ToolExecution | null> {
+    const pool = getPool();
+    const result = await pool.query<ToolExecutionRow>(
+      `UPDATE tool_executions
+       SET status = 'running', completed_at = NULL
+       WHERE id = $1 AND status = 'pending'
+       RETURNING ${SELECT_COLUMNS}`,
+      [id],
+    );
+    return result.rows[0] ?? null;
   },
 
   async setApproval(id: string, approvalId: string): Promise<void> {
