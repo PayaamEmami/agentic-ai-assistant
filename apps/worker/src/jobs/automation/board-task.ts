@@ -297,14 +297,26 @@ async function implementClaimedWork(
   });
 
   const pullRequestUrl = result.pullRequest.html_url;
-  await automationRunRepository.update(run.id, { pullRequestUrl });
+  // Persist the PR URL only while the run is still active so a sweeper-failed
+  // row is not rewritten after another run may already own the card.
+  const recorded = await automationRunRepository.update(
+    run.id,
+    { pullRequestUrl },
+    { requireActive: true },
+  );
+  if (!recorded) {
+    throw new AutomationRunAbandonedError(run.id);
+  }
 
   try {
     await log.enterStage('reporting_back');
   } catch (error) {
-    if (!(error instanceof AutomationRunAbandonedError)) {
-      throw error;
+    if (error instanceof AutomationRunAbandonedError) {
+      // The PR exists, but the run was abandoned (stale sweeper). Do not mutate
+      // the board — another run may already be working the same card.
+      return;
     }
+    throw error;
   }
 
   try {

@@ -40,7 +40,11 @@ export class ApprovalService {
       throw new AppError(409, 'Approval has already been decided', 'ALREADY_DECIDED');
     }
 
-    await approvalRepository.decide(approvalId, status);
+    // Atomic claim: only one concurrent decide() wins the pending → decided race.
+    const decided = await approvalRepository.decide(approvalId, status);
+    if (!decided) {
+      throw new AppError(409, 'Approval has already been decided', 'ALREADY_DECIDED');
+    }
 
     const toolExecution = await toolExecutionRepository.findById(approval.toolExecutionId);
     if (!toolExecution) {

@@ -23,7 +23,11 @@ export interface ApprovalRepository {
     toolExecutionId: string,
     description: string,
   ): Promise<Approval>;
-  decide(id: string, status: string): Promise<void>;
+  /**
+   * Atomically decide a pending approval. Returns null when the row is missing
+   * or was already decided (prevents double-approve races).
+   */
+  decide(id: string, status: string): Promise<Approval | null>;
 }
 
 export const approvalRepository: ApprovalRepository = {
@@ -73,11 +77,17 @@ export const approvalRepository: ApprovalRepository = {
     return result.rows[0]!;
   },
 
-  async decide(id: string, status: string): Promise<void> {
+  async decide(id: string, status: string): Promise<Approval | null> {
     const pool = getPool();
-    await pool.query('UPDATE approvals SET status = $1, decided_at = NOW() WHERE id = $2', [
-      status,
-      id,
-    ]);
+    const result = await pool.query<ApprovalRow>(
+      `UPDATE approvals
+       SET status = $1, decided_at = NOW()
+       WHERE id = $2 AND status = 'pending'
+       RETURNING id, user_id AS "userId", conversation_id AS "conversationId",
+                 tool_execution_id AS "toolExecutionId", description, status,
+                 decided_at AS "decidedAt", created_at AS "createdAt"`,
+      [status, id],
+    );
+    return result.rows[0] ?? null;
   },
 };

@@ -104,6 +104,9 @@ The assistant can connect to the personal `tools` task board over MCP and run a 
 - MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL in `settings`, API key in `encrypted_credentials`). One row per server: capability `task-board` (legacy `tools`) for the personal task board, `crs` for Content Recommendation System. Chat loads tools from every connected server; board automation still requires the task-board MCP.
 - Schedules and run history live in `automation_schedules`, `automation_runs`, and append-only `automation_run_events`.
 - The worker `automation` queue is ticked by `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`). Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat so a live coding job is not killed early. At most one in-flight run is allowed per schedule.
+- Due-schedule rate-limit and "already running" checks happen **before** advancing `next_run_at`, so a skipped fire stays due and retries later instead of being permanently dropped.
+- If a run is abandoned (stale sweeper) after a PR is opened, the worker must not report back to the board card — another run may already own it.
+- Approval decisions use an atomic `UPDATE … WHERE status = 'pending' RETURNING *` so concurrent approve/reject cannot double-enqueue tool execution.
 - Each run creates a hidden `conversations.is_automation` row so activity can stream over the existing WebSocket without appearing in the sidebar.
 - Settings UI is `/chat/automation` (account menu). Start new schedules in dry-run.
 

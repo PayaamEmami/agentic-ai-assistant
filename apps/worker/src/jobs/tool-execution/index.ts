@@ -133,7 +133,23 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     throw new Error(`Conversation not found for tool execution: ${conversationId}`);
   }
 
-  await toolExecutionRepository.updateStatus(toolExecutionId, 'running');
+  const claimed = await toolExecutionRepository.claimForExecution(toolExecutionId);
+  if (!claimed) {
+    logger.info(
+      {
+        event: 'tool.execution.skipped',
+        outcome: 'success',
+        toolExecutionId,
+        toolName,
+        conversationId,
+        correlationId,
+        status: execution.status,
+      },
+      'Skipping tool execution that is already claimed or terminal',
+    );
+    return;
+  }
+
   await updateInlineToolResult(execution.messageId, toolExecutionId, {
     status: 'running',
     detail: undefined,
