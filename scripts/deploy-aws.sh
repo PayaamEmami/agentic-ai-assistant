@@ -290,7 +290,10 @@ wait_for_container_ready() {{
     local status
     status="$(docker inspect --format '{{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}{{{{.State.Status}}}}{{{{end}}}}' "$container_name" 2>/dev/null || true)"
 
-    if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+    # Require Docker healthchecks to pass. Accepting bare "running" masked
+    # broken dependencies when a container had no health status yet or failed
+    # its ready probe.
+    if [[ "$status" == "healthy" ]]; then
       return 0
     fi
 
@@ -320,18 +323,22 @@ aws ecr get-login-password --region {region} | docker login --username AWS --pas
 docker compose --env-file {env_file} -f docker-compose.prod.yml pull --quiet
 docker compose --env-file {env_file} -f docker-compose.prod.yml --profile tools run --rm -T migrate </dev/null
 
-# The compose project name is fixed in docker-compose.prod.yml. Bring that one
-# project down from the new release directory, then recreate it from the new
-# image tag. This avoids the old behavior where iterating historical release
-# directories could exit before `up` while SSM still reported success.
-docker compose --env-file {env_file} -f docker-compose.prod.yml down --remove-orphans
-docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate
+# Recreate app containers in place. Avoid `compose down` — that stops
+# postgres/redis/proxy too and opens an unnecessary outage window (and leaves
+# nothing running if the new app containers fail health checks).
+docker compose --env-file {env_file} -f docker-compose.prod.yml up -d --remove-orphans --force-recreate proxy api worker web
 wait_for_container_ready aaa-api
 wait_for_container_ready aaa-worker
 wait_for_container_ready aaa-web
+wait_for_container_ready aaa-proxy
 verify_container_image aaa-api "{ecr_registry}/aaa-api:{image_tag}"
 verify_container_image aaa-worker "{ecr_registry}/aaa-worker:{image_tag}"
 verify_container_image aaa-web "{ecr_registry}/aaa-web:{image_tag}"
+# Edge path: Caddy must route /health to a healthy API before we declare success.
+if ! curl -fsS --max-time 10 "http://127.0.0.1/health" >/dev/null; then
+  echo "Proxy→API /health check failed on the instance loopback." >&2
+  exit 1
+fi
 ln -sfn {release_dir} {app_dir}/current
 # Remove now-unused aaa-* images (old SHAs) — `prune` only catches dangling.
 for repo in aaa-api aaa-web aaa-worker; do

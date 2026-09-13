@@ -53,8 +53,26 @@ services:
       - caddydata:/data
       - caddyconfig:/config
     depends_on:
-      - web
-      - api
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    # Probe through Caddy → API /health so edge routing is covered, not just
+    # container process liveness.
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'wget',
+          '--no-verbose',
+          '--tries=1',
+          '--spider',
+          'http://127.0.0.1:80/health',
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
     logging: *default-logging
 
   postgres:
@@ -123,12 +141,12 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3001/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     logging: *default-logging
 
   worker:
@@ -152,12 +170,12 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:9464/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:9464/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     logging: *default-logging
 
   web:

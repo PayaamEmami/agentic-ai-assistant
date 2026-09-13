@@ -125,6 +125,27 @@ aws --profile "${AWS_PROFILE}" s3api put-bucket-encryption \
   --bucket "${bucket_name}" \
   --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 
+# Expire short-lived deploy bundles under deployments/ and abort abandoned multipart
+# uploads. Application object prefixes are left untouched.
+aws --profile "${AWS_PROFILE}" s3api put-bucket-lifecycle-configuration \
+  --bucket "${bucket_name}" \
+  --lifecycle-configuration '{
+    "Rules": [
+      {
+        "ID": "expire-deploy-bundles",
+        "Status": "Enabled",
+        "Filter": { "Prefix": "deployments/" },
+        "Expiration": { "Days": 14 }
+      },
+      {
+        "ID": "abort-incomplete-multipart-uploads",
+        "Status": "Enabled",
+        "Filter": { "Prefix": "" },
+        "AbortIncompleteMultipartUpload": { "DaysAfterInitiation": 7 }
+      }
+    ]
+  }'
+
 aws --profile "${AWS_PROFILE}" iam put-role-policy \
   --role-name "${ROLE_NAME}" \
   --policy-name "${NAME_PREFIX}-s3-access" \
