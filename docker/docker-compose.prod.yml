@@ -141,12 +141,12 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:3001/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:3001/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     logging: *default-logging
 
   worker:
@@ -170,12 +170,12 @@ services:
           'CMD',
           'node',
           '-e',
-          "fetch('http://127.0.0.1:9464/health/live').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+          "fetch('http://127.0.0.1:9464/health/ready').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
         ]
       interval: 30s
       timeout: 5s
       retries: 5
-      start_period: 30s
+      start_period: 40s
     logging: *default-logging
 
   web:

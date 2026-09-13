@@ -290,7 +290,10 @@ wait_for_container_ready() {{
     local status
     status="$(docker inspect --format '{{{{if .State.Health}}}}{{{{.State.Health.Status}}}}{{{{else}}}}{{{{.State.Status}}}}{{{{end}}}}' "$container_name" 2>/dev/null || true)"
 
-    if [[ "$status" == "healthy" || "$status" == "running" ]]; then
+    # Require Docker healthchecks to pass. Accepting bare "running" masked
+    # broken dependencies when a container had no health status yet or failed
+    # its ready probe.
+    if [[ "$status" == "healthy" ]]; then
       return 0
     fi
 
