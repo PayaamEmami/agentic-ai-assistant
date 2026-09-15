@@ -11,6 +11,11 @@ export interface Message {
 
 export interface MessageRepository {
   findById(id: string): Promise<Message | null>;
+  /**
+   * Lists conversation messages in chronological order.
+   * With `limit`, returns the most recent `limit` messages (not the oldest).
+   * Without `limit`, returns the full conversation history.
+   */
   listByConversation(conversationId: string, limit?: number, offset?: number): Promise<Message[]>;
   create(conversationId: string, role: string, content: unknown[]): Promise<Message>;
   updateToolResultBlock(
@@ -42,12 +47,31 @@ export const messageRepository: MessageRepository = {
     return result.rows[0] ?? null;
   },
 
-  async listByConversation(conversationId: string, limit = 100, offset = 0): Promise<Message[]> {
+  async listByConversation(conversationId: string, limit?: number, offset = 0): Promise<Message[]> {
     const pool = getPool();
+
+    // Unbounded: full chronological history (e.g. conversation reload).
+    if (limit === undefined) {
+      const result = await pool.query<Message>(
+        `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+         FROM messages WHERE conversation_id = $1
+         ORDER BY created_at ASC, id ASC`,
+        [conversationId],
+      );
+      return result.rows;
+    }
+
+    // Bounded: most recent window, returned oldest→newest for prompt/UI use.
+    // OFFSET skips from the newest end (after DESC), matching "page back" semantics.
     const result = await pool.query<Message>(
-      `SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
-       FROM messages WHERE conversation_id = $1
-       ORDER BY created_at ASC, id ASC LIMIT $2 OFFSET $3`,
+      `SELECT id, "conversationId", role, content, "createdAt"
+       FROM (
+         SELECT id, conversation_id AS "conversationId", role, content, created_at AS "createdAt"
+         FROM messages WHERE conversation_id = $1
+         ORDER BY created_at DESC, id DESC
+         LIMIT $2 OFFSET $3
+       ) recent
+       ORDER BY "createdAt" ASC, id ASC`,
       [conversationId, limit, offset],
     );
     return result.rows;
