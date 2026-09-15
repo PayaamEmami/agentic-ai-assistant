@@ -87,6 +87,8 @@ When deciding where a change belongs:
 - Scheduled board automation: check `apps/worker/src/jobs/automation/`, `apps/api/src/routes/automation.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 
+Chat history note: `messageRepository.listByConversation(id, limit)` returns the **most recent** `limit` messages in chronological order (not the oldest). Omit `limit` to load the full conversation (e.g. UI reload). After a tool group finishes, only the lexicographically smallest tool-execution id for that assistant message may start the chat continuation turn.
+
 ## Model Providers
 
 Model access is abstracted so the chat provider can be swapped without touching agent, retrieval, or app code.

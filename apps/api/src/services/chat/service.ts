@@ -304,6 +304,15 @@ export class ChatService {
       return { continued: false, reason: 'tool_group_still_in_progress' };
     }
 
+    // Only one execution in the group may start the follow-up turn. Prefer the
+    // lexicographically smallest id so parallel completions cannot double-reply.
+    const continuationLeaderId = [...groupedExecutions]
+      .map((item) => item.id)
+      .sort()[0];
+    if (execution.id !== continuationLeaderId) {
+      return { continued: false, reason: 'not_continuation_leader' };
+    }
+
     const requestContent = getLatestUserRequestText(recentMessages);
     if (!requestContent) {
       return { continued: false, reason: 'missing_user_request' };
