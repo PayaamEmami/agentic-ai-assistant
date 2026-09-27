@@ -10,13 +10,10 @@ export type AutomationRunEventKindDto = z.infer<typeof AutomationRunEventKindDto
 export const AutomationScheduleDto = z.object({
   id: z.string().uuid(),
   name: z.string(),
+  prompt: z.string(),
   cron: z.string(),
   timezone: z.string(),
   enabled: z.boolean(),
-  boardId: z.string(),
-  sourceListId: z.string().nullable(),
-  repoAllowlist: z.array(z.string()).nullable(),
-  dryRun: z.boolean(),
   maxRunsPerDay: z.number().int().positive(),
   lastRunAt: z.string().nullable(),
   nextRunAt: z.string().nullable(),
@@ -25,15 +22,10 @@ export type AutomationScheduleDto = z.infer<typeof AutomationScheduleDto>;
 
 export const CreateAutomationScheduleRequest = z.object({
   name: z.string().trim().min(1).max(120),
+  prompt: z.string().trim().min(1).max(8_000),
   cron: z.string().trim().min(1).max(120),
   timezone: z.string().trim().min(1).max(64).default('UTC'),
   enabled: z.boolean().default(true),
-  boardId: z.string().trim().min(1).max(200),
-  sourceListId: z.string().trim().min(1).max(200).nullish(),
-  repoAllowlist: z.array(z.string().trim().min(1).max(200)).max(100).nullish(),
-  // Dry run is the default so a new schedule cannot open a pull request before
-  // the user has seen what it would pick.
-  dryRun: z.boolean().default(true),
   maxRunsPerDay: z.number().int().min(1).max(24).default(1),
 });
 export type CreateAutomationScheduleRequest = z.infer<typeof CreateAutomationScheduleRequest>;
@@ -72,9 +64,7 @@ export const AutomationRunEventDto = z.object({
 });
 export type AutomationRunEventDto = z.infer<typeof AutomationRunEventDto>;
 
-export const AutomationRunNowRequest = z.object({
-  dryRun: z.boolean().optional(),
-});
+export const AutomationRunNowRequest = z.object({});
 export type AutomationRunNowRequest = z.infer<typeof AutomationRunNowRequest>;
 
 export const ConnectMcpServerRequest = z.object({
@@ -110,14 +100,3 @@ export const McpConnectionTestDto = z.object({
 });
 export type McpConnectionTestDto = z.infer<typeof McpConnectionTestDto>;
 
-export const AutomationBoardListDto = z.object({
-  boardId: z.string(),
-  name: z.string(),
-  lists: z.array(
-    z.object({
-      listId: z.string(),
-      name: z.string(),
-    }),
-  ),
-});
-export type AutomationBoardListDto = z.infer<typeof AutomationBoardListDto>;

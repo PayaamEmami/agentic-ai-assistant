@@ -24,13 +24,10 @@ function toScheduleDto(schedule: AutomationSchedule): AutomationScheduleDto {
   return {
     id: schedule.id,
     name: schedule.name,
+    prompt: schedule.prompt,
     cron: schedule.cron,
     timezone: schedule.timezone,
     enabled: schedule.enabled,
-    boardId: schedule.boardId,
-    sourceListId: schedule.sourceListId,
-    repoAllowlist: schedule.repoAllowlist,
-    dryRun: schedule.dryRun,
     maxRunsPerDay: schedule.maxRunsPerDay,
     lastRunAt: schedule.lastRunAt?.toISOString() ?? null,
     nextRunAt: schedule.nextRunAt?.toISOString() ?? null,
@@ -97,11 +94,7 @@ export async function automationRoutes(
         return sendValidationError(reply, parsed.error.message);
       }
 
-      const schedule = await automationService.createSchedule(request.user!.id, {
-        ...parsed.data,
-        sourceListId: parsed.data.sourceListId ?? null,
-        repoAllowlist: parsed.data.repoAllowlist ?? null,
-      });
+      const schedule = await automationService.createSchedule(request.user!.id, parsed.data);
       return reply.status(201).send({ schedule: toScheduleDto(schedule) });
     });
 
@@ -147,11 +140,7 @@ export async function automationRoutes(
           return sendValidationError(reply, parsed.error.message);
         }
 
-        const run = await automationService.runNow(
-          request.user!.id,
-          request.params.id,
-          parsed.data,
-        );
+        const run = await automationService.runNow(request.user!.id, request.params.id);
         if (!run) {
           return sendNotFound(reply, 'Schedule not found');
         }
@@ -186,23 +175,6 @@ export async function automationRoutes(
         return reply.status(200).send({ events: events.map(toRunEventDto) });
       },
     );
-
-    userApp.get('/automation/boards', async (request, reply) => {
-      try {
-        const boards = await automationService.listBoards(request.user!.id);
-        return reply.status(200).send({ boards });
-      } catch (error) {
-        return reply.status(502).send({
-          error: {
-            code: 'MCP_UNAVAILABLE',
-            message:
-              error instanceof Error
-                ? error.message
-                : 'Could not read boards from the MCP server',
-          },
-        });
-      }
-    });
 
     userApp.get('/automation/mcp', async (request, reply) => {
       const status = await automationService.getMcpStatus(request.user!.id);

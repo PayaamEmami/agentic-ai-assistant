@@ -59,9 +59,24 @@ export function mcpCapabilityForToolName(namespacedName: string): string | null 
   return namespace ? mcpCapabilityForNamespace(namespace) : null;
 }
 
+/** Leading `prefix_` segments from remote MCP tool names, used to route calls. */
+export function mcpToolPrefixes(toolNames: string[]): string[] {
+  const prefixes = new Set<string>();
+  for (const toolName of toolNames) {
+    const match = toolName.match(/^([a-z0-9]+)_/);
+    if (match?.[1]) {
+      prefixes.add(match[1]);
+    }
+  }
+  return [...prefixes].sort();
+}
+
 /**
  * Pick a storage slug for a newly connected server from its handshake.
- * `tools-tasks` and `tasks_*` tools map to the board automation connection.
+ *
+ * The server's own name is the slug when it is already one (`tools`, `crs`).
+ * A single tool prefix is the fallback. One server may expose many prefixes;
+ * those are stored separately and are not required to match the slug.
  */
 export function inferMcpCapability(input: {
   serverName?: string;
@@ -71,21 +86,39 @@ export function inferMcpCapability(input: {
   if (name === 'tools-tasks' || name === TASK_BOARD_MCP_CAPABILITY) {
     return TASK_BOARD_MCP_CAPABILITY;
   }
-  if (name === CRS_MCP_CAPABILITY) {
-    return CRS_MCP_CAPABILITY;
+  if (name && isValidMcpCapabilitySlug(name)) {
+    return name;
   }
 
-  const prefixes = new Set<string>();
-  for (const tool of input.tools) {
-    const match = tool.match(/^([a-z0-9]+)_/);
-    if (match) {
-      prefixes.add(match[1]!);
-    }
-  }
-
-  if (prefixes.size === 1) {
-    return mcpCapabilityForNamespace([...prefixes][0]!);
+  const prefixes = mcpToolPrefixes(input.tools);
+  if (prefixes.length === 1) {
+    return mcpCapabilityForNamespace(prefixes[0]!);
   }
 
   return null;
+}
+
+/**
+ * Chooses which saved connection should serve tools in `namespace`.
+ *
+ * An exact capability match wins, so an older `task-board` row still receives
+ * `tasks_*` calls. Otherwise the connection that advertised that prefix wins,
+ * which is how one server (for example `tools`) can own tasks, docs, and finances.
+ */
+export function selectMcpCapabilityForNamespace(
+  connections: Array<{ capability: string; toolPrefixes?: readonly string[] }>,
+  namespace: string,
+): string | null {
+  const expected = mcpCapabilityForNamespace(namespace);
+  const exact = connections.find(
+    (connection) => connection.capability === expected || connection.capability === namespace,
+  );
+  if (exact) {
+    return exact.capability;
+  }
+
+  const prefixed = connections.find((connection) =>
+    connection.toolPrefixes?.includes(namespace),
+  );
+  return prefixed?.capability ?? null;
 }

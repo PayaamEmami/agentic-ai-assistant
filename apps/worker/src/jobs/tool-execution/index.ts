@@ -1,5 +1,5 @@
 import type { Job } from 'bullmq';
-import { conversationRepository, toolExecutionRepository } from '@aaa/db';
+import { automationRunRepository, conversationRepository, toolExecutionRepository } from '@aaa/db';
 import type { ToolDoneEvent, ToolExecutionJobData, ToolStartEvent } from '@aaa/shared';
 import { logger } from '../../lib/logger.js';
 import { enqueueChatContinuationJob } from '../../lib/chat-continuation-queue.js';
@@ -131,6 +131,13 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
   const conversation = await conversationRepository.findById(conversationId);
   if (!conversation) {
     throw new Error(`Conversation not found for tool execution: ${conversationId}`);
+  }
+
+  if (conversation.isAutomation) {
+    const activeRun = await automationRunRepository.findActiveByConversation(conversation.id);
+    if (activeRun) {
+      await automationRunRepository.touch(activeRun.id);
+    }
   }
 
   const claimed = await toolExecutionRepository.claimForExecution(toolExecutionId);

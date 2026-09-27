@@ -122,11 +122,11 @@ export function useAutomationSchedules() {
   );
 
   const runNow = useCallback(
-    async (id: string, dryRun?: boolean) =>
+    async (id: string) =>
       withBusy(async () => {
-        const { run } = await api.automation.runNow(id, dryRun);
+        const { run } = await api.automation.runNow(id);
         await reload();
-        toast.info(run.dryRun ? 'Started a dry run.' : 'Started a run.');
+        toast.info('Started a run.');
         return run;
       }, 'Failed to start the run'),
     [reload, toast, withBusy],

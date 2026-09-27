@@ -1,5 +1,6 @@
 import { AUTOMATION_RUN_STAGE_LABELS, type AutomationRunStage } from '@aaa/shared';
 import type { AutomationRun } from '@/lib/api-client';
+import { describeTiming } from './schedule-cron';
 
 type BadgeVariant = 'neutral' | 'accent' | 'success' | 'error' | 'warning';
 
@@ -42,6 +43,11 @@ export function runSummary(run: AutomationRun): string {
     return run.skipReason ?? 'No work was started.';
   }
 
+  if (run.rationale) {
+    const text = run.rationale.trim();
+    return text.length > 160 ? `${text.slice(0, 159).trimEnd()}…` : text;
+  }
+
   if (run.selectedCardTitle) {
     const prefix = run.dryRun ? 'Would implement' : 'Implemented';
     return run.selectedRepo
@@ -49,7 +55,15 @@ export function runSummary(run: AutomationRun): string {
       : `${prefix} "${run.selectedCardTitle}"`;
   }
 
-  return stageLabel(run.currentStage) ?? 'Starting up';
+  if (run.status === 'queued') {
+    return 'Waiting to start';
+  }
+
+  if (run.status === 'running') {
+    return stageLabel(run.currentStage) ?? 'Running';
+  }
+
+  return 'Finished';
 }
 
 export function formatRunTime(iso: string): string {
@@ -62,26 +76,5 @@ export function formatRunTime(iso: string): string {
 }
 
 export function describeCron(cron: string, timezone: string): string {
-  const parts = cron.trim().split(/\s+/);
-  if (parts.length !== 5) {
-    return `${cron} (${timezone})`;
-  }
-
-  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts as [
-    string,
-    string,
-    string,
-    string,
-    string,
-  ];
-
-  // Only the common "every day at HH:MM" shape gets prose; anything else keeps
-  // the raw expression so the description is never subtly wrong.
-  const isDaily = dayOfMonth === '*' && month === '*' && dayOfWeek === '*';
-  if (isDaily && /^\d+$/.test(minute) && /^\d+$/.test(hour)) {
-    const time = `${hour.padStart(2, '0')}:${minute.padStart(2, '0')}`;
-    return `Daily at ${time} (${timezone})`;
-  }
-
-  return `${cron} (${timezone})`;
+  return describeTiming(cron, timezone);
 }

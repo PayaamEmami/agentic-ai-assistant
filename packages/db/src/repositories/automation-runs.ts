@@ -72,6 +72,7 @@ export interface AutomationRunRepository {
   /** Card ids that already have a pull request or an in-flight run. */
   findCardIdsWithExistingWork(userId: string, cardIds: string[]): Promise<string[]>;
   hasActiveRunForSchedule(scheduleId: string): Promise<boolean>;
+  findActiveByConversation(conversationId: string): Promise<AutomationRun | null>;
   /**
    * Marks a queued/running run as failed. Returns the updated row, or null when
    * the run was already terminal so a late worker failure cannot clobber success.
@@ -279,6 +280,18 @@ export const automationRunRepository: AutomationRunRepository = {
       [userId, cardIds],
     );
     return result.rows.map((row) => row.selectedCardId);
+  },
+
+  async findActiveByConversation(conversationId: string): Promise<AutomationRun | null> {
+    const pool = getPool();
+    const result = await pool.query<AutomationRun>(
+      `SELECT ${SELECT_FIELDS} FROM automation_runs
+       WHERE conversation_id = $1 AND status IN ('queued', 'running')
+       ORDER BY started_at DESC
+       LIMIT 1`,
+      [conversationId],
+    );
+    return result.rows[0] ?? null;
   },
 
   async hasActiveRunForSchedule(scheduleId: string): Promise<boolean> {

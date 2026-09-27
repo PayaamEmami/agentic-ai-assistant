@@ -250,6 +250,9 @@ importers:
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
+      '@aaa/shared':
+        specifier: workspace:*
+        version: link:../shared
       node-pg-migrate:
         specifier: ^7.0.0
         version: 7.9.1(@types/pg@8.18.0)(pg@8.20.0)

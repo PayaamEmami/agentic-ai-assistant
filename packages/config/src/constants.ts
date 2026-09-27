@@ -50,8 +50,8 @@ export const QUEUE_JOB_OPTIONS = {
     removeOnComplete: 100,
     removeOnFail: 500,
   },
-  // Automation runs write code and open pull requests, so a retry would redo
-  // side effects rather than recover. Failures surface on the run record instead.
+  // A scheduled prompt can call tools, so a retry would send the prompt twice.
+  // Failures surface on the run record instead.
   [QUEUE_NAMES.automation]: {
     attempts: 1,
     removeOnComplete: 50,

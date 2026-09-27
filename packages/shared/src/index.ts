@@ -126,7 +126,6 @@ export {
   McpConnectionStatusDto,
   McpConnectionListDto,
   McpConnectionTestDto,
-  AutomationBoardListDto,
   PersonalizationProfileDto,
   MemoryItemDto,
   PersonalizationResponse,

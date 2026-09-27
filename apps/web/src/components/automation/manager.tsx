@@ -1,15 +1,14 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { Alert } from '@/components/ui/alert';
+import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { McpConnectionSection } from '@/components/automation/mcp-connection';
 import { RunList } from '@/components/automation/run-list';
 import { ScheduleForm } from '@/components/automation/schedule-form';
-import { describeCron } from '@/lib/automation/automation-status';
+import { describeTiming } from '@/lib/automation/schedule-cron';
 import { useAutomationSchedules } from '@/lib/automation/use-automation-schedules';
-import { api, type AutomationBoard, type AutomationSchedule } from '@/lib/api-client';
+import type { AutomationSchedule } from '@/lib/api-client';
 
 export function AutomationManager() {
   const {
@@ -23,42 +22,21 @@ export function AutomationManager() {
     deleteSchedule,
     runNow,
   } = useAutomationSchedules();
-  const [taskBoardConnected, setTaskBoardConnected] = useState(false);
-  const [boards, setBoards] = useState<AutomationBoard[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
-
-  const loadBoards = useCallback(async () => {
-    if (!taskBoardConnected) {
-      setBoards([]);
-      return;
-    }
-
-    try {
-      const result = await api.automation.listBoards();
-      setBoards(result.boards);
-    } catch {
-      setBoards([]);
-    }
-  }, [taskBoardConnected]);
-
-  useEffect(() => {
-    void loadBoards();
-  }, [loadBoards]);
-
   const editing = schedules.find((schedule) => schedule.id === editingId) ?? null;
 
   return (
     <div className="space-y-10">
-      <McpConnectionSection onTaskBoardConnectedChange={setTaskBoardConnected} />
+      <McpConnectionSection />
 
       <section className="space-y-4 border-t border-border pt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-medium text-foreground">Schedules</h2>
             <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-              On each fire the assistant reads the board, picks a card and repository, and
-              opens a draft pull request. Start in dry-run until you like what it chooses.
+              Write a prompt and choose when it should run. Each fire uses the same assistant as
+              chat, including whatever tools and MCP servers are connected.
             </p>
           </div>
           <Button
@@ -67,17 +45,11 @@ export function AutomationManager() {
               setCreating(true);
               setEditingId(null);
             }}
-            disabled={!taskBoardConnected || busy}
+            disabled={busy}
           >
             New schedule
           </Button>
         </div>
-
-        {!taskBoardConnected ? (
-          <Alert variant="warning">
-            Connect the task board MCP server before creating a schedule.
-          </Alert>
-        ) : null}
 
         {loading ? (
           <p className="text-sm text-foreground-muted">Loading schedules...</p>
@@ -95,7 +67,7 @@ export function AutomationManager() {
                   setEditingId(schedule.id);
                   setCreating(false);
                 }}
-                onRun={(dryRun) => void runNow(schedule.id, dryRun)}
+                onRun={() => void runNow(schedule.id)}
                 onToggleEnabled={() =>
                   void updateSchedule(schedule.id, { enabled: !schedule.enabled })
                 }
@@ -108,9 +80,7 @@ export function AutomationManager() {
           <div className="rounded-2xl border border-border bg-surface-elevated p-4">
             <h3 className="mb-4 text-sm font-medium text-foreground">New schedule</h3>
             <ScheduleForm
-              boards={boards}
               busy={busy}
-              disabled={!taskBoardConnected}
               submitLabel="Create schedule"
               onCancel={() => setCreating(false)}
               onSubmit={async (input) => {
@@ -127,7 +97,6 @@ export function AutomationManager() {
           <div className="rounded-2xl border border-border bg-surface-elevated p-4">
             <h3 className="mb-4 text-sm font-medium text-foreground">Edit {editing.name}</h3>
             <ScheduleForm
-              boards={boards}
               busy={busy}
               initial={editing}
               submitLabel="Save changes"
@@ -167,7 +136,7 @@ function ScheduleCard({
   busy: boolean;
   onDelete: () => void;
   onEdit: () => void;
-  onRun: (dryRun?: boolean) => void;
+  onRun: () => void;
   onToggleEnabled: () => void;
 }) {
   return (
@@ -179,28 +148,19 @@ function ScheduleCard({
             <Badge variant={schedule.enabled ? 'success' : 'neutral'} className="font-normal">
               {schedule.enabled ? 'Enabled' : 'Paused'}
             </Badge>
-            {schedule.dryRun ? (
-              <Badge variant="warning" className="font-normal">
-                Dry run
-              </Badge>
-            ) : null}
           </div>
+          <p className="line-clamp-2 text-sm text-foreground">{schedule.prompt}</p>
           <p className="text-xs text-foreground-muted">
-            {describeCron(schedule.cron, schedule.timezone)}
+            {describeTiming(schedule.cron, schedule.timezone)}
             {schedule.nextRunAt
               ? ` · next ${new Date(schedule.nextRunAt).toLocaleString()}`
               : ''}
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button size="sm" onClick={() => onRun()} disabled={busy}>
-            {schedule.dryRun ? 'Run now (dry)' : 'Run now'}
+          <Button size="sm" onClick={onRun} disabled={busy}>
+            Run now
           </Button>
-          {!schedule.dryRun ? (
-            <Button size="sm" variant="secondary" onClick={() => onRun(true)} disabled={busy}>
-              Dry run
-            </Button>
-          ) : null}
           <Button size="sm" variant="secondary" onClick={onEdit} disabled={busy}>
             Edit
           </Button>

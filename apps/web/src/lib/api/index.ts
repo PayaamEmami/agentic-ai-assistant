@@ -26,7 +26,6 @@ export type {
   GitHubRepositorySummary,
 } from './apps';
 export type {
-  AutomationBoard,
   AutomationRun,
   AutomationRunEvent,
   AutomationSchedule,

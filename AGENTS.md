@@ -84,7 +84,7 @@ When deciding where a change belongs:
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
 - Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
-- Scheduled board automation: check `apps/worker/src/jobs/automation/`, `apps/api/src/routes/automation.ts`, and `apps/web/src/app/chat/automation`
+- Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 
 ## Model Providers
@@ -107,18 +107,17 @@ Intentional coupling (out of scope for provider swaps):
 - Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
 
-## Task Board Automation
+## Scheduled prompts
 
-The assistant can connect to the personal `tools` task board over MCP and run a scheduled coding job:
+A schedule is a prompt plus a cadence. When it fires, the API runs that prompt through the same chat turn as a normal message, so connected tools and MCP servers are available. Settings live at `/chat/automation`.
 
-- MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL in `settings`, API key in `encrypted_credentials`). One row per server: capability `task-board` (legacy `tools`) for the personal task board, `crs` for Content Recommendation System. Chat loads tools from every connected server; board automation still requires the task-board MCP.
-- Schedules and run history live in `automation_schedules`, `automation_runs`, and append-only `automation_run_events`.
-- The worker `automation` queue is ticked by `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`). Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat so a live coding job is not killed early. At most one in-flight run is allowed per schedule.
+- MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL and tool prefixes in `settings`, API key in `encrypted_credentials`). One row per server. The capability slug comes from the server name (`tools`, `crs`, …). Chat and scheduled prompts load tools from every connected server. A server that exposes several tool prefixes is routed by the prefixes saved at connect time; an exact capability match still wins, so an older `task-board` row keeps receiving `tasks_*` calls.
+- Schedules and run history live in `automation_schedules` (`prompt`, cron, timezone), `automation_runs`, and append-only `automation_run_events`.
+- The worker ticks due schedules in `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`) and enqueues `automation` jobs. The API consumes those jobs and calls `ChatService.runScheduledPrompt`. Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat. Each prompt turn and tool execution refreshes the heartbeat. At most one in-flight run is allowed per schedule.
 - Due-schedule rate-limit and "already running" checks happen **before** advancing `next_run_at`, so a skipped fire stays due and retries later instead of being permanently dropped.
-- If a run is abandoned (stale sweeper) after a PR is opened, the worker must not report back to the board card — another run may already own it.
-- Approval decisions use an atomic `UPDATE … WHERE status = 'pending' RETURNING *` so concurrent approve/reject cannot double-enqueue tool execution.
+- Scheduled turns execute tools without the interactive approval click, because the saved prompt is the authorization. Interactive chat still asks for approval.
+- Approval decisions for interactive chat use an atomic `UPDATE … WHERE status = 'pending' RETURNING *` so concurrent approve/reject cannot double-enqueue tool execution.
 - Each run creates a hidden `conversations.is_automation` row so activity can stream over the existing WebSocket without appearing in the sidebar.
-- Settings UI is `/chat/automation` (account menu). Start new schedules in dry-run.
 
 ## Local Workflow
 

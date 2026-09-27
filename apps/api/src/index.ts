@@ -15,7 +15,9 @@ import { closeAppSyncQueue } from './services/app/index.js';
 import {
   closeAutomationQueue,
   startAutomationEventRelay,
+  startAutomationPromptWorker,
   stopAutomationEventRelay,
+  stopAutomationPromptWorker,
 } from './services/automation/index.js';
 
 async function main() {
@@ -27,6 +29,7 @@ async function main() {
   await startAutomationEventRelay();
   const server = await buildServer(config, services);
   startChatContinuationWorker(config, services.chatService);
+  startAutomationPromptWorker(config, services.chatService);
   let shuttingDown = false;
 
   const shutdown = async (signal: NodeJS.Signals) => {
@@ -48,6 +51,7 @@ async function main() {
     try {
       await server.close();
       await stopChatContinuationWorker();
+      await stopAutomationPromptWorker();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
       await closeMcpToolCache();
@@ -114,6 +118,7 @@ async function main() {
     await closeAutomationQueue();
     await closeAppSyncQueue();
     await stopChatContinuationWorker();
+    await stopAutomationPromptWorker();
     await stopToolEventRelay();
     await stopAutomationEventRelay();
     await closePool();

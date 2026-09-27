@@ -10,6 +10,9 @@ export {
   isTaskBoardMcpCapability,
   isValidMcpCapabilitySlug,
   mcpCapabilityForToolName,
+  mcpNamespaceForToolName,
+  mcpToolPrefixes,
+  selectMcpCapabilityForNamespace,
   toNamespacedMcpToolName,
   toRemoteMcpToolName,
 } from './names.js';

@@ -1,5 +1,12 @@
 export { createPool, getPool, closePool, pingDatabase } from './client.js';
 export { isPgUniqueViolation } from './errors.js';
+export {
+  AUTOMATION_EVENT_CHANNEL,
+  AutomationRunAbandonedError,
+  AutomationRunLog,
+  abandonAutomationRun,
+  publishAbandonedRuns,
+} from './automation-run-log.js';
 
 export {
   userRepository,

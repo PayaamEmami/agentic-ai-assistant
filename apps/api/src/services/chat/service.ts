@@ -12,6 +12,7 @@ import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   attachmentRepository,
   appCapabilityConfigRepository,
+  automationRunRepository,
   conversationRepository,
   getPool,
   messageRepository,
@@ -27,6 +28,7 @@ import {
 import type { AppConfig } from '../../config.js';
 import { loadAvailableTools, type AvailableTool } from '../tools/loader.js';
 import { stageToolCall } from '../tools/call-service.js';
+import { noteAutomationTurn } from '../automation/settle-run.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
 import type { RetrievalResponse } from '../retrieval/bridge.js';
@@ -105,6 +107,7 @@ interface AssistantTurnOptions {
   conversation: {
     id: string;
     title: string | null;
+    isAutomation: boolean;
   };
   userId: string;
   requestContent: string;
@@ -118,6 +121,7 @@ interface PreparedTurn {
     id: string;
     title: string | null;
     userId: string;
+    isAutomation: boolean;
   };
   signal?: AbortSignal;
   assistantMessageId: string;
@@ -247,6 +251,24 @@ export class ChatService {
     };
   }
 
+  /**
+   * Runs a scheduled prompt through the same turn pipeline as a chat message.
+   *
+   * The caller waits for this turn. If the model calls tools, those jobs continue
+   * through the normal tool worker and this method's follow-up turns settle the run.
+   */
+  async runScheduledPrompt(userId: string, conversationId: string, content: string) {
+    const prepared = await this.prepareTurn(userId, content, { conversationId });
+    return this.generateAssistantTurn({
+      conversation: prepared.conversation,
+      userId,
+      requestContent: content,
+      signal: prepared.signal,
+      assistantMessageId: prepared.assistantMessageId,
+      initialConversationTitle: prepared.initialConversationTitle,
+    });
+  }
+
   async interruptRun(userId: string, runId: string): Promise<InterruptChatRunResponse> {
     const activeRun = this.runRegistry.get(runId);
     if (!activeRun || activeRun.userId !== userId) {
@@ -353,6 +375,13 @@ export class ChatService {
       const priorMessages = recentMessages.filter(
         (message) => message.id !== assistantMessageId,
       );
+
+      const automationRun = conversation.isAutomation
+        ? await automationRunRepository.findActiveByConversation(conversation.id)
+        : null;
+      if (automationRun) {
+        await automationRunRepository.touch(automationRun.id);
+      }
 
       if (conversation.title === null && priorMessages.length === 1 && initialConversationTitle) {
         await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
@@ -469,6 +498,7 @@ export class ChatService {
           toolCalls,
           availableTools,
           signal,
+          autoApprove: automationRun !== null,
         });
 
       if (
@@ -564,6 +594,15 @@ export class ChatService {
         },
         'Chat message processed',
       );
+
+      if (automationRun) {
+        await noteAutomationTurn({
+          runId: automationRun.id,
+          conversationId: conversation.id,
+          assistantText: assistantResponse,
+          toolNames: queuedToolJobs.map((job) => job.toolName),
+        });
+      }
 
       return {
         conversationId: conversation.id,
@@ -667,6 +706,7 @@ export class ChatService {
     toolCalls: AgentToolCall[];
     availableTools: AvailableTool[];
     signal?: AbortSignal;
+    autoApprove?: boolean;
   }): Promise<{
     toolResultBlocks: Array<Record<string, unknown>>;
     toolExecutionIds: string[];
@@ -699,6 +739,7 @@ export class ChatService {
         messageId: null,
         originMode: 'text',
         enqueueToolExecutionJob: this.enqueueToolExecutionJob,
+        autoApprove: params.autoApprove,
       });
       toolExecutionIds.push(stagedToolCall.toolExecutionId);
 

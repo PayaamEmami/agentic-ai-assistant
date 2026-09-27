@@ -11,17 +11,10 @@ export const AUTOMATION_RUN_STATUSES = [
 export type AutomationRunStatus = (typeof AUTOMATION_RUN_STATUSES)[number];
 
 /**
- * Ordered stages of a board-task run. The UI shows the current stage next to a
+ * Ordered stages of a scheduled prompt. The UI shows the current stage next to a
  * running run, so the order here is the order the user sees.
  */
-export const AUTOMATION_RUN_STAGES = [
-  'connecting',
-  'reading_board',
-  'selecting_card',
-  'implementing',
-  'opening_pull_request',
-  'reporting_back',
-] as const;
+export const AUTOMATION_RUN_STAGES = ['running_prompt', 'using_tools'] as const;
 
 export type AutomationRunStage = (typeof AUTOMATION_RUN_STAGES)[number];
 
@@ -35,12 +28,8 @@ export const AUTOMATION_RUN_EVENT_KINDS = [
 export type AutomationRunEventKind = (typeof AUTOMATION_RUN_EVENT_KINDS)[number];
 
 export const AUTOMATION_RUN_STAGE_LABELS: Record<AutomationRunStage, string> = {
-  connecting: 'Connecting to task board',
-  reading_board: 'Reading board',
-  selecting_card: 'Choosing a card',
-  implementing: 'Writing code',
-  opening_pull_request: 'Opening pull request',
-  reporting_back: 'Updating the card',
+  running_prompt: 'Running prompt',
+  using_tools: 'Using tools',
 };
 
 export class InvalidCronExpressionError extends Error {

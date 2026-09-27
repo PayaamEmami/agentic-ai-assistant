@@ -9,27 +9,11 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { api, type McpConnectionStatus, type McpConnectionTest } from '@/lib/api-client';
 
-interface McpConnectionSectionProps {
-  onTaskBoardConnectedChange: (connected: boolean) => void;
+function connectionLabel(connection: McpConnectionStatus): string {
+  return connection.serverName?.trim() || connection.capability;
 }
 
-function isTaskBoardCapability(capability: string): boolean {
-  return capability === 'task-board' || capability === 'tools';
-}
-
-function connectionLabel(capability: string): string {
-  if (isTaskBoardCapability(capability)) {
-    return 'Task board';
-  }
-  if (capability === 'crs') {
-    return 'Content recommendations';
-  }
-  return capability;
-}
-
-export function McpConnectionSection({
-  onTaskBoardConnectedChange,
-}: McpConnectionSectionProps) {
+export function McpConnectionSection() {
   const toast = useToast();
   const [connections, setConnections] = useState<McpConnectionStatus[]>([]);
   const [serverUrl, setServerUrl] = useState('');
@@ -38,28 +22,20 @@ export function McpConnectionSection({
   const [busy, setBusy] = useState(false);
   const [test, setTest] = useState<McpConnectionTest | null>(null);
 
-  const applyConnections = useCallback(
-    (next: McpConnectionStatus[]) => {
-      setConnections(next);
-      onTaskBoardConnectedChange(next.some((item) => isTaskBoardCapability(item.capability)));
-    },
-    [onTaskBoardConnectedChange],
-  );
-
   const reload = useCallback(async () => {
     const status = await api.automation.getMcpStatus();
-    applyConnections(status.connections);
-  }, [applyConnections]);
+    setConnections(status.connections);
+  }, []);
 
   useEffect(() => {
     void reload()
       .catch(() => {
-        applyConnections([]);
+        setConnections([]);
       })
       .finally(() => {
         setLoading(false);
       });
-  }, [applyConnections, reload]);
+  }, [reload]);
 
   const connect = async () => {
     setBusy(true);
@@ -69,6 +45,7 @@ export function McpConnectionSection({
 
       if (result.connected) {
         setApiKey('');
+        setServerUrl('');
         await reload();
         toast.success(
           `Connected to ${result.serverName ?? 'the MCP server'} (${result.tools.length} tools).`,
@@ -98,17 +75,18 @@ export function McpConnectionSection({
     }
   };
 
-  const disconnect = async (capability: string) => {
-    if (!window.confirm(`Disconnect ${connectionLabel(capability)}?`)) {
+  const disconnect = async (connection: McpConnectionStatus) => {
+    const label = connectionLabel(connection);
+    if (!window.confirm(`Disconnect ${label}?`)) {
       return;
     }
 
     setBusy(true);
     try {
-      await api.automation.disconnectMcp(capability);
+      await api.automation.disconnectMcp(connection.capability);
       setTest(null);
       await reload();
-      toast.success(`Disconnected ${connectionLabel(capability)}.`);
+      toast.success(`Disconnected ${label}.`);
     } finally {
       setBusy(false);
     }
@@ -120,8 +98,8 @@ export function McpConnectionSection({
         <h2 className="text-base font-medium text-foreground">MCP servers</h2>
       </div>
       <p className="max-w-2xl text-sm text-foreground-muted">
-        Connect the task board for scheduled coding jobs and CRS for feeds, sources, and votes.
-        Each server keeps its own API key. Connecting CRS does not replace the task board.
+        Connect MCP servers so chat and scheduled prompts can use their tools. Each server keeps
+        its own URL and API key.
       </p>
 
       {loading ? (
@@ -141,14 +119,11 @@ export function McpConnectionSection({
                     <div className="min-w-0 space-y-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-sm font-medium text-foreground">
-                          {connectionLabel(connection.capability)}
+                          {connectionLabel(connection)}
                         </p>
                         <Badge variant="success" className="font-normal">
                           Connected
                         </Badge>
-                        {connection.serverName ? (
-                          <Badge className="font-normal">{connection.serverName}</Badge>
-                        ) : null}
                       </div>
                       <p className="truncate text-xs text-foreground-muted">{connection.serverUrl}</p>
                     </div>
@@ -164,7 +139,7 @@ export function McpConnectionSection({
                       <Button
                         size="sm"
                         variant="danger"
-                        onClick={() => void disconnect(connection.capability)}
+                        onClick={() => void disconnect(connection)}
                         disabled={busy}
                       >
                         Disconnect
@@ -177,22 +152,22 @@ export function McpConnectionSection({
           )}
 
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">Add or update a server</h3>
+            <h3 className="text-sm font-medium text-foreground">Add a server</h3>
             <Field label="MCP server URL">
               <Input
                 value={serverUrl}
                 onChange={(event) => setServerUrl(event.target.value)}
-                placeholder="https://example.lambda-url.us-west-2.on.aws/"
+                placeholder="https://example.lambda-url.on.aws/"
                 autoComplete="off"
               />
             </Field>
 
-            <Field label="Agent API key">
+            <Field label="API key">
               <Input
                 type="password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder="tak_... or cak_..."
+                placeholder="API key"
                 autoComplete="off"
               />
             </Field>
@@ -201,7 +176,7 @@ export function McpConnectionSection({
               onClick={() => void connect()}
               disabled={busy || !serverUrl.trim() || !apiKey.trim()}
             >
-              {connections.length > 0 ? 'Save connection' : 'Connect'}
+              Connect
             </Button>
           </div>
 
@@ -211,7 +186,7 @@ export function McpConnectionSection({
             <div className="rounded-xl border border-border bg-surface-elevated p-3">
               <p className="text-xs font-medium uppercase tracking-wide text-foreground-muted">
                 Available tools
-                {test.capability ? ` · ${connectionLabel(test.capability)}` : ''}
+                {test.serverName ? ` · ${test.serverName}` : ''}
               </p>
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {test.tools.map((tool) => (

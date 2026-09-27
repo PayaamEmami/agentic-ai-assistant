@@ -4,9 +4,8 @@ import {
   CRS_MCP_CAPABILITY,
   CRS_MCP_TIMEOUT_MS,
   McpClient,
-  TASK_BOARD_MCP_CAPABILITY,
-  isTaskBoardMcpCapability,
-  mcpCapabilityForToolName,
+  mcpNamespaceForToolName,
+  selectMcpCapabilityForNamespace,
 } from '@aaa/mcp';
 import { GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import type { ToolExecutionResult } from './types.js';
@@ -85,34 +84,32 @@ export async function withGitHubProvider(
   }
 }
 
+function toolPrefixesFromSettings(settings: Record<string, unknown>): string[] {
+  const value = settings['toolPrefixes'];
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
+}
+
 /**
- * Builds an MCP client from a stored connection. Kept separate from
- * `withMcpClient` so automation jobs can reuse the client without the
- * ToolExecutionResult wrapper.
+ * Builds an MCP client for the connection that owns this tool namespace.
+ * One server can advertise several prefixes; an exact capability match still wins.
  */
-export async function resolveMcpClient(
-  userId: string,
-  capability: string = TASK_BOARD_MCP_CAPABILITY,
-): Promise<McpClient> {
+export async function resolveMcpClient(userId: string, namespace: string): Promise<McpClient> {
   const configs = await appCapabilityConfigRepository.listByUserAndApp(userId, 'mcp');
   const connected = configs.filter((entry) => entry.status === 'connected');
-  const hasTaskBoard = connected.some((entry) => entry.capability === TASK_BOARD_MCP_CAPABILITY);
-  const config = connected.find((entry) => {
-    if (isTaskBoardMcpCapability(capability)) {
-      if (hasTaskBoard) {
-        return entry.capability === TASK_BOARD_MCP_CAPABILITY;
-      }
-      return isTaskBoardMcpCapability(entry.capability);
-    }
-    return entry.capability === capability;
-  });
+  const capability = selectMcpCapabilityForNamespace(
+    connected.map((entry) => ({
+      capability: entry.capability,
+      toolPrefixes: toolPrefixesFromSettings(entry.settings),
+    })),
+    namespace,
+  );
+  const config = connected.find((entry) => entry.capability === capability);
 
   if (!config) {
-    throw new Error(
-      isTaskBoardMcpCapability(capability)
-        ? 'No task board MCP server is connected'
-        : `No MCP server is connected for "${capability}"`,
-    );
+    throw new Error(`No MCP server is connected for "${namespace}" tools`);
   }
 
   const credentials = decryptCredentials(config.encryptedCredentials);
@@ -129,11 +126,11 @@ export async function withMcpClient(
   handler: (client: McpClient) => Promise<unknown>,
 ): Promise<ToolExecutionResult> {
   try {
-    const capability = mcpCapabilityForToolName(toolName);
-    if (!capability) {
+    const namespace = mcpNamespaceForToolName(toolName);
+    if (!namespace) {
       throw new Error(`Not an MCP tool: ${toolName}`);
     }
-    return { success: true, result: await handler(await resolveMcpClient(userId, capability)) };
+    return { success: true, result: await handler(await resolveMcpClient(userId, namespace)) };
   } catch (error) {
     return {
       success: false,

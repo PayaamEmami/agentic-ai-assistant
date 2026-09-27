@@ -16,6 +16,7 @@
   "dependencies": {
     "@aaa/config": "workspace:*",
     "@aaa/observability": "workspace:*",
+    "@aaa/shared": "workspace:*",
     "node-pg-migrate": "^7.0.0",
     "pg": "^8.13.0"
   },

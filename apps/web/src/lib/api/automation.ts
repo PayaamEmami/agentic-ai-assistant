@@ -1,5 +1,4 @@
 import type {
-  AutomationBoardListDto,
   AutomationRunDto,
   AutomationRunEventDto,
   AutomationScheduleDto,
@@ -14,7 +13,6 @@ import { request } from './client';
 export type AutomationSchedule = AutomationScheduleDto;
 export type AutomationRun = AutomationRunDto;
 export type AutomationRunEvent = AutomationRunEventDto;
-export type AutomationBoard = AutomationBoardListDto;
 export type McpConnectionStatus = McpConnectionStatusDto;
 export type McpConnectionList = McpConnectionListDto;
 export type McpConnectionTest = McpConnectionTestDto;
@@ -40,10 +38,10 @@ export const automationApi = {
       method: 'DELETE',
     });
   },
-  runNow(id: string, dryRun?: boolean) {
+  runNow(id: string) {
     return request<{ run: AutomationRun }>(`/api/automation/schedules/${id}/run`, {
       method: 'POST',
-      body: JSON.stringify(dryRun === undefined ? {} : { dryRun }),
+      body: JSON.stringify({}),
     });
   },
   listRuns(limit = 20) {
@@ -53,9 +51,6 @@ export const automationApi = {
     return request<{ events: AutomationRunEvent[] }>(
       `/api/automation/runs/${runId}/events?afterSeq=${afterSeq}`,
     );
-  },
-  listBoards() {
-    return request<{ boards: AutomationBoard[] }>('/api/automation/boards');
   },
   getMcpStatus() {
     return request<McpConnectionList>('/api/automation/mcp');

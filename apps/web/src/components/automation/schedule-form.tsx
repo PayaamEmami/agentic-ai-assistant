@@ -7,7 +7,14 @@ import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Select } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import type { AutomationBoard, AutomationSchedule } from '@/lib/api-client';
+import { Textarea } from '@/components/ui/textarea';
+import {
+  WEEKDAY_OPTIONS,
+  cronForTiming,
+  timingFromCron,
+  type ScheduleCadence,
+} from '@/lib/automation/schedule-cron';
+import type { AutomationSchedule } from '@/lib/api-client';
 
 const TIMEZONES = [
   'UTC',
@@ -20,99 +27,71 @@ const TIMEZONES = [
   'Asia/Tokyo',
 ];
 
-const CRON_PRESETS = [
-  { label: 'Daily at 09:00', value: '0 9 * * *' },
-  { label: 'Daily at 08:00', value: '0 8 * * *' },
-  { label: 'Weekdays at 09:00', value: '0 9 * * 1-5' },
-  { label: 'Custom', value: 'custom' },
+const CADENCE_OPTIONS: Array<{ value: ScheduleCadence; label: string }> = [
+  { value: 'hourly', label: 'Hourly' },
+  { value: 'daily', label: 'Daily' },
+  { value: 'weekdays', label: 'Weekdays' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'custom', label: 'Custom cron' },
 ];
 
 interface ScheduleFormProps {
-  boards: AutomationBoard[];
   busy: boolean;
-  disabled?: boolean;
   initial?: AutomationSchedule | null;
   onCancel?: () => void;
   onSubmit: (input: CreateAutomationScheduleRequest) => Promise<unknown>;
   submitLabel: string;
 }
 
-function cronPresetFor(cron: string): string {
-  return CRON_PRESETS.some((preset) => preset.value === cron) ? cron : 'custom';
-}
-
 export function ScheduleForm({
-  boards,
   busy,
-  disabled = false,
   initial,
   onCancel,
   onSubmit,
   submitLabel,
 }: ScheduleFormProps) {
-  const [name, setName] = useState(initial?.name ?? 'Daily board task');
+  const initialTiming = timingFromCron(initial?.cron ?? '0 9 * * *');
+  const [name, setName] = useState(initial?.name ?? '');
+  const [prompt, setPrompt] = useState(initial?.prompt ?? '');
+  const [cadence, setCadence] = useState<ScheduleCadence>(initialTiming.cadence);
+  const [time, setTime] = useState(initialTiming.time);
+  const [weekday, setWeekday] = useState(initialTiming.weekday);
   const [cron, setCron] = useState(initial?.cron ?? '0 9 * * *');
-  const [cronPreset, setCronPreset] = useState(cronPresetFor(initial?.cron ?? '0 9 * * *'));
   const [timezone, setTimezone] = useState(initial?.timezone ?? 'America/Los_Angeles');
-  const [boardId, setBoardId] = useState(initial?.boardId ?? '');
-  const [sourceListId, setSourceListId] = useState(initial?.sourceListId ?? '');
   const [enabled, setEnabled] = useState(initial?.enabled ?? true);
-  const [dryRun, setDryRun] = useState(initial?.dryRun ?? true);
   const [maxRunsPerDay, setMaxRunsPerDay] = useState(String(initial?.maxRunsPerDay ?? 1));
-  const [repoAllowlist, setRepoAllowlist] = useState(
-    (initial?.repoAllowlist ?? []).join(', '),
-  );
 
   useEffect(() => {
     if (!initial) {
       return;
     }
 
+    const timing = timingFromCron(initial.cron);
     setName(initial.name);
+    setPrompt(initial.prompt);
+    setCadence(timing.cadence);
+    setTime(timing.time);
+    setWeekday(timing.weekday);
     setCron(initial.cron);
-    setCronPreset(cronPresetFor(initial.cron));
     setTimezone(initial.timezone);
-    setBoardId(initial.boardId);
-    setSourceListId(initial.sourceListId ?? '');
     setEnabled(initial.enabled);
-    setDryRun(initial.dryRun);
     setMaxRunsPerDay(String(initial.maxRunsPerDay));
-    setRepoAllowlist((initial.repoAllowlist ?? []).join(', '));
   }, [initial]);
 
-  const selectedBoard = useMemo(
-    () => boards.find((board) => board.boardId === boardId) ?? null,
-    [boardId, boards],
-  );
   const timezoneOptions = useMemo(
     () => (TIMEZONES.includes(timezone) ? TIMEZONES : [timezone, ...TIMEZONES]),
     [timezone],
   );
-
-  useEffect(() => {
-    if (boards.length === 0 || boardId) {
-      return;
-    }
-
-    setBoardId(boards[0]!.boardId);
-  }, [boardId, boards]);
+  const showsTime = cadence === 'daily' || cadence === 'weekdays' || cadence === 'weekly';
 
   const submit = async () => {
     const parsedMax = Number.parseInt(maxRunsPerDay, 10);
-    const allowlist = repoAllowlist
-      .split(',')
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-
     await onSubmit({
       name: name.trim(),
-      cron: cron.trim(),
+      prompt: prompt.trim(),
+      cron: cronForTiming({ cadence, time, weekday, cron }),
       timezone,
       enabled,
-      boardId: boardId.trim(),
-      sourceListId: sourceListId.trim() || null,
-      repoAllowlist: allowlist.length > 0 ? allowlist : null,
-      dryRun,
       maxRunsPerDay: Number.isInteger(parsedMax) && parsedMax > 0 ? parsedMax : 1,
     });
   };
@@ -123,26 +102,38 @@ export function ScheduleForm({
         <Input
           value={name}
           onChange={(event) => setName(event.target.value)}
-          disabled={disabled || busy}
+          disabled={busy}
+          placeholder="Morning digest"
+        />
+      </Field>
+
+      <Field label="Prompt">
+        <Textarea
+          value={prompt}
+          onChange={(event) => setPrompt(event.target.value)}
+          disabled={busy}
+          rows={5}
+          className="min-h-28 w-full"
+          placeholder="What should the assistant do each time this runs?"
         />
       </Field>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <Field label="Cadence">
           <Select
-            value={cronPreset}
-            disabled={disabled || busy}
+            value={cadence}
+            disabled={busy}
             onChange={(event) => {
-              const next = event.target.value;
-              setCronPreset(next);
-              if (next !== 'custom') {
-                setCron(next);
+              const next = event.target.value as ScheduleCadence;
+              setCadence(next);
+              if (next === 'hourly') {
+                setMaxRunsPerDay((current) => (current === '1' ? '24' : current));
               }
             }}
           >
-            {CRON_PRESETS.map((preset) => (
-              <option key={preset.value} value={preset.value}>
-                {preset.label}
+            {CADENCE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </Select>
@@ -151,7 +142,7 @@ export function ScheduleForm({
         <Field label="Timezone">
           <Select
             value={timezone}
-            disabled={disabled || busy}
+            disabled={busy}
             onChange={(event) => setTimezone(event.target.value)}
           >
             {timezoneOptions.map((zone) => (
@@ -163,77 +154,44 @@ export function ScheduleForm({
         </Field>
       </div>
 
-      {cronPreset === 'custom' ? (
+      {showsTime ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Time">
+            <Input
+              type="time"
+              value={time}
+              onChange={(event) => setTime(event.target.value)}
+              disabled={busy}
+            />
+          </Field>
+          {cadence === 'weekly' ? (
+            <Field label="Day">
+              <Select
+                value={weekday}
+                disabled={busy}
+                onChange={(event) => setWeekday(event.target.value)}
+              >
+                {WEEKDAY_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          ) : null}
+        </div>
+      ) : null}
+
+      {cadence === 'custom' ? (
         <Field label="Cron expression">
           <Input
             value={cron}
             onChange={(event) => setCron(event.target.value)}
-            disabled={disabled || busy}
+            disabled={busy}
             placeholder="0 9 * * *"
           />
         </Field>
       ) : null}
-
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Field label="Board">
-          {boards.length > 0 && (!boardId || boards.some((board) => board.boardId === boardId)) ? (
-            <Select
-              value={boardId}
-              disabled={disabled || busy}
-              onChange={(event) => {
-                setBoardId(event.target.value);
-                setSourceListId('');
-              }}
-            >
-              {boards.map((board) => (
-                <option key={board.boardId} value={board.boardId}>
-                  {board.name}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Input
-              value={boardId}
-              onChange={(event) => setBoardId(event.target.value)}
-              disabled={disabled || busy}
-              placeholder="Board ID"
-            />
-          )}
-        </Field>
-
-        <Field label="Source list">
-          {selectedBoard && selectedBoard.lists.length > 0 ? (
-            <Select
-              value={sourceListId}
-              disabled={disabled || busy}
-              onChange={(event) => setSourceListId(event.target.value)}
-            >
-              <option value="">Any list</option>
-              {selectedBoard.lists.map((list) => (
-                <option key={list.listId} value={list.listId}>
-                  {list.name}
-                </option>
-              ))}
-            </Select>
-          ) : (
-            <Input
-              value={sourceListId}
-              onChange={(event) => setSourceListId(event.target.value)}
-              disabled={disabled || busy}
-              placeholder="Optional list ID"
-            />
-          )}
-        </Field>
-      </div>
-
-      <Field label="Repo allowlist">
-        <Input
-          value={repoAllowlist}
-          onChange={(event) => setRepoAllowlist(event.target.value)}
-          disabled={disabled || busy}
-          placeholder="owner/repo, owner/other — leave blank for all"
-        />
-      </Field>
 
       <Field label="Max runs per day">
         <Input
@@ -242,29 +200,22 @@ export function ScheduleForm({
           max={24}
           value={maxRunsPerDay}
           onChange={(event) => setMaxRunsPerDay(event.target.value)}
-          disabled={disabled || busy}
+          disabled={busy}
         />
       </Field>
 
       <Switch
         checked={enabled}
         onCheckedChange={setEnabled}
-        disabled={disabled || busy}
+        disabled={busy}
         label="Enabled"
-        description="When off, the scheduler skips this automation."
-      />
-      <Switch
-        checked={dryRun}
-        onCheckedChange={setDryRun}
-        disabled={disabled || busy}
-        label="Dry run"
-        description="Pick a card and repo, but do not write code or open a pull request."
+        description="When off, the scheduler skips this prompt."
       />
 
       <div className="flex flex-wrap gap-2">
         <Button
           onClick={() => void submit()}
-          disabled={disabled || busy || !name.trim() || !boardId.trim() || !cron.trim()}
+          disabled={busy || !name.trim() || !prompt.trim() || !cronForTiming({ cadence, time, weekday, cron }).trim()}
         >
           {submitLabel}
         </Button>

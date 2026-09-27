@@ -12,7 +12,7 @@ export function configureAutomationQueue(
 ): EnqueueAutomationJob {
   producer = createQueueProducer<AutomationJobData>({
     queueName: QUEUE_NAMES.automation,
-    jobName: 'automation-board-task',
+    jobName: 'automation-prompt',
     component: 'automation-queue',
     spanName: 'queue.automation.enqueue',
     connection: parseRedisUrl(config.redisUrl),

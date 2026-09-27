@@ -5,14 +5,10 @@ export interface AutomationSchedule {
   id: string;
   userId: string;
   name: string;
+  prompt: string;
   cron: string;
   timezone: string;
   enabled: boolean;
-  boardId: string;
-  sourceListId: string | null;
-  /** null means every repository the GitHub connection can reach. */
-  repoAllowlist: string[] | null;
-  dryRun: boolean;
   maxRunsPerDay: number;
   lastRunAt: Date | null;
   nextRunAt: Date | null;
@@ -22,13 +18,10 @@ export interface AutomationSchedule {
 
 export interface AutomationScheduleInput {
   name: string;
+  prompt: string;
   cron: string;
   timezone?: string;
   enabled?: boolean;
-  boardId: string;
-  sourceListId?: string | null;
-  repoAllowlist?: string[] | null;
-  dryRun?: boolean;
   maxRunsPerDay?: number;
   nextRunAt?: Date | null;
 }
@@ -57,13 +50,10 @@ export interface AutomationScheduleRepository {
 const SELECT_FIELDS = `id,
                        user_id AS "userId",
                        name,
+                       prompt,
                        cron,
                        timezone,
                        enabled,
-                       board_id AS "boardId",
-                       source_list_id AS "sourceListId",
-                       repo_allowlist AS "repoAllowlist",
-                       dry_run AS "dryRun",
                        max_runs_per_day AS "maxRunsPerDay",
                        last_run_at AS "lastRunAt",
                        next_run_at AS "nextRunAt",
@@ -72,13 +62,10 @@ const SELECT_FIELDS = `id,
 
 const UPDATABLE_COLUMNS: Record<keyof AutomationScheduleInput, string> = {
   name: 'name',
+  prompt: 'prompt',
   cron: 'cron',
   timezone: 'timezone',
   enabled: 'enabled',
-  boardId: 'board_id',
-  sourceListId: 'source_list_id',
-  repoAllowlist: 'repo_allowlist',
-  dryRun: 'dry_run',
   maxRunsPerDay: 'max_runs_per_day',
   nextRunAt: 'next_run_at',
 };
@@ -92,22 +79,18 @@ export const automationScheduleRepository: AutomationScheduleRepository = {
     const id = crypto.randomUUID();
     const result = await pool.query<AutomationSchedule>(
       `INSERT INTO automation_schedules (
-         id, user_id, name, cron, timezone, enabled, board_id, source_list_id,
-         repo_allowlist, dry_run, max_runs_per_day, next_run_at
+         id, user_id, name, prompt, cron, timezone, enabled, max_runs_per_day, next_run_at
        )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING ${SELECT_FIELDS}`,
       [
         id,
         userId,
         input.name,
+        input.prompt,
         input.cron,
         input.timezone ?? 'UTC',
         input.enabled ?? true,
-        input.boardId,
-        input.sourceListId ?? null,
-        input.repoAllowlist ? JSON.stringify(input.repoAllowlist) : null,
-        input.dryRun ?? true,
         input.maxRunsPerDay ?? 1,
         input.nextRunAt ?? null,
       ],
@@ -162,7 +145,7 @@ export const automationScheduleRepository: AutomationScheduleRepository = {
         continue;
       }
 
-      values.push(key === 'repoAllowlist' && value ? JSON.stringify(value) : value);
+      values.push(value);
       assignments.push(`${column} = $${values.length}`);
     }
 

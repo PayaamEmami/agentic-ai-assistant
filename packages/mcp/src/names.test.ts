@@ -7,6 +7,7 @@ import {
   isMcpToolName,
   isTaskBoardMcpCapability,
   mcpCapabilityForToolName,
+  selectMcpCapabilityForNamespace,
   toNamespacedMcpToolName,
   toRemoteMcpToolName,
 } from './names.js';
@@ -52,6 +53,9 @@ describe('MCP tool names', () => {
     expect(inferMcpCapability({ serverName: 'tools-tasks', tools: [] })).toBe(
       TASK_BOARD_MCP_CAPABILITY,
     );
+    expect(inferMcpCapability({ serverName: 'tools', tools: ['tasks_list_boards', 'docs_list'] })).toBe(
+      'tools',
+    );
     expect(inferMcpCapability({ serverName: 'crs', tools: [] })).toBe(CRS_MCP_CAPABILITY);
     expect(
       inferMcpCapability({ tools: ['crs_list_sources', 'crs_get_feed'] }),
@@ -62,5 +66,29 @@ describe('MCP tool names', () => {
     expect(
       inferMcpCapability({ tools: ['tasks_list_boards', 'crs_list_sources'] }),
     ).toBeNull();
+  });
+
+  it('routes a multi-tool server by the prefixes it advertised', () => {
+    expect(
+      selectMcpCapabilityForNamespace(
+        [{ capability: 'tools', toolPrefixes: ['tasks', 'docs', 'finances'] }],
+        'tasks',
+      ),
+    ).toBe('tools');
+    expect(
+      selectMcpCapabilityForNamespace(
+        [
+          { capability: 'task-board', toolPrefixes: ['tasks'] },
+          { capability: 'tools', toolPrefixes: ['tasks', 'docs'] },
+        ],
+        'tasks',
+      ),
+    ).toBe('task-board');
+    expect(
+      selectMcpCapabilityForNamespace(
+        [{ capability: 'crs', toolPrefixes: ['crs'] }],
+        'crs',
+      ),
+    ).toBe('crs');
   });
 });

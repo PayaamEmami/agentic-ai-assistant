@@ -101,6 +101,8 @@ export interface CreateToolCallOptions {
   messageId?: string | null;
   originMode: 'text' | 'voice';
   enqueueToolExecutionJob?: EnqueueToolExecutionJob;
+  /** Scheduled prompts already authorized the turn, so tools run without a click. */
+  autoApprove?: boolean;
 }
 
 export interface CreateToolCallResult {
@@ -134,7 +136,7 @@ export async function stageToolCall(
     { originMode },
   );
 
-  if (tool.requiresApproval) {
+  if (tool.requiresApproval && !options.autoApprove) {
     await toolExecutionRepository.updateStatus(toolExecution.id, 'requires_approval');
     const approval = await approvalRepository.create(
       userId,

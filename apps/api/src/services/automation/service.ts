@@ -3,8 +3,8 @@ import {
   assertPublicHttpsUrl,
   inferMcpCapability,
   isValidMcpCapabilitySlug,
+  mcpToolPrefixes,
   McpError,
-  TASK_BOARD_MCP_CAPABILITY,
 } from '@aaa/mcp';
 import { computeNextRunAt, isValidCronExpression, isValidTimezone } from '@aaa/shared';
 import {
@@ -45,12 +45,6 @@ export interface McpConnectionStatusItem {
   serverUrl: string;
   serverName: string | null;
   connected: boolean;
-}
-
-export interface AutomationBoardSummary {
-  boardId: string;
-  name: string;
-  lists: Array<{ listId: string; name: string }>;
 }
 
 function assertValidSchedule(input: {
@@ -190,11 +184,7 @@ export class AutomationService {
    * The conversation and run row are created here rather than in the worker so
    * the caller can subscribe to the run's activity before the job is picked up.
    */
-  async runNow(
-    userId: string,
-    scheduleId: string,
-    overrides?: { dryRun?: boolean },
-  ): Promise<AutomationRun | null> {
+  async runNow(userId: string, scheduleId: string): Promise<AutomationRun | null> {
     const schedule = await automationScheduleRepository.findById(scheduleId);
     if (!schedule || schedule.userId !== userId) {
       return null;
@@ -218,8 +208,6 @@ export class AutomationService {
         userId,
         conversationId: conversation.id,
         trigger: 'manual',
-        dryRun: overrides?.dryRun ?? schedule.dryRun,
-        boardId: schedule.boardId,
       });
     } catch (error) {
       if (isPgUniqueViolation(error)) {
@@ -260,7 +248,6 @@ export class AutomationService {
     }
 
     const test = await this.testMcpConnection({
-      capability: input.capability?.trim() || TASK_BOARD_MCP_CAPABILITY,
       serverUrl,
       apiKey: input.apiKey.trim(),
     });
@@ -273,7 +260,7 @@ export class AutomationService {
       inferMcpCapability({ serverName: test.serverName, tools: test.tools });
     if (!capability || !isValidMcpCapabilitySlug(capability)) {
       throw new AutomationValidationError(
-        'Could not tell which MCP this is. Pass capability "task-board" or "crs".',
+        'Could not identify this MCP server. It needs a name that is a lowercase slug.',
       );
     }
 
@@ -283,19 +270,12 @@ export class AutomationService {
       capability,
       'connected',
       encryptCredentials({ apiKey: input.apiKey.trim() }),
-      { serverUrl, serverName: test.serverName ?? null },
+      {
+        serverUrl,
+        serverName: test.serverName ?? null,
+        toolPrefixes: mcpToolPrefixes(test.tools),
+      },
     );
-
-    if (capability === TASK_BOARD_MCP_CAPABILITY) {
-      const legacy = await appCapabilityConfigRepository.findByUserAppAndCapability(
-        userId,
-        'mcp',
-        'tools',
-      );
-      if (legacy) {
-        await appCapabilityConfigRepository.delete(legacy.id);
-      }
-    }
 
     await invalidateMcpToolCache(userId, capability);
 
@@ -333,7 +313,7 @@ export class AutomationService {
   }): Promise<McpConnectionTestResult> {
     try {
       const { serverInfo, tools } = await createMcpClient({
-        capability: connection.capability ?? TASK_BOARD_MCP_CAPABILITY,
+        capability: connection.capability ?? 'mcp',
         serverUrl: connection.serverUrl,
         apiKey: connection.apiKey,
       }).testConnection();
@@ -376,63 +356,4 @@ export class AutomationService {
       })),
     };
   }
-
-  /**
-   * Lists boards from the task-board MCP server so the settings form can offer
-   * real pickers instead of asking the user to type opaque IDs.
-   */
-  async listBoards(userId: string): Promise<AutomationBoardSummary[]> {
-    const connection = await getMcpConnection(userId, TASK_BOARD_MCP_CAPABILITY);
-    if (!connection) {
-      return [];
-    }
-
-    const result = await createMcpClient(connection).callTool('tasks_list_boards');
-    return parseBoardSummaries(result.data);
-  }
-}
-
-function asNonEmptyString(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function parseBoardSummaries(data: unknown): AutomationBoardSummary[] {
-  if (typeof data !== 'object' || data === null || !('boards' in data)) {
-    return [];
-  }
-
-  const boards = (data as { boards?: unknown }).boards;
-  if (!Array.isArray(boards)) {
-    return [];
-  }
-
-  return boards.flatMap((entry) => {
-    if (typeof entry !== 'object' || entry === null) {
-      return [];
-    }
-
-    const board = entry as { boardId?: unknown; name?: unknown; lists?: unknown };
-    const boardId = asNonEmptyString(board.boardId);
-    if (!boardId) {
-      return [];
-    }
-
-    const lists = Array.isArray(board.lists)
-      ? board.lists.flatMap((listEntry) => {
-          if (typeof listEntry !== 'object' || listEntry === null) {
-            return [];
-          }
-
-          const list = listEntry as { listId?: unknown; name?: unknown };
-          const listId = asNonEmptyString(list.listId);
-          if (!listId) {
-            return [];
-          }
-
-          return [{ listId, name: asNonEmptyString(list.name) ?? listId }];
-        })
-      : [];
-
-    return [{ boardId, name: asNonEmptyString(board.name) ?? boardId, lists }];
-  });
 }

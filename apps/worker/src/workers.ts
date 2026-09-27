@@ -4,7 +4,6 @@ import { QUEUE_NAMES, parseRedisUrl, type WorkerConfig } from '@aaa/config';
 import { withLogContext, withSpan } from '@aaa/observability';
 import type {
   AppSyncJobData,
-  AutomationJobData,
   EmbeddingJobData,
   IngestionJobData,
   ToolExecutionJobData,
@@ -12,7 +11,6 @@ import type {
 import { handleIngestion } from './jobs/ingestion.js';
 import { handleEmbedding } from './jobs/embedding.js';
 import { handleAppSync } from './jobs/app-sync.js';
-import { abandonAutomationRun, handleAutomation } from './jobs/automation/index.js';
 import { handleToolExecution } from './jobs/tool-execution/index.js';
 import { logger } from './lib/logger.js';
 import { workerJobCounter, workerJobDurationMs } from './lib/telemetry.js';
@@ -115,26 +113,6 @@ function trackWorkerEvents(worker: Worker): void {
       },
       'Job failed',
     );
-
-    if (job?.queueName === QUEUE_NAMES.automation) {
-      const runId =
-        typeof job.data === 'object' && job.data !== null && 'runId' in job.data
-          ? job.data.runId
-          : undefined;
-      if (typeof runId === 'string') {
-        void abandonAutomationRun(runId, err.message).catch((abandonError) => {
-          logger.error(
-            {
-              event: 'automation.run.abandon_failed',
-              outcome: 'failure',
-              automationRunId: runId,
-              error: abandonError,
-            },
-            'Failed to mark an abandoned automation run as failed',
-          );
-        });
-      }
-    }
   });
 }
 
@@ -173,17 +151,6 @@ export function createWorkers(config: WorkerConfig): Worker[] {
       context: (job) => ({
         conversationId: job.data.conversationId,
         toolExecutionId: job.data.toolExecutionId,
-      }),
-    }),
-    createTrackedWorker<AutomationJobData>(connection, {
-      queueName: QUEUE_NAMES.automation,
-      component: 'automation-worker',
-      spanName: 'worker.job.automation',
-      handler: handleAutomation,
-      workerOptions: { lockDuration: LONG_RUNNING_LOCK_MS },
-      context: (job) => ({
-        automationRunId: job.data.runId,
-        scheduleId: job.data.scheduleId,
       }),
     }),
   ];

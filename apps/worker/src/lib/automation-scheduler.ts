@@ -20,7 +20,7 @@ const SCHEDULER_LOCK_KEY = 'aaa:automation-scheduler';
 const SCHEDULER_LOCK_TTL_SECONDS = 50;
 /** A queued run with no worker pickup is almost certainly an enqueue miss. */
 const QUEUED_STALE_MS = 15 * 60 * 1000;
-/** Coding a card and opening a PR should finish well under this. */
+/** Each prompt turn and tool call refreshes the heartbeat, so this is a crash bound. */
 const RUNNING_STALE_MS = 90 * 60 * 1000;
 
 async function enqueueOrFailRun(
@@ -142,8 +142,6 @@ async function scheduleDueAutomations(redis: Redis): Promise<void> {
         userId: schedule.userId,
         conversationId: conversation.id,
         trigger: 'schedule',
-        dryRun: schedule.dryRun,
-        boardId: schedule.boardId,
       });
     } catch (error) {
       if (isPgUniqueViolation(error)) {

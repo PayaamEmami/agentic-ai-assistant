@@ -87,7 +87,7 @@ function createJobQueueProducers(connection: ConnectionOptions): JobQueueProduce
     }),
     automation: createQueueProducer<AutomationJobData>({
       queueName: QUEUE_NAMES.automation,
-      jobName: 'automation-board-task',
+      jobName: 'automation-prompt',
       component: 'worker-job-queues',
       spanName: 'queue.automation.enqueue',
       connection,
