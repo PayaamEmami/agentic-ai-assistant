@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { McpConnectionSection } from '@/components/automation/mcp-connection';
 import { RunList } from '@/components/automation/run-list';
 import { ScheduleForm } from '@/components/automation/schedule-form';
+import { PlusIcon } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { IconButton } from '@/components/ui/icon-button';
 import { describeTiming } from '@/lib/automation/schedule-cron';
 import { useAutomationSchedules } from '@/lib/automation/use-automation-schedules';
 import type { AutomationSchedule } from '@/lib/api-client';
@@ -31,24 +33,25 @@ export function AutomationManager() {
       <McpConnectionSection />
 
       <section className="space-y-4 border-t border-border pt-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
+        <div className="space-y-1">
+          <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-medium text-foreground">Schedules</h2>
-            <p className="mt-1 max-w-2xl text-sm text-foreground-muted">
-              Write a prompt and choose when it should run. Each fire uses the same assistant as
-              chat, including whatever tools and MCP servers are connected.
-            </p>
+            <IconButton
+              onClick={() => {
+                setCreating(true);
+                setEditingId(null);
+              }}
+              disabled={busy}
+              title="New schedule"
+              aria-label="New schedule"
+            >
+              <PlusIcon width={18} height={18} />
+            </IconButton>
           </div>
-          <Button
-            variant="secondary"
-            onClick={() => {
-              setCreating(true);
-              setEditingId(null);
-            }}
-            disabled={busy}
-          >
-            New schedule
-          </Button>
+          <p className="max-w-2xl text-sm text-foreground-muted">
+            Write a prompt and choose when it should run. Each fire uses the same assistant as
+            chat, including whatever tools and MCP servers are connected.
+          </p>
         </div>
 
         {loading ? (
