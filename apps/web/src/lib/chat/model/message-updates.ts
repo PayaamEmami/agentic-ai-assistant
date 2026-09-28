@@ -154,6 +154,22 @@ function isOptimisticLocalId(id: string): boolean {
   return id.startsWith('local-');
 }
 
+function isOptimisticUserMessage(message: ChatMessage): boolean {
+  return message.id.startsWith('local-user-');
+}
+
+function persistedUserMessageKey(message: ChatMessage): string {
+  const text = message.content
+    .filter((block) => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n');
+  const attachmentIds = message.content
+    .filter((block) => block.type === 'attachment_ref')
+    .map((block) => block.attachmentId ?? '')
+    .join('\n');
+  return `${text}\0${attachmentIds}`;
+}
+
 export function mergeRemoteConversationMessages(
   local: ChatMessage[],
   remote: ChatMessage[],
@@ -172,9 +188,33 @@ export function mergeRemoteConversationMessages(
     return remoteMessage;
   });
 
-  const pendingLocal = local.filter(
-    (message) => !remoteIds.has(message.id) && isOptimisticLocalId(message.id),
-  );
+  const unmatchedRemoteUserKeys = new Map<string, number>();
+  for (const remoteMessage of remote) {
+    if (remoteMessage.role !== 'user' || localById.has(remoteMessage.id)) {
+      continue;
+    }
+    const key = persistedUserMessageKey(remoteMessage);
+    unmatchedRemoteUserKeys.set(key, (unmatchedRemoteUserKeys.get(key) ?? 0) + 1);
+  }
+
+  const pendingLocal = local.filter((message) => {
+    if (remoteIds.has(message.id) || !isOptimisticLocalId(message.id)) {
+      return false;
+    }
+
+    if (!isOptimisticUserMessage(message)) {
+      return true;
+    }
+
+    const key = persistedUserMessageKey(message);
+    const remaining = unmatchedRemoteUserKeys.get(key) ?? 0;
+    if (remaining === 0) {
+      return true;
+    }
+
+    unmatchedRemoteUserKeys.set(key, remaining - 1);
+    return false;
+  });
 
   return pendingLocal.length === 0 ? merged : [...merged, ...pendingLocal];
 }

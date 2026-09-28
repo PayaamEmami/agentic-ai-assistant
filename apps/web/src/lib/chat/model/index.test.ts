@@ -303,6 +303,85 @@ describe('chat model', () => {
     expect(settled[1]?.content).toEqual([{ type: 'text', text: 'complete answer' }]);
     expect(settled[2]?.id).toBe('local-user-pending');
   });
+
+  it('drops an optimistic user prompt once the saved copy is in the remote snapshot', () => {
+    const local: ChatMessage[] = [
+      {
+        id: 'local-user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [
+          { type: 'text', text: 'explain superposition' },
+          {
+            type: 'attachment_ref',
+            attachmentId: 'file-1',
+            fileName: 'notes.pdf',
+          },
+        ],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'A qubit can be both states at once.' }],
+        presentation: { streaming: false, activeStage: 'done' },
+      },
+    ];
+    const remote: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [
+          { type: 'text', text: 'explain superposition' },
+          {
+            type: 'attachment_ref',
+            attachmentId: 'file-1',
+            fileName: 'notes.pdf',
+            indexedForRag: true,
+          },
+        ],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'A qubit can be both states at once.' }],
+      },
+    ];
+
+    const merged = mergeRemoteConversationMessages(local, remote);
+
+    expect(merged.map((message) => message.id)).toEqual(['user-1', 'assistant-1']);
+  });
+
+  it('keeps a repeated optimistic prompt that the server has not saved yet', () => {
+    const local: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: 'again' }],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'done' }],
+      },
+      {
+        id: 'local-user-2',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:02.000Z',
+        content: [{ type: 'text', text: 'again' }],
+      },
+    ];
+    const remote: ChatMessage[] = [local[0]!, local[1]!];
+
+    const merged = mergeRemoteConversationMessages(local, remote);
+
+    expect(merged.map((message) => message.id)).toEqual(['user-1', 'assistant-1', 'local-user-2']);
+  });
 });
 
 function conversation(id: string, title: string, updatedAt: string): ConversationSummary {
