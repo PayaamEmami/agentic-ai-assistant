@@ -147,7 +147,7 @@ export function Sidebar({
 
   return (
     <aside
-      className={`fixed inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:translate-x-0 ${
+      className={`absolute inset-y-0 left-0 z-40 flex min-h-0 w-72 shrink-0 flex-col border-r border-border bg-surface transition-transform duration-200 md:static md:translate-x-0 ${
         isAccountMenuOpen ? 'overflow-visible md:z-50' : 'overflow-hidden md:z-20'
       } ${collapsed ? 'md:w-20' : 'md:w-72'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
     >

@@ -24,6 +24,25 @@
 html,
 body {
   @apply bg-surface text-foreground antialiased;
+  height: 100%;
+}
+
+html.app-viewport-lock,
+html.app-viewport-lock body {
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+html.app-viewport-lock .app-viewport-root {
+  position: fixed;
+  top: var(--app-offset-top, 0px);
+  left: 0;
+  width: 100%;
+  height: var(--app-height, 100dvh);
+  min-height: 0;
+  overflow: hidden;
 }
 
 button:not(:disabled),

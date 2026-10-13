@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { AppProviders } from '@/components/layout/app-providers';
 import { ClientLogBootstrap } from '@/components/layout/client-log-bootstrap';
@@ -9,10 +9,17 @@ export const metadata: Metadata = {
   description: 'AI assistant with multi-modal support',
 };
 
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  viewportFit: 'cover',
+  interactiveWidget: 'resizes-content',
+};
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">
+      <body className="min-h-dvh">
         <AuthProvider>
           <AppProviders>{children}</AppProviders>
         </AuthProvider>

@@ -49,7 +49,7 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-surface p-8">
+    <main className="flex min-h-dvh items-center justify-center bg-surface p-8">
       <div className="grid w-full max-w-5xl gap-8 lg:grid-cols-[1.1fr_0.9fr]">
         <section className="rounded-3xl border border-border bg-surface-elevated p-10 shadow-sm">
           <p className="text-sm font-medium uppercase tracking-[0.24em] text-foreground-muted">

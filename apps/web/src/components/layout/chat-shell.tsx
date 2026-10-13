@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { SidebarToggleIcon } from '@/components/icons';
 import { Sidebar } from '@/components/sidebar/sidebar';
+import { lockAppViewport } from '@/lib/viewport-lock';
 
 const SIDEBAR_STORAGE_KEY = 'agentic-ai-assistant.sidebar-collapsed';
 const DESKTOP_MEDIA_QUERY = '(min-width: 768px)';
@@ -45,6 +46,8 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
     setIsMobileSidebarOpen(false);
   }, [pathname]);
 
+  useLayoutEffect(() => lockAppViewport(), []);
+
   const handleToggleSidebar = () => {
     if (isDesktop) {
       setIsSidebarCollapsed((previous) => !previous);
@@ -55,13 +58,13 @@ export function ChatShell({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <div className="flex h-screen min-h-0 overflow-hidden bg-surface">
+    <div className="app-viewport-root relative flex h-[var(--app-height,100dvh)] min-h-0 overflow-hidden bg-surface">
       {!isDesktop && isMobileSidebarOpen ? (
         <button
           type="button"
           aria-label="Close sidebar overlay"
           onClick={() => setIsMobileSidebarOpen(false)}
-          className="fixed inset-0 z-30 bg-black/50 md:hidden"
+          className="absolute inset-0 z-30 bg-black/50 md:hidden"
         />
       ) : null}
       <Sidebar

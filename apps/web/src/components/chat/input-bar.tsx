@@ -188,7 +188,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
 
   if (liveVoice.isActive) {
     return (
-      <section className="border-t border-border bg-surface-elevated p-4">
+      <section className="shrink-0 border-t border-border bg-surface-elevated p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-center gap-4 rounded-[2rem] border border-border-subtle bg-surface p-3">
           <p className="sr-only" aria-live="polite">
             {liveVoice.connectionLabel}
@@ -225,7 +225,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
   return (
     <form
       onSubmit={handleSubmit}
-      className="flex min-h-[75px] flex-col justify-center border-t border-border bg-surface-elevated p-4"
+      className="flex min-h-[75px] shrink-0 flex-col justify-center border-t border-border bg-surface-elevated p-4 pb-[max(1rem,env(safe-area-inset-bottom))]"
     >
       <input
         ref={fileInputRef}
