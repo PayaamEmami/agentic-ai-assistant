@@ -1,6 +1,7 @@
 'use client';
 
-import { EditIcon, SaveIcon, TrashIcon } from '@/components/icons';
+import { EditIcon, TrashIcon } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { IconButton } from '@/components/ui/icon-button';
 import { Textarea } from '@/components/ui/textarea';
 import { type PersonalizationMemory } from '@/lib/api-client';
@@ -41,21 +42,16 @@ export function MemoryItem({
             className="w-full"
           />
           <div className="flex items-center justify-end gap-2">
-            <button
-              onClick={onCancelEdit}
-              disabled={isPending}
-              className="rounded-xl px-3 py-2 text-sm text-foreground-muted transition hover:bg-surface-hover hover:text-foreground disabled:opacity-50"
-            >
+            <Button variant="secondary" size="sm" onClick={onCancelEdit} disabled={isPending}>
               Cancel
-            </button>
-            <IconButton
+            </Button>
+            <Button
+              size="sm"
               onClick={() => onSave(memory.id)}
               disabled={isPending || !editingContent.trim()}
-              title={isPending ? 'Saving memory' : 'Save memory'}
-              aria-label={isPending ? 'Saving memory' : 'Save memory'}
             >
-              <SaveIcon />
-            </IconButton>
+              {isPending ? 'Saving...' : 'Save'}
+            </Button>
           </div>
         </div>
       ) : (
@@ -66,7 +62,6 @@ export function MemoryItem({
               size="sm"
               onClick={() => onBeginEdit(memory)}
               disabled={isPending}
-              className="rounded p-1"
               title="Edit memory"
               aria-label="Edit memory"
             >
@@ -77,7 +72,6 @@ export function MemoryItem({
               variant="danger"
               onClick={() => onDelete(memory)}
               disabled={isPending}
-              className="rounded p-1 hover:bg-surface"
               title="Delete memory"
               aria-label="Delete memory"
             >

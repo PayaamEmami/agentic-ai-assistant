@@ -311,9 +311,9 @@ export function Sidebar({
                       </IconButton>
                       <IconButton
                         size="sm"
+                        variant="danger"
                         onClick={() => void handleDelete(conversation.id, conversation.title)}
                         disabled={isPending}
-                        className="hover:text-error"
                         title="Delete conversation"
                         aria-label="Delete conversation"
                       >

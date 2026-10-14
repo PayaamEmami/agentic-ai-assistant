@@ -1,7 +1,6 @@
 'use client';
 
-import { PlusIcon } from '@/components/icons';
-import { IconButton } from '@/components/ui/icon-button';
+import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { type PersonalizationMemoryKind } from '@/lib/api-client';
 import { MemoryKindSelector } from './memory-kind-selector';
@@ -38,14 +37,13 @@ export function MemoryComposer({
       </label>
       <div className="mt-3 flex items-center justify-end gap-2">
         <MemoryKindSelector value={kind} onChange={onKindChange} />
-        <IconButton
+        <Button
+          size="sm"
           onClick={onCreate}
           disabled={isCreating || !kind || !content.trim()}
-          title={isCreating ? 'Adding memory' : 'Add memory'}
-          aria-label={isCreating ? 'Adding memory' : 'Add memory'}
         >
-          <PlusIcon />
-        </IconButton>
+          {isCreating ? 'Adding...' : 'Add'}
+        </Button>
       </div>
     </div>
   );

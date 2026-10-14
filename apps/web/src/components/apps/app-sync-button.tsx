@@ -2,8 +2,7 @@
 
 import { cn } from '@/lib/cn';
 import { type AppSummary } from '@/lib/api-client';
-import { SyncIcon } from '@/components/icons';
-import { IconButton } from '@/components/ui/icon-button';
+import { Button } from '@/components/ui/button';
 import { getAppSyncDisabledReason, isAppSyncDisabled } from '@/lib/apps/sync-labels';
 
 interface AppSyncButtonProps {
@@ -22,10 +21,10 @@ export function AppSyncButton({ app, syncingKind, onSync }: AppSyncButtonProps) 
       title={disabledReason ?? undefined}
       className={cn('inline-flex', disabled && !loading && 'cursor-not-allowed')}
     >
-      <IconButton
+      <Button
+        size="sm"
         onClick={() => onSync(app.kind)}
         disabled={disabled}
-        loading={loading}
         title={disabledReason ? undefined : `Sync ${app.displayName}`}
         aria-label={
           loading
@@ -35,8 +34,8 @@ export function AppSyncButton({ app, syncingKind, onSync }: AppSyncButtonProps) 
               : `Sync ${app.displayName}`
         }
       >
-        <SyncIcon />
-      </IconButton>
+        {loading ? 'Syncing...' : 'Sync'}
+      </Button>
     </span>
   );
 }

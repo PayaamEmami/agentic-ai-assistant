@@ -290,7 +290,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
         {loading.isSendingMessage ? (
           <IconButton
             size="lg"
-            variant="danger"
+            variant="dangerEmphasis"
             onClick={() => void interruptMessage()}
             disabled={loading.isInterruptingMessage}
             title={loading.isInterruptingMessage ? 'Stopping response...' : 'Stop response'}

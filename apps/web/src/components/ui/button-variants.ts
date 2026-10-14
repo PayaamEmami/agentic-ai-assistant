@@ -32,16 +32,19 @@ export const iconButtonSizes: Record<ButtonSize, string> = {
   lg: 'h-10 w-10 rounded-xl',
 };
 
-export type IconButtonVariant = Exclude<ButtonVariant, 'secondary'>;
+export type IconButtonVariant = 'ghost' | 'primary' | 'danger' | 'success' | 'dangerEmphasis';
 
+// Icon buttons stay borderless. Danger/success tint on hover so row actions
+// (edit vs delete) share one shape. `dangerEmphasis` is the exception for a
+// control that must read as destructive at rest, such as chat stop.
 export const iconButtonVariants: Record<IconButtonVariant, string> = {
   ghost: 'text-foreground-muted hover:bg-surface-hover hover:text-foreground',
   primary:
-    'border border-accent/60 bg-transparent text-foreground hover:border-accent hover:bg-accent/10',
-  danger:
+    'border border-border bg-surface-elevated text-foreground-muted hover:border-accent/50 hover:bg-surface-hover hover:text-foreground',
+  danger: 'text-foreground-muted hover:bg-error/10 hover:text-error',
+  success: 'text-foreground-muted hover:bg-success/10 hover:text-success',
+  dangerEmphasis:
     'border border-error/60 bg-transparent text-error hover:border-error hover:bg-error/10',
-  success:
-    'border border-success/60 bg-transparent text-success hover:border-success hover:bg-success/10',
 };
 
 export function buttonClassName({

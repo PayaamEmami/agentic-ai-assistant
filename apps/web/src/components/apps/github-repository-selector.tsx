@@ -9,6 +9,7 @@ import {
   type SetStateAction,
 } from 'react';
 import { ChevronDownIcon } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { type GitHubRepositorySummary } from '@/lib/api-client';
 import { useDismissOnOutsidePointerDown } from '@/lib/use-dismiss-on-outside-pointer-down';
 import { selectedRepositoryLabel } from './labels';
@@ -129,21 +130,12 @@ export function GitHubRepositorySelector({
             </div>
           )}
           <div className="mt-3 flex items-center justify-end gap-2 pt-3">
-            <button
-              type="button"
-              onClick={() => setOpen(false)}
-              className="rounded-xl px-3 py-2 text-xs font-medium text-foreground-muted transition hover:bg-surface-hover hover:text-foreground"
-            >
+            <Button size="sm" variant="secondary" onClick={() => setOpen(false)}>
               Cancel
-            </button>
-            <button
-              type="button"
-              onClick={() => void saveSelection()}
-              disabled={saving}
-              className="rounded-xl border border-border bg-surface-elevated px-3 py-2 text-sm font-medium text-foreground-muted transition hover:border-accent/50 hover:bg-surface-hover hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            >
+            </Button>
+            <Button size="sm" onClick={() => void saveSelection()} disabled={saving}>
               {saving ? 'Saving...' : 'Save and sync'}
-            </button>
+            </Button>
           </div>
         </div>
       ) : null}

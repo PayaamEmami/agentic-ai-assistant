@@ -6,10 +6,9 @@ import { api, type AppSummary, type GitHubRepositorySummary } from '@/lib/api-cl
 import { GitHubRepositorySelector } from '@/components/apps/github-repository-selector';
 import { IndexedSourcesSection } from '@/components/apps/indexed-sources-section';
 import { AppSyncButton } from '@/components/apps/app-sync-button';
-import { ConnectIcon, DisconnectIcon } from '@/components/icons';
 import { Alert } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import { IconButton } from '@/components/ui/icon-button';
+import { Button } from '@/components/ui/button';
 import { reportClientError } from '@/lib/client-logging';
 import { useAppSync } from '@/lib/apps/use-app-sync';
 
@@ -227,13 +226,9 @@ export function AppManager() {
 
                   <div className="flex flex-wrap gap-2">
                     {!isConnected ? (
-                      <IconButton
-                        onClick={() => void connectApp(app.kind)}
-                        title={`Connect ${app.displayName}`}
-                        aria-label={`Connect ${app.displayName}`}
-                      >
-                        <ConnectIcon />
-                      </IconButton>
+                      <Button size="sm" onClick={() => void connectApp(app.kind)}>
+                        Connect
+                      </Button>
                     ) : null}
                     {isConnected ? (
                       <AppSyncButton
@@ -243,23 +238,14 @@ export function AppManager() {
                       />
                     ) : null}
                     {isConnected ? (
-                      <IconButton
+                      <Button
+                        size="sm"
                         variant="danger"
                         onClick={() => void disconnectApp(app.kind)}
                         disabled={disconnectingKind === app.kind}
-                        title={
-                          disconnectingKind === app.kind
-                            ? `Disconnecting ${app.displayName}`
-                            : `Disconnect ${app.displayName}`
-                        }
-                        aria-label={
-                          disconnectingKind === app.kind
-                            ? `Disconnecting ${app.displayName}`
-                            : `Disconnect ${app.displayName}`
-                        }
                       >
-                        <DisconnectIcon />
-                      </IconButton>
+                        {disconnectingKind === app.kind ? 'Disconnecting...' : 'Disconnect'}
+                      </Button>
                     ) : null}
                   </div>
                 </div>
