@@ -1,23 +1,11 @@
-import { getPool } from '@aaa/db';
-import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
-import { logger } from '../../lib/logger.js';
+import {
+  TOOL_EVENT_CHANNEL,
+  type ToolDoneEvent,
+  type ToolProgressEvent,
+  type ToolStartEvent,
+} from '@aaa/shared';
+import { createPgNotifyRelay } from '../../lib/pg-notify-relay.js';
 import { broadcast } from '../../ws/connections.js';
-
-const CHANNEL = 'tool_execution_events';
-
-interface NotificationLike {
-  channel?: string;
-  payload?: string;
-}
-
-interface ListenerClient {
-  query: (sql: string) => Promise<unknown>;
-  on: (event: 'notification', cb: (message: NotificationLike) => void) => void;
-  removeAllListeners: (event: 'notification') => void;
-  release: () => void;
-}
-
-let listenerClient: ListenerClient | null = null;
 
 function isToolStartEvent(event: unknown): event is ToolStartEvent {
   if (typeof event !== 'object' || event === null) {
@@ -61,76 +49,22 @@ function isToolProgressEvent(event: unknown): event is ToolProgressEvent {
   );
 }
 
+const relay = createPgNotifyRelay({
+  channel: TOOL_EVENT_CHANNEL,
+  component: 'tool-event-relay',
+  eventPrefix: 'tool.event_relay',
+  label: 'tool event relay',
+  onPayload: (payload) => {
+    if (isToolStartEvent(payload) || isToolDoneEvent(payload) || isToolProgressEvent(payload)) {
+      broadcast(payload.conversationId, payload);
+    }
+  },
+});
+
 export async function startToolEventRelay(): Promise<void> {
-  if (listenerClient) {
-    return;
-  }
-
-  const rawClient = await getPool().connect();
-  const client = rawClient as unknown as ListenerClient;
-  await client.query(`LISTEN ${CHANNEL}`);
-  client.on('notification', (message: NotificationLike) => {
-    if (message.channel !== CHANNEL || !message.payload) {
-      return;
-    }
-
-    try {
-      const parsed = JSON.parse(message.payload) as unknown;
-      if (isToolStartEvent(parsed)) {
-        broadcast(parsed.conversationId, parsed);
-        return;
-      }
-
-      if (isToolDoneEvent(parsed)) {
-        broadcast(parsed.conversationId, parsed);
-        return;
-      }
-
-      if (isToolProgressEvent(parsed)) {
-        broadcast(parsed.conversationId, parsed);
-      }
-    } catch (error) {
-      logger.warn(
-        {
-          event: 'tool.event_relay.notification_failed',
-          outcome: 'failure',
-          component: 'tool-event-relay',
-          error,
-        },
-        'Failed to process tool event notification',
-      );
-    }
-  });
-
-  listenerClient = client;
-  logger.info(
-    {
-      event: 'tool.event_relay.started',
-      outcome: 'success',
-      component: 'tool-event-relay',
-    },
-    'Tool event relay started',
-  );
+  await relay.start();
 }
 
 export async function stopToolEventRelay(): Promise<void> {
-  if (!listenerClient) {
-    return;
-  }
-
-  try {
-    await listenerClient.query(`UNLISTEN ${CHANNEL}`);
-  } finally {
-    listenerClient.removeAllListeners('notification');
-    listenerClient.release();
-    listenerClient = null;
-    logger.info(
-      {
-        event: 'tool.event_relay.stopped',
-        outcome: 'success',
-        component: 'tool-event-relay',
-      },
-      'Tool event relay stopped',
-    );
-  }
+  await relay.stop();
 }

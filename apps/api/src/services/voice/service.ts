@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
-import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
+import { addLogContext, getLogger } from '@aaa/observability';
 import type { AssistantInterruptedEvent, AssistantTextDoneEvent } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
@@ -31,6 +31,7 @@ import {
 } from '../tools/execution-queue.js';
 import { loadAvailableTools, type AvailableTool } from '../tools/loader.js';
 import { buildConversationTitle } from '../chat/helpers.js';
+import { exchangeRealtimeSdp } from '../realtime/sdp-exchange.js';
 
 // Voice keeps a tighter recent-history window than text chat (see chat-service
 // HISTORY_LIMIT) to bound realtime prompt size and latency.
@@ -203,32 +204,19 @@ export class VoiceService {
       instructions,
       availableTools,
     );
-    const formData = new FormData();
-    formData.set('sdp', sdp);
-    formData.set('session', JSON.stringify(sessionConfig));
-
-    const response = await fetchWithTelemetry(
-      'https://api.openai.com/v1/realtime/calls',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.openaiApiKey}`,
-        },
-        body: formData,
-      },
-      {
+    const exchange = await exchangeRealtimeSdp({
+      apiKey: this.config.openaiApiKey,
+      userId,
+      sdp,
+      sessionConfig,
+      telemetry: {
         component: 'voice-service',
-        provider: 'openai',
         eventPrefix: 'voice.sdp_exchange',
         logResponseBodyOnFailure: true,
       },
-    );
+    });
 
-    if (!response.ok) {
-      const responseBody = await response
-        .clone()
-        .text()
-        .catch(() => '');
+    if (!exchange.ok) {
       getLogger({
         component: 'voice-service',
         voiceSessionId: sessionId,
@@ -238,8 +226,8 @@ export class VoiceService {
         {
           event: 'voice.sdp_exchange.failed',
           outcome: 'failure',
-          status: response.status,
-          responseBody: responseBody.slice(0, 2048),
+          status: exchange.status,
+          responseBody: exchange.responseBody.slice(0, 2048),
           sessionConfigSummary: {
             model,
             voice,
@@ -266,7 +254,7 @@ export class VoiceService {
       },
       'Realtime SDP exchange completed',
     );
-    return response.text();
+    return exchange.answerSdp;
   }
 
   async startTurn(userId: string, userTranscript: string, conversationId?: string) {

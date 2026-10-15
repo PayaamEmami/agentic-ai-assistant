@@ -83,9 +83,11 @@ When deciding where a change belongs:
 - Native tool provider behavior: check `packages/tool-providers`
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
-- Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
+- Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Hydration (URL, API key, tool prefixes, CRS timeout, legacy `tools` vs `task-board` filtering) lives in `packages/mcp/src/connections.ts` and is shared with the worker. The API keeps the Redis tool cache. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
+- Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`; conversation CRUD is `conversations.ts`.
 - Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
+- Worker→browser live events (tool execution, automation runs): Postgres `NOTIFY` on `TOOL_EVENT_CHANNEL` / `AUTOMATION_EVENT_CHANNEL` (`packages/shared`), relayed by the API over conversation WebSockets. New LISTEN channels must use `apps/api/src/lib/pg-notify-relay.ts` so disconnect reconnect/backoff stays consistent.
 
 ## Model Providers
 
@@ -103,7 +105,7 @@ Model access is abstracted so the chat provider can be swapped without touching 
 Intentional coupling (out of scope for provider swaps):
 
 - Embeddings are pinned to OpenAI regardless of `LLM_CHAT_PROVIDER`, because the `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). Changing embedding dimensions requires a DB migration and re-embedding.
-- Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`.
+- Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`. Voice and Listener share the SDP proxy in `apps/api/src/services/realtime/sdp-exchange.ts`, which sends `OpenAI-Safety-Identifier` as a sha256 of the user id.
 - Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
 

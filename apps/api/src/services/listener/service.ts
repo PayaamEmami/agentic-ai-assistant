@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import type { ChatProvider } from '@aaa/ai';
 import { conversationRepository, getPool, messageRepository } from '@aaa/db';
-import { addLogContext, fetchWithTelemetry, getLogger } from '@aaa/observability';
+import { addLogContext, getLogger } from '@aaa/observability';
 import type {
   ListenerAudioSourceDto,
   ListenerInsightDto,
@@ -10,6 +10,7 @@ import type {
 } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
+import { exchangeRealtimeSdp } from '../realtime/sdp-exchange.js';
 
 const SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 const TRANSCRIPT_ROLLOVER_CHARS = 12_000;
@@ -236,35 +237,25 @@ export class ListenerService {
     const sessionConfig = buildListenerSessionConfig(
       this.config.openaiStreamingTranscriptionModel,
     );
-    const formData = new FormData();
-    formData.set('sdp', sdp);
-    formData.set('session', JSON.stringify(sessionConfig));
-    const safetyIdentifier = crypto.createHash('sha256').update(userId).digest('hex');
-    const response = await fetchWithTelemetry(
-      'https://api.openai.com/v1/realtime/calls',
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.config.openaiApiKey}`,
-          'OpenAI-Safety-Identifier': safetyIdentifier,
-        },
-        body: formData,
-      },
-      {
+    const exchange = await exchangeRealtimeSdp({
+      apiKey: this.config.openaiApiKey,
+      userId,
+      sdp,
+      sessionConfig,
+      telemetry: {
         component: 'listener-service',
-        provider: 'openai',
         eventPrefix: 'listener.sdp_exchange',
         logResponseBodyOnFailure: false,
       },
-    );
-    if (!response.ok) {
+    });
+    if (!exchange.ok) {
       throw new AppError(
         502,
         'Failed to connect listener transcription session',
         'LISTENER_SDP_EXCHANGE_FAILED',
       );
     }
-    return response.text();
+    return exchange.answerSdp;
   }
 
   async appendTranscript(userId: string, input: ListenerTranscriptRequest) {
