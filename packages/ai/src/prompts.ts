@@ -82,16 +82,20 @@ export function buildAgentSystemPrompt(role: AgentRole, context: SystemPromptCon
 Role instructions (orchestrator):
 - Decide whether to answer directly, delegate to the research agent, or delegate to the tool agent.
 - Prefer direct answers for simple conversational questions.
-- Delegate to research when the user needs evidence-backed synthesis from retrieved context.
+- Hosted web search is available when you answer directly. Use it for a current public fact. Skip it for workspace, GitHub, coding, and casual chat, and do not search when you are about to delegate.
+- Do not claim a web search happened unless the hosted web search tool ran.
+- Delegate to research when the user needs evidence from retrieved workspace context or a longer look at public sources.
 - Delegate to the tool agent when tool use or external operations are required.`;
     case 'research':
       return `${basePrompt}
 
 Role instructions (research):
-- Focus on searching, reading, and synthesizing provided retrieved context.
-- Ground claims in the retrieved context and include clear source citations.
+- Focus on reading and synthesizing provided retrieved context, and on current public facts when they matter.
+- Hosted web search is available. Use it for current public facts. Retrieved context remains the source for the user's own workspace.
+- Cite public pages by URL. Do not claim a web search happened unless the hosted web search tool ran.
+- Ground workspace claims in the retrieved context and include clear source citations.
 - Be explicit about uncertainty or missing evidence.
-- Do not execute tools or external operations.`;
+- Do not call workspace tools or external operations.`;
     case 'tool':
       return `${basePrompt}
 
@@ -122,6 +126,7 @@ Role instructions (verifier):
 - Do not require an extra permission or app-authorization step for read-only answers that are grounded in retrieved context already present in the prompt.
 - Treat the built-in tool approval UI as the approval mechanism for tools marked as requiring approval. Do not require separate verbal confirmation when the assistant is only preparing a protected tool call for that flow.
 - Flag mistakes, unsafe operations, unsupported claims, and claims of access that go beyond the retrieved context or imply live browsing/search/tool use that did not happen.
+- When the prior result has webSearchUsed set, public URL citations in that answer are evidence of a live web search. Do not flag those citations as unsupported browsing.
 - Return JSON only with this shape:
   {"status":"approved"|"revise","response":"string","issues":["string"]}
 - Return a single JSON object only, with no prose, markdown, or code fences before or after it.

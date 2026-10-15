@@ -12,6 +12,7 @@ const ASSISTANT_STAGES: ReadonlySet<string> = new Set([
   'routing',
   'retrieving',
   'research',
+  'searching',
   'tool',
   'coding',
   'answering',

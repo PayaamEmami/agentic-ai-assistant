@@ -10,6 +10,11 @@ import {
   mapToolCalls,
   prepareTools,
 } from './openai-mappers.js';
+import {
+  applyResponsesStreamEvent,
+  buildResponsesRequest,
+  createResponsesTurnState,
+} from './openai-responses.js';
 import { OpenAiCallTelemetry } from './openai-telemetry.js';
 import type {
   CompletionRequest,
@@ -34,6 +39,10 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
+    if (request.hostedWebSearch) {
+      return this.completeWithHostedWebSearch(request);
+    }
+
     const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('chat_complete', model);
     const preparedTools = prepareTools(request.tools);
@@ -95,6 +104,11 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
+    if (request.hostedWebSearch) {
+      yield* this.streamWithHostedWebSearch(request);
+      return;
+    }
+
     const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('chat_stream', model);
     const preparedTools = prepareTools(request.tools);
@@ -192,6 +206,142 @@ export class OpenAIProvider implements ModelProvider {
         'OpenAI streaming completion failed',
         error,
       );
+      throw error;
+    }
+  }
+
+  private async completeWithHostedWebSearch(
+    request: CompletionRequest,
+  ): Promise<CompletionResponse> {
+    const model = request.model ?? this.defaults.model;
+    const telemetry = new OpenAiCallTelemetry('responses_complete', model);
+    const { body, aliasToOriginal } = buildResponsesRequest({
+      model,
+      messages: request.messages,
+      tools: request.tools,
+      maxTokens: request.maxTokens,
+    });
+
+    try {
+      const response = await withSpan(
+        'openai.responses.complete',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'responses_complete',
+        },
+        () =>
+          this.client.responses.create(
+            body as unknown as OpenAI.Responses.ResponseCreateParamsNonStreaming,
+            request.signal ? { signal: request.signal } : undefined,
+          ),
+      );
+
+      const state = createResponsesTurnState();
+      applyResponsesStreamEvent(
+        state,
+        { type: 'response.completed', response },
+        aliasToOriginal,
+      );
+      if (state.failedMessage) {
+        throw new Error(state.failedMessage);
+      }
+
+      const usage = state.usage ?? { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+      const estimatedCostUsd = estimateModelCost({
+        model,
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+      });
+      telemetry.recordTokens('prompt', usage.promptTokens);
+      telemetry.recordTokens('completion', usage.completionTokens);
+      telemetry.recordCost(estimatedCostUsd);
+      telemetry.success('openai.responses.completed', 'OpenAI responses completion finished', {
+        toolCount: request.tools?.length ?? 0,
+        webSearchUsed: state.webSearchUsed,
+        totalTokens: usage.totalTokens,
+        estimatedCostUsd,
+      });
+
+      return {
+        messageId: response.id,
+        content: state.text.length > 0 ? state.text : null,
+        toolCalls: state.toolCalls,
+        finishReason: state.toolCalls.length > 0 ? 'tool_calls' : 'stop',
+        usage,
+        webSearchUsed: state.webSearchUsed || undefined,
+      };
+    } catch (error) {
+      telemetry.failure('openai.responses.completed', 'OpenAI responses completion failed', error);
+      throw error;
+    }
+  }
+
+  private async *streamWithHostedWebSearch(
+    request: CompletionRequest,
+  ): AsyncIterable<StreamDelta> {
+    const model = request.model ?? this.defaults.model;
+    const telemetry = new OpenAiCallTelemetry('responses_stream', model);
+    const { body, aliasToOriginal } = buildResponsesRequest({
+      model,
+      messages: request.messages,
+      tools: request.tools,
+      maxTokens: request.maxTokens,
+      stream: true,
+    });
+
+    try {
+      const stream = await withSpan(
+        'openai.responses.stream',
+        {
+          'ai.model': model,
+          'aaa.ai.operation': 'responses_stream',
+        },
+        () =>
+          this.client.responses.create(
+            body as unknown as OpenAI.Responses.ResponseCreateParamsStreaming,
+            request.signal ? { signal: request.signal } : undefined,
+          ),
+      );
+
+      const state = createResponsesTurnState();
+      for await (const event of stream) {
+        for (const delta of applyResponsesStreamEvent(state, event, aliasToOriginal)) {
+          yield delta;
+        }
+        if (state.failedMessage) {
+          throw new Error(state.failedMessage);
+        }
+      }
+
+      if (state.failedMessage) {
+        throw new Error(state.failedMessage);
+      }
+
+      const usage = state.usage;
+      if (usage) {
+        telemetry.recordTokens('prompt', usage.promptTokens);
+        telemetry.recordTokens('completion', usage.completionTokens);
+        telemetry.recordCost(
+          estimateModelCost({
+            model,
+            promptTokens: usage.promptTokens,
+            completionTokens: usage.completionTokens,
+          }),
+        );
+      }
+      telemetry.success('openai.responses_stream.completed', 'OpenAI responses stream finished', {
+        webSearchUsed: state.webSearchUsed,
+        totalTokens: usage?.totalTokens,
+      });
+
+      yield {
+        type: 'done',
+        finishReason: state.toolCalls.length > 0 ? 'tool_calls' : 'stop',
+        usage,
+        webSearchUsed: state.webSearchUsed || undefined,
+      };
+    } catch (error) {
+      telemetry.failure('openai.responses_stream.completed', 'OpenAI responses stream failed', error);
       throw error;
     }
   }

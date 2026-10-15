@@ -105,9 +105,11 @@ export class OrchestratorAgent implements Agent {
         messages,
         model: this.model,
         tools: toToolDefinitions(context.availableTools),
+        hostedWebSearch: true,
         signal: context.signal,
       },
       createOrchestratorStreamSink(context),
+      () => context.stream?.onStage?.('searching'),
     );
 
     const toolCalls = parseToolCalls(completion.toolCalls);
@@ -119,6 +121,7 @@ export class OrchestratorAgent implements Agent {
       toolCalls,
       delegateTo,
       requiresApproval: requiresApprovalForCalls(toolCalls, context.availableTools),
+      webSearchUsed: completion.webSearchUsed,
       usage: completion.usage,
     };
   }

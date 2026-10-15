@@ -19,9 +19,14 @@ export async function completeOrStream(
   modelProvider: ChatProvider,
   request: CompletionRequest,
   onTextDelta?: (delta: string) => void,
+  onWebSearch?: () => void,
 ): Promise<CompletionResponse> {
   if (!onTextDelta) {
-    return modelProvider.complete(request);
+    const response = await modelProvider.complete(request);
+    if (response.webSearchUsed) {
+      onWebSearch?.();
+    }
+    return response;
   }
 
   let content = '';
@@ -31,6 +36,7 @@ export async function completeOrStream(
     completionTokens: 0,
     totalTokens: 0,
   };
+  let webSearchUsed = false;
   const toolCallsById = new Map<string, ToolCall>();
 
   for await (const delta of modelProvider.streamComplete(request)) {
@@ -39,9 +45,20 @@ export async function completeOrStream(
       onTextDelta(delta.text);
     } else if (delta.type === 'tool_call' && delta.toolCall) {
       toolCallsById.set(delta.toolCall.id, delta.toolCall);
+    } else if (delta.type === 'web_search') {
+      if (!webSearchUsed) {
+        webSearchUsed = true;
+        onWebSearch?.();
+      }
     } else if (delta.type === 'done') {
       if (delta.usage) {
         usage = delta.usage;
+      }
+      if (delta.webSearchUsed) {
+        if (!webSearchUsed) {
+          onWebSearch?.();
+        }
+        webSearchUsed = true;
       }
       if (
         delta.finishReason === 'stop' ||
@@ -60,6 +77,7 @@ export async function completeOrStream(
     toolCalls: Array.from(toolCallsById.values()),
     finishReason,
     usage,
+    webSearchUsed: webSearchUsed || undefined,
   };
 }
 

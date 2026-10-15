@@ -7,6 +7,7 @@ const STAGE_LABELS: Record<AssistantStage, string> = {
   routing: 'Routing the request',
   retrieving: 'Searching your knowledge',
   research: 'Researching',
+  searching: 'Searching the web',
   tool: 'Planning tools',
   coding: 'Working through code',
   answering: 'Writing the answer',

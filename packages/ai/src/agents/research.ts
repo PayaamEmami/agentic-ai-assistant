@@ -28,9 +28,11 @@ export class ResearchAgent implements Agent {
       {
         messages,
         model: this.model,
+        hostedWebSearch: true,
         signal: context.signal,
       },
       context.emitAnswerDelta,
+      () => context.stream?.onStage?.('searching'),
     );
 
     return {
@@ -38,6 +40,7 @@ export class ResearchAgent implements Agent {
       toolCalls: [],
       delegateTo: null,
       requiresApproval: false,
+      webSearchUsed: completion.webSearchUsed,
       usage: completion.usage,
     };
   }

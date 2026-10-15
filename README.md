@@ -40,7 +40,9 @@ Provider apps connect once per external provider and expose separate internal ca
 
 ## Architecture
 
-AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage, and treats the chat model as a swappable backend. The Next.js web app talks to a Fastify API over REST and WebSocket. Chat turns run through a multi-agent orchestrator. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
+### System Architecture
+
+AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage, and treats the chat model as a swappable backend. The Next.js web app talks to a Fastify API over REST and WebSocket. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
 
 ```mermaid
 flowchart TB
@@ -80,6 +82,23 @@ Text chat streams tokens and tool events over WebSocket. When an agent stages a 
 Shared packages own the seams between apps: agent orchestration, the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat models can be swapped without changing those layers. Voice and Listener Mode use a realtime path and do not go through the chat-provider gateway.
 
 Production runs the web, API, worker, and data services on a single host behind a reverse proxy. See the infrastructure docs for deploy details.
+
+### Multi-Agent Architecture
+
+Each text chat turn starts with the orchestrator. It answers directly, or hands the turn to one specialist. A verifier then checks the draft. Hosted web search is available on the direct answer and on research; the model decides whether the question needs a live lookup. Tool calls and coding tasks do not search the web. Writes still wait for approval, then run on the worker.
+
+```mermaid
+flowchart TD
+  msg[User message] --> orch[Orchestrator agent]
+  orch -->|direct answer| verifier[Verifier agent]
+  orch -->|workspace evidence or a longer public look| research[Research agent]
+  orch -->|live tool| tool[Tool agent]
+  orch -->|GitHub code change| coding[Coding agent]
+  research --> verifier
+  tool --> verifier
+  coding --> verifier
+  verifier --> reply[Reply]
+```
 
 ## Local Development Setup
 

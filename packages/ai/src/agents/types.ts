@@ -20,6 +20,7 @@ export type AgentStage =
   | 'routing'
   | 'retrieving'
   | 'research'
+  | 'searching'
   | 'tool'
   | 'coding'
   | 'answering'
@@ -66,6 +67,8 @@ export interface AgentResult {
   delegateTo: AgentRole | null;
   requiresApproval: boolean;
   verification?: AgentVerificationResult;
+  /** True when hosted web search ran while producing this result. */
+  webSearchUsed?: boolean;
   usage?: {
     promptTokens: number;
     completionTokens: number;

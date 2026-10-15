@@ -8,6 +8,7 @@ export type AssistantStage =
   | 'routing'
   | 'retrieving'
   | 'research'
+  | 'searching'
   | 'tool'
   | 'coding'
   | 'answering'
