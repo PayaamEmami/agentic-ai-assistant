@@ -1,7 +1,10 @@
 import { getPool, messageRepository } from '@aaa/db';
-import type { ToolDoneEvent, ToolProgressEvent, ToolStartEvent } from '@aaa/shared';
-
-const TOOL_EVENT_CHANNEL = 'tool_execution_events';
+import {
+  TOOL_EVENT_CHANNEL,
+  type ToolDoneEvent,
+  type ToolProgressEvent,
+  type ToolStartEvent,
+} from '@aaa/shared';
 
 export async function publishToolEvent(
   event: ToolStartEvent | ToolProgressEvent | ToolDoneEvent,

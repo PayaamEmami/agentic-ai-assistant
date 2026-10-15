@@ -1,8 +1,9 @@
 import { getLogger } from '@aaa/observability';
-import type {
-  AutomationRunActivityEvent,
-  AutomationRunStage,
-  AutomationRunStatusEvent,
+import {
+  AUTOMATION_EVENT_CHANNEL,
+  type AutomationRunActivityEvent,
+  type AutomationRunStage,
+  type AutomationRunStatusEvent,
 } from '@aaa/shared';
 import { AUTOMATION_RUN_STAGE_LABELS } from '@aaa/shared';
 import { getPool } from './client.js';
@@ -14,7 +15,7 @@ import {
 
 const logger = getLogger({ component: 'automation-run-log' });
 
-export const AUTOMATION_EVENT_CHANNEL = 'automation_run_events';
+export { AUTOMATION_EVENT_CHANNEL };
 
 type RunEventKind = 'stage' | 'thought' | 'progress' | 'result';
 
