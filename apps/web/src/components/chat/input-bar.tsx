@@ -36,6 +36,16 @@ export interface InputBarHandle {
   addFiles: (files: File[]) => Promise<void>;
 }
 
+function focusMessageInput(textarea: HTMLTextAreaElement | null) {
+  if (!textarea) {
+    return;
+  }
+
+  textarea.focus();
+  const value = textarea.value;
+  textarea.setSelectionRange(value.length, value.length);
+}
+
 function buildAttachmentFallbackMessage(attachments: UploadedAttachment[]): string {
   if (attachments.length === 1) {
     return `Attached ${attachments[0].kind}`;
@@ -71,15 +81,16 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
   });
 
   useEffect(() => {
-    if (focusRequestId === 0 || liveVoice.isActive) {
+    if (liveVoice.isActive) {
       return;
     }
-    const textarea = messageInputRef.current;
-    textarea?.focus();
-    if (textarea) {
-      const value = textarea.value;
-      textarea.setSelectionRange(value.length, value.length);
-    }
+
+    // Focus after paint so returning from a settings page wins over the
+    // control that started the navigation.
+    const frame = window.requestAnimationFrame(() => {
+      focusMessageInput(messageInputRef.current);
+    });
+    return () => window.cancelAnimationFrame(frame);
   }, [focusRequestId, liveVoice.isActive]);
 
   useEffect(() => {
