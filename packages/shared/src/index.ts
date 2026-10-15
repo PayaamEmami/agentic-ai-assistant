@@ -144,6 +144,7 @@ export {
   ClientTelemetryResponse,
 } from './dto.js';
 
+export { AUTOMATION_EVENT_CHANNEL, TOOL_EVENT_CHANNEL } from './events.js';
 export type { RealtimeEvent } from './events.js';
 export type {
   AssistantStage,

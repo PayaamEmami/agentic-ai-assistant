@@ -1,3 +1,9 @@
+/** Postgres NOTIFY channel for live tool-execution events. */
+export const TOOL_EVENT_CHANNEL = 'tool_execution_events';
+
+/** Postgres NOTIFY channel for live automation-run events. */
+export const AUTOMATION_EVENT_CHANNEL = 'automation_run_events';
+
 export type AssistantStage =
   | 'routing'
   | 'retrieving'

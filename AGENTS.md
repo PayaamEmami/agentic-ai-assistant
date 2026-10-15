@@ -86,6 +86,7 @@ When deciding where a change belongs:
 - Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
 - Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
+- Worker→browser live events (tool execution, automation runs): Postgres `NOTIFY` on `TOOL_EVENT_CHANNEL` / `AUTOMATION_EVENT_CHANNEL` (`packages/shared`), relayed by the API over conversation WebSockets. New LISTEN channels must use `apps/api/src/lib/pg-notify-relay.ts` so disconnect reconnect/backoff stays consistent.
 
 ## Model Providers
 
