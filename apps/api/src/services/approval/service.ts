@@ -6,6 +6,10 @@ import {
   type EnqueueToolExecutionJob,
   enqueueToolExecutionJob as defaultEnqueueToolExecutionJob,
 } from '../tools/execution-queue.js';
+import {
+  type EnqueueChatContinuationJob,
+  enqueueChatContinuationJob as defaultEnqueueChatContinuationJob,
+} from '../chat/continuation-queue.js';
 import { broadcast } from '../../ws/connections.js';
 
 function toRecord(input: unknown): Record<string, unknown> {
@@ -17,10 +21,16 @@ function toRecord(input: unknown): Record<string, unknown> {
 
 export class ApprovalService {
   private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
+  private readonly enqueueChatContinuationJob: EnqueueChatContinuationJob;
 
-  constructor(options?: { enqueueToolExecutionJob?: EnqueueToolExecutionJob }) {
+  constructor(options?: {
+    enqueueToolExecutionJob?: EnqueueToolExecutionJob;
+    enqueueChatContinuationJob?: EnqueueChatContinuationJob;
+  }) {
     this.enqueueToolExecutionJob =
       options?.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
+    this.enqueueChatContinuationJob =
+      options?.enqueueChatContinuationJob ?? defaultEnqueueChatContinuationJob;
   }
 
   async listPending(userId: string) {
@@ -92,6 +102,15 @@ export class ApprovalService {
         status: 'failed',
       };
       broadcast(approval.conversationId, doneEvent);
+
+      if (toolExecution.originMode !== 'voice') {
+        await this.enqueueChatContinuationJob({
+          toolExecutionId: toolExecution.id,
+          conversationId: toolExecution.conversationId,
+          correlationId:
+            getLogContext().correlationId ?? `approval-${approval.id}-${toolExecution.id}`,
+        });
+      }
     }
 
     const event: ApprovalResolvedEvent = {

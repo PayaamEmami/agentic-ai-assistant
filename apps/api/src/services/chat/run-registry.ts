@@ -8,6 +8,10 @@ export class ChatRunRegistry {
   private readonly activeRuns = new Map<string, ActiveChatRun>();
 
   start(runId: string, userId: string, conversationId?: string): ActiveChatRun {
+    if (this.activeRuns.has(runId)) {
+      throw new Error(`Chat run already active: ${runId}`);
+    }
+
     const run: ActiveChatRun = {
       userId,
       controller: new AbortController(),

@@ -43,6 +43,10 @@ export interface AutomationScheduleRepository {
    * the same fire. Returns false when another replica already claimed it.
    */
   claimDue(id: string, lastRunAt: Date, nextRunAt: Date | null): Promise<boolean>;
+  /**
+   * Undo claimDue when the run row could not be created, so the fire stays due.
+   */
+  restoreClaim(id: string, lastRunAt: Date | null, nextRunAt: Date | null): Promise<void>;
   delete(id: string, userId: string): Promise<boolean>;
   countRunsToday(id: string, since: Date): Promise<number>;
 }
@@ -178,6 +182,16 @@ export const automationScheduleRepository: AutomationScheduleRepository = {
       [lastRunAt, nextRunAt, id],
     );
     return (result.rowCount ?? 0) > 0;
+  },
+
+  async restoreClaim(id: string, lastRunAt: Date | null, nextRunAt: Date | null): Promise<void> {
+    const pool = getPool();
+    await pool.query(
+      `UPDATE automation_schedules
+       SET last_run_at = $1, next_run_at = $2, updated_at = NOW()
+       WHERE id = $3`,
+      [lastRunAt, nextRunAt, id],
+    );
   },
 
   async delete(id: string, userId: string): Promise<boolean> {

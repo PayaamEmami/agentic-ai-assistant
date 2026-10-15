@@ -288,6 +288,7 @@ export async function generateAssistantTurn(
         },
         'Assistant generation failed',
       );
+      throw error;
     }
 
     const { toolResultBlocks, toolExecutionIds, queuedToolJobs, approvalEvents, hasApprovalRequest } =
@@ -300,6 +301,7 @@ export async function generateAssistantTurn(
         autoApprove: automationRun !== null,
         enqueueToolExecutionJob: deps.enqueueToolExecutionJob,
       });
+    throwIfAborted(signal);
 
     if (
       hasApprovalRequest &&

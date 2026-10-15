@@ -87,18 +87,29 @@ export function mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessa
   });
 }
 
+const OPENAI_TOOL_NAME_MAX_LENGTH = 64;
+
 function toToolAlias(name: string, existingAliases: Map<string, string>): string {
   const sanitizedBase = name.replace(/[^a-zA-Z0-9_-]/g, '_');
   const base = sanitizedBase.length > 0 ? sanitizedBase : 'tool';
-  let alias = base;
+  let alias = clipToolAlias(base);
   let suffix = 2;
 
   while (existingAliases.has(alias) && existingAliases.get(alias) !== name) {
-    alias = `${base}_${suffix}`;
+    alias = clipToolAlias(base, suffix);
     suffix += 1;
   }
 
   return alias;
+}
+
+function clipToolAlias(base: string, suffix?: number): string {
+  if (suffix === undefined) {
+    return base.slice(0, OPENAI_TOOL_NAME_MAX_LENGTH);
+  }
+
+  const suffixText = `_${suffix}`;
+  return `${base.slice(0, OPENAI_TOOL_NAME_MAX_LENGTH - suffixText.length)}${suffixText}`;
 }
 
 export interface PreparedTools {

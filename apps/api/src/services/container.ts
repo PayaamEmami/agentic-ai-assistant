@@ -5,7 +5,7 @@ import { ApprovalService } from './approval/index.js';
 import { AppService } from './app/index.js';
 import { configureAppSyncQueue } from './app/index.js';
 import { AutomationService, configureAutomationQueue } from './automation/index.js';
-import { ChatService } from './chat/index.js';
+import { ChatService, configureChatContinuationQueue } from './chat/index.js';
 import { ListenerService } from './listener/index.js';
 import { PersonalizationService } from './personalization/index.js';
 import { RetrievalBridge } from './retrieval/index.js';
@@ -37,12 +37,16 @@ export function buildApiServices(config: AppConfig): ApiServices {
     embeddingModel: config.openaiEmbeddingModel,
   });
   const enqueueToolExecutionJob = configureToolExecutionQueue(config);
+  const enqueueChatContinuationJob = configureChatContinuationQueue(config);
   const enqueueAppSyncJob = configureAppSyncQueue(config);
   configureMcpToolCache(config);
   configureAutomationQueue(config);
 
   return {
-    approvalService: new ApprovalService({ enqueueToolExecutionJob }),
+    approvalService: new ApprovalService({
+      enqueueToolExecutionJob,
+      enqueueChatContinuationJob,
+    }),
     appService: new AppService(config, { enqueueAppSyncJob }),
     automationService: new AutomationService(),
     chatService: new ChatService({

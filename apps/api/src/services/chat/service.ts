@@ -121,6 +121,13 @@ export class ChatService {
     clientRunId?: string,
   ) {
     if (clientRunId !== undefined) {
+      if (this.runRegistry.get(clientRunId)) {
+        throw new AppError(
+          409,
+          'A chat run with this id is already in progress',
+          'RUN_ALREADY_ACTIVE',
+        );
+      }
       this.runRegistry.start(clientRunId, userId, conversationId);
     }
 

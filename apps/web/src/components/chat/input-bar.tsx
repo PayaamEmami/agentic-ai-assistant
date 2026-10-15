@@ -102,6 +102,9 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading.isSendingMessage) {
+      return;
+    }
     const trimmedMessage = message.trim();
     if (!trimmedMessage && attachments.length === 0) return;
 
