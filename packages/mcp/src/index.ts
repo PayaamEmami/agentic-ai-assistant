@@ -1,5 +1,16 @@
 export { McpClient, unwrapMcpToolData } from './client.js';
 export {
+  createMcpClientForConnection,
+  findMcpConnection,
+  hydrateMcpConnection,
+  mcpRequestTimeoutMs,
+  resolveMcpConnectionForNamespace,
+  toolPrefixesFromSettings,
+  withoutLegacyMcpDuplicate,
+  type HydratedMcpConnection,
+  type McpCapabilityConfig,
+} from './connections.js';
+export {
   CRS_MCP_CAPABILITY,
   CRS_MCP_TIMEOUT_MS,
   LEGACY_MCP_CAPABILITY,

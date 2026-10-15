@@ -1,3 +1,9 @@
+export function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw signal.reason instanceof Error ? signal.reason : new Error('Chat run interrupted');
+  }
+}
+
 const DEFAULT_MAX_CONVERSATION_TITLE_CHARS = 80;
 
 export function buildConversationTitle(

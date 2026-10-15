@@ -1,11 +1,11 @@
 import { appCapabilityConfigRepository } from '@aaa/db';
 import { decryptCredentials, encryptCredentials } from '@aaa/knowledge-sources';
 import {
-  CRS_MCP_CAPABILITY,
-  CRS_MCP_TIMEOUT_MS,
-  McpClient,
+  type McpClient,
+  createMcpClientForConnection,
   mcpNamespaceForToolName,
-  selectMcpCapabilityForNamespace,
+  resolveMcpConnectionForNamespace,
+  toolPrefixesFromSettings,
 } from '@aaa/mcp';
 import { GitHubToolProvider, GoogleDriveToolProvider } from '@aaa/tool-providers';
 import type { ToolExecutionResult } from './types.js';
@@ -84,39 +84,35 @@ export async function withGitHubProvider(
   }
 }
 
-function toolPrefixesFromSettings(settings: Record<string, unknown>): string[] {
-  const value = settings['toolPrefixes'];
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.filter((entry): entry is string => typeof entry === 'string' && entry.length > 0);
-}
-
 /**
  * Builds an MCP client for the connection that owns this tool namespace.
  * One server can advertise several prefixes; an exact capability match still wins.
+ *
+ * Incomplete rows stay in the candidate list until they are selected, so a bad
+ * URL or key still fails with the same field error instead of silently falling
+ * through to another server.
  */
 export async function resolveMcpClient(userId: string, namespace: string): Promise<McpClient> {
   const configs = await appCapabilityConfigRepository.listByUserAndApp(userId, 'mcp');
   const connected = configs.filter((entry) => entry.status === 'connected');
-  const capability = selectMcpCapabilityForNamespace(
+  const selected = resolveMcpConnectionForNamespace(
     connected.map((entry) => ({
+      entry,
       capability: entry.capability,
       toolPrefixes: toolPrefixesFromSettings(entry.settings),
     })),
     namespace,
   );
-  const config = connected.find((entry) => entry.capability === capability);
 
-  if (!config) {
+  if (!selected) {
     throw new Error(`No MCP server is connected for "${namespace}" tools`);
   }
 
-  const credentials = decryptCredentials(config.encryptedCredentials);
-  return new McpClient({
-    serverUrl: requireString(config.settings, 'serverUrl'),
+  const credentials = decryptCredentials(selected.entry.encryptedCredentials);
+  return createMcpClientForConnection({
+    capability: selected.entry.capability,
+    serverUrl: requireString(selected.entry.settings, 'serverUrl'),
     apiKey: requireString(credentials, 'apiKey'),
-    timeoutMs: config.capability === CRS_MCP_CAPABILITY ? CRS_MCP_TIMEOUT_MS : undefined,
   });
 }
 

@@ -3,12 +3,14 @@ import { appCapabilityConfigRepository, type AppCapabilityConfig } from '@aaa/db
 import { decryptCredentials } from '@aaa/knowledge-sources';
 import {
   CRS_MCP_CAPABILITY,
-  CRS_MCP_TIMEOUT_MS,
   LEGACY_MCP_CAPABILITY,
-  McpClient,
   TASK_BOARD_MCP_CAPABILITY,
-  isTaskBoardMcpCapability,
+  createMcpClientForConnection,
+  findMcpConnection,
+  hydrateMcpConnection,
   toNamespacedMcpToolName,
+  withoutLegacyMcpDuplicate,
+  type HydratedMcpConnection,
   type McpToolDefinition,
 } from '@aaa/mcp';
 import type { AppConfig } from '../../config.js';
@@ -33,12 +35,7 @@ export {
 
 const TOOL_CACHE_TTL_SECONDS = 300;
 
-export interface McpConnection {
-  capability: string;
-  serverUrl: string;
-  apiKey: string;
-  serverName?: string;
-}
+export type McpConnection = HydratedMcpConnection;
 
 let redis: Redis | null = null;
 
@@ -62,19 +59,12 @@ function connectionFromConfig(config: AppCapabilityConfig): McpConnection | null
     return null;
   }
 
-  const credentials = decryptCredentials(config.encryptedCredentials);
-  const apiKey = credentials['apiKey'];
-  if (typeof apiKey !== 'string' || !apiKey) {
-    return null;
-  }
-
-  const serverName = config.settings['serverName'];
-  return {
+  return hydrateMcpConnection({
     capability: config.capability,
-    serverUrl,
-    apiKey,
-    serverName: typeof serverName === 'string' && serverName ? serverName : undefined,
-  };
+    status: config.status,
+    settings: config.settings,
+    credentials: decryptCredentials(config.encryptedCredentials),
+  });
 }
 
 export async function getMcpConnections(userId: string): Promise<McpConnection[]> {
@@ -83,12 +73,7 @@ export async function getMcpConnections(userId: string): Promise<McpConnection[]
     const connection = connectionFromConfig(config);
     return connection ? [connection] : [];
   });
-  const hasTaskBoard = connections.some(
-    (connection) => connection.capability === TASK_BOARD_MCP_CAPABILITY,
-  );
-  return hasTaskBoard
-    ? connections.filter((connection) => connection.capability !== LEGACY_MCP_CAPABILITY)
-    : connections;
+  return withoutLegacyMcpDuplicate(connections);
 }
 
 /** Reads one MCP connection. Task-board lookups also accept the legacy `tools` slug. */
@@ -96,19 +81,15 @@ export async function getMcpConnection(
   userId: string,
   capability: string,
 ): Promise<McpConnection | null> {
-  const connections = await getMcpConnections(userId);
-  if (isTaskBoardMcpCapability(capability)) {
-    return connections.find((connection) => isTaskBoardMcpCapability(connection.capability)) ?? null;
-  }
-  return connections.find((connection) => connection.capability === capability) ?? null;
+  return findMcpConnection(await getMcpConnections(userId), capability);
 }
 
-export function createMcpClient(connection: McpConnection): McpClient {
-  return new McpClient({
-    serverUrl: connection.serverUrl,
-    apiKey: connection.apiKey,
-    timeoutMs: connection.capability === CRS_MCP_CAPABILITY ? CRS_MCP_TIMEOUT_MS : undefined,
-  });
+export function createMcpClient(connection: {
+  capability: string;
+  serverUrl: string;
+  apiKey: string;
+}): ReturnType<typeof createMcpClientForConnection> {
+  return createMcpClientForConnection(connection);
 }
 
 /**
