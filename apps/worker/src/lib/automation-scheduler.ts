@@ -41,7 +41,7 @@ async function enqueueOrFailRun(
   }
 }
 
-async function scheduleDueAutomations(redis: Redis): Promise<void> {
+export async function scheduleDueAutomations(redis: Redis): Promise<void> {
   const lock = await redis.set(SCHEDULER_LOCK_KEY, '1', 'EX', SCHEDULER_LOCK_TTL_SECONDS, 'NX');
   if (lock !== 'OK') {
     return;
@@ -145,6 +145,11 @@ async function scheduleDueAutomations(redis: Redis): Promise<void> {
       });
     } catch (error) {
       if (isPgUniqueViolation(error)) {
+        await automationScheduleRepository.restoreClaim(
+          schedule.id,
+          schedule.lastRunAt,
+          schedule.nextRunAt,
+        );
         await conversationRepository.delete(conversation.id);
         logger.info(
           {

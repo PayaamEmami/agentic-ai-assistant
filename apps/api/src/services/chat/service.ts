@@ -191,6 +191,13 @@ export class ChatService {
     clientRunId?: string,
   ) {
     if (clientRunId !== undefined) {
+      if (this.runRegistry.get(clientRunId)) {
+        throw new AppError(
+          409,
+          'A chat run with this id is already in progress',
+          'RUN_ALREADY_ACTIVE',
+        );
+      }
       this.runRegistry.start(clientRunId, userId, conversationId);
     }
 
@@ -489,6 +496,7 @@ export class ChatService {
           },
           'Assistant generation failed',
         );
+        throw error;
       }
 
       const { toolResultBlocks, toolExecutionIds, queuedToolJobs, approvalEvents, hasApprovalRequest } =
@@ -500,6 +508,7 @@ export class ChatService {
           signal,
           autoApprove: automationRun !== null,
         });
+      throwIfAborted(signal);
 
       if (
         hasApprovalRequest &&

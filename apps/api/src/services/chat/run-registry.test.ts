@@ -17,4 +17,18 @@ describe('ChatRunRegistry', () => {
     registry.finish('run-1');
     expect(registry.get('run-1')).toBeUndefined();
   });
+
+  it('rejects a second start for an in-flight run id', () => {
+    const registry = new ChatRunRegistry();
+    const first = registry.start('run-1', 'user-1', 'conversation-1');
+
+    expect(() => registry.start('run-1', 'user-1', 'conversation-1')).toThrow(
+      /Chat run already active/,
+    );
+    expect(registry.get('run-1')?.controller).toBe(first.controller);
+
+    registry.finish('run-1');
+    const second = registry.start('run-1', 'user-1', 'conversation-1');
+    expect(second.controller).not.toBe(first.controller);
+  });
 });

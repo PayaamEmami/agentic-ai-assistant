@@ -42,6 +42,22 @@ describe('prepareTools', () => {
     expect(aliasToOriginal.get('time_now')).toBe('time.now');
     expect(aliasToOriginal.get('time_now_2')).toBe('time/now');
   });
+
+  it('clips aliases to OpenAI 64-character function name limit', () => {
+    const longName = `mcp.finances.${'transactions_search_and_export_csv_with_filters'.repeat(2)}`;
+    const collidingName = `${longName}.alt`;
+    const { tools, aliasToOriginal } = prepareTools([
+      { name: longName, description: 'a', parameters: {} },
+      { name: collidingName, description: 'b', parameters: {} },
+    ]);
+
+    const aliases = tools?.map((tool) => tool.function.name) ?? [];
+    expect(aliases[0]?.length).toBeLessThanOrEqual(64);
+    expect(aliases[1]?.length).toBeLessThanOrEqual(64);
+    expect(aliases[0]).not.toBe(aliases[1]);
+    expect(aliasToOriginal.get(aliases[0]!)).toBe(longName);
+    expect(aliasToOriginal.get(aliases[1]!)).toBe(collidingName);
+  });
 });
 
 describe('mapToolCalls', () => {

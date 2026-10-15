@@ -9,6 +9,7 @@ const { mocks } = vi.hoisted(() => ({
     updateToolExecutionStatus: vi.fn(),
     updateToolResultBlock: vi.fn(),
     enqueueToolExecutionJob: vi.fn(),
+    enqueueChatContinuationJob: vi.fn(),
     broadcast: vi.fn(),
   },
 }));
@@ -39,6 +40,10 @@ vi.mock('../tools/execution-queue.js', () => ({
   enqueueToolExecutionJob: mocks.enqueueToolExecutionJob,
 }));
 
+vi.mock('../chat/continuation-queue.js', () => ({
+  enqueueChatContinuationJob: mocks.enqueueChatContinuationJob,
+}));
+
 vi.mock('../../ws/connections.js', () => ({
   broadcast: mocks.broadcast,
 }));
@@ -57,6 +62,7 @@ const toolExecution = {
   input: { repo: 'owner/repo', path: 'README.md' },
   conversationId: 'conversation-1',
   messageId: 'message-1',
+  originMode: 'text',
 };
 
 describe('ApprovalService', () => {
@@ -128,7 +134,7 @@ describe('ApprovalService', () => {
     );
   });
 
-  it('marks rejected tool executions failed and broadcasts completion', async () => {
+  it('marks rejected tool executions failed and enqueues chat continuation', async () => {
     mocks.decideApproval.mockResolvedValue({ ...pendingApproval, status: 'rejected' });
     await new ApprovalService().decide('approval-1', 'user-1', 'rejected');
 
@@ -136,6 +142,11 @@ describe('ApprovalService', () => {
       error: 'Rejected by user approval',
     });
     expect(mocks.enqueueToolExecutionJob).not.toHaveBeenCalled();
+    expect(mocks.enqueueChatContinuationJob).toHaveBeenCalledWith({
+      toolExecutionId: 'tool-execution-1',
+      conversationId: 'conversation-1',
+      correlationId: 'correlation-1',
+    });
     expect(mocks.broadcast).toHaveBeenCalledWith(
       'conversation-1',
       expect.objectContaining({
@@ -148,5 +159,14 @@ describe('ApprovalService', () => {
       'conversation-1',
       expect.objectContaining({ type: 'approval.resolved', status: 'rejected' }),
     );
+  });
+
+  it('does not enqueue chat continuation when a voice-origin approval is rejected', async () => {
+    mocks.decideApproval.mockResolvedValue({ ...pendingApproval, status: 'rejected' });
+    mocks.findToolExecutionById.mockResolvedValue({ ...toolExecution, originMode: 'voice' });
+
+    await new ApprovalService().decide('approval-1', 'user-1', 'rejected');
+
+    expect(mocks.enqueueChatContinuationJob).not.toHaveBeenCalled();
   });
 });

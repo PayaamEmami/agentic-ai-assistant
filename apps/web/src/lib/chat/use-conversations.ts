@@ -1,7 +1,8 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState, type SetStateAction } from 'react';
 import { api } from '../api-client';
+import { isCurrentConversationLoad } from './conversation-load';
 import {
   buildConversationTitle,
   hasSettledAssistantContent,
@@ -25,10 +26,38 @@ export function useChatConversations({
   onDeleteConversation,
 }: UseChatConversationsOptions) {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | undefined>(undefined);
+  const [currentConversationId, setCurrentConversationIdState] = useState<string | undefined>(
+    undefined,
+  );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
+  const currentConversationIdRef = useRef<string | undefined>(undefined);
+  const loadGenerationRef = useRef(0);
+
+  const setCurrentConversationId = useCallback(
+    (conversationId: SetStateAction<string | undefined>) => {
+      if (typeof conversationId === 'function') {
+        setCurrentConversationIdState((previous) => {
+          const next = conversationId(previous);
+          currentConversationIdRef.current = next;
+          return next;
+        });
+        return;
+      }
+
+      currentConversationIdRef.current = conversationId;
+      setCurrentConversationIdState(conversationId);
+    },
+    [],
+  );
+
+  const beginConversationLoad = useCallback((conversationId: string | undefined) => {
+    loadGenerationRef.current += 1;
+    currentConversationIdRef.current = conversationId;
+    setCurrentConversationIdState(conversationId);
+    return loadGenerationRef.current;
+  }, []);
 
   const loadConversations = useCallback(async () => {
     setIsLoadingConversations(true);
@@ -51,16 +80,38 @@ export function useChatConversations({
   }, []);
 
   const refreshConversation = useCallback(
-    async (conversationId: string) => {
-      setMessages(await loadConversationMessages(conversationId));
+    async (conversationId: string, loadGeneration = loadGenerationRef.current) => {
+      const remote = await loadConversationMessages(conversationId);
+      if (
+        !isCurrentConversationLoad({
+          requestedId: conversationId,
+          currentId: currentConversationIdRef.current,
+          loadGeneration,
+          currentGeneration: loadGenerationRef.current,
+        })
+      ) {
+        return;
+      }
+      setMessages(remote);
     },
     [loadConversationMessages],
   );
 
   const syncConversationMessages = useCallback(
     async (conversationId: string) => {
+      const loadGeneration = loadGenerationRef.current;
       try {
         const remote = await loadConversationMessages(conversationId);
+        if (
+          !isCurrentConversationLoad({
+            requestedId: conversationId,
+            currentId: currentConversationIdRef.current,
+            loadGeneration,
+            currentGeneration: loadGenerationRef.current,
+          })
+        ) {
+          return;
+        }
         setMessages((previous) => mergeRemoteConversationMessages(previous, remote));
       } catch {
         // Live recovery should not clear the in-progress transcript.
@@ -71,8 +122,19 @@ export function useChatConversations({
 
   const pullSettledAssistantTurn = useCallback(
     async (conversationId: string, assistantMessageId: string) => {
+      const loadGeneration = loadGenerationRef.current;
       try {
         const remote = await loadConversationMessages(conversationId);
+        if (
+          !isCurrentConversationLoad({
+            requestedId: conversationId,
+            currentId: currentConversationIdRef.current,
+            loadGeneration,
+            currentGeneration: loadGenerationRef.current,
+          })
+        ) {
+          return false;
+        }
         const remoteAssistant = remote.find((message) => message.id === assistantMessageId);
         if (!remoteAssistant || !hasSettledAssistantContent(remoteAssistant)) {
           return false;
@@ -89,17 +151,17 @@ export function useChatConversations({
 
   const syncConversationState = useCallback(
     async (conversationId: string) => {
-      setCurrentConversationId(conversationId);
-      await refreshConversation(conversationId);
+      const loadGeneration = beginConversationLoad(conversationId);
+      await refreshConversation(conversationId, loadGeneration);
       await loadConversations();
     },
-    [loadConversations, refreshConversation],
+    [beginConversationLoad, loadConversations, refreshConversation],
   );
 
   const selectConversation = useCallback(
     async (conversationId?: string) => {
       setError(null);
-      setCurrentConversationId(conversationId);
+      const loadGeneration = beginConversationLoad(conversationId);
 
       if (!conversationId) {
         setMessages([]);
@@ -108,17 +170,22 @@ export function useChatConversations({
 
       setIsLoadingMessages(true);
       try {
-        await refreshConversation(conversationId);
+        await refreshConversation(conversationId, loadGeneration);
       } catch (requestError) {
+        if (loadGeneration !== loadGenerationRef.current) {
+          return;
+        }
         setError(
           requestError instanceof Error ? requestError.message : 'Failed to load conversation',
         );
         setMessages([]);
       } finally {
-        setIsLoadingMessages(false);
+        if (loadGeneration === loadGenerationRef.current) {
+          setIsLoadingMessages(false);
+        }
       }
     },
-    [refreshConversation, setError],
+    [beginConversationLoad, refreshConversation, setError],
   );
 
   const renameConversation = useCallback(
@@ -151,23 +218,27 @@ export function useChatConversations({
 
         if (currentConversationId === conversationId) {
           const nextConversationId = remaining[0]?.id;
-          setCurrentConversationId(nextConversationId);
+          const loadGeneration = beginConversationLoad(nextConversationId);
 
           if (!nextConversationId) {
             setMessages([]);
           } else {
             setIsLoadingMessages(true);
             try {
-              await refreshConversation(nextConversationId);
+              await refreshConversation(nextConversationId, loadGeneration);
             } catch (requestError) {
-              setError(
-                requestError instanceof Error
-                  ? requestError.message
-                  : 'Failed to load conversation',
-              );
-              setMessages([]);
+              if (loadGeneration === loadGenerationRef.current) {
+                setError(
+                  requestError instanceof Error
+                    ? requestError.message
+                    : 'Failed to load conversation',
+                );
+                setMessages([]);
+              }
             } finally {
-              setIsLoadingMessages(false);
+              if (loadGeneration === loadGenerationRef.current) {
+                setIsLoadingMessages(false);
+              }
             }
           }
         }
@@ -181,6 +252,7 @@ export function useChatConversations({
       }
     },
     [
+      beginConversationLoad,
       conversations,
       currentConversationId,
       onDeleteConversation,
@@ -201,7 +273,11 @@ export function useChatConversations({
         return;
       }
 
-      setCurrentConversationId(conversationId);
+      if (currentConversationIdRef.current !== conversationId) {
+        beginConversationLoad(conversationId);
+      } else {
+        setCurrentConversationId(conversationId);
+      }
       setMessages((previous) => upsertVoiceMessageInList(previous, messageId, role, trimmed));
       setConversations((previous) => {
         const existing = previous.find((conversation) => conversation.id === conversationId);
@@ -217,7 +293,7 @@ export function useChatConversations({
         });
       });
     },
-    [],
+    [beginConversationLoad, setCurrentConversationId],
   );
 
   return {

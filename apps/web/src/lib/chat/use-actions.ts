@@ -100,6 +100,9 @@ export function useChatActions({
       if (!trimmedContent) {
         return;
       }
+      if (activeRunIdRef.current) {
+        return;
+      }
 
       setError(null);
       setIsSendingMessage(true);

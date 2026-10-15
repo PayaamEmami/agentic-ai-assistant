@@ -6,6 +6,7 @@ import { logger } from './lib/logger.js';
 import { initializeApiTelemetry } from './lib/telemetry.js';
 import { buildApiServices } from './services/container.js';
 import {
+  closeChatContinuationQueue,
   startChatContinuationWorker,
   stopChatContinuationWorker,
 } from './services/chat/index.js';
@@ -54,6 +55,7 @@ async function main() {
       await stopAutomationPromptWorker();
       await closeAppSyncQueue();
       await closeToolExecutionQueue();
+      await closeChatContinuationQueue();
       await closeMcpToolCache();
       await closeAutomationQueue();
       await stopToolEventRelay();

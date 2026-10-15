@@ -13,6 +13,9 @@ import {
 } from '@aaa/mcp';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../lib/logger.js';
+import { mcpToolRequiresApproval } from './mcp-approval.js';
+
+export { mcpToolRequiresApproval } from './mcp-approval.js';
 
 /**
  * MCP tools are namespaced so they can never collide with a native tool and so
@@ -111,14 +114,8 @@ export function createMcpClient(connection: McpConnection): McpClient {
   });
 }
 
-/**
- * A remote tool that changes state needs approval in interactive chat. Read-only
- * tools do not, so browsing boards and feeds stays frictionless.
- */
 function requiresApproval(tool: McpToolDefinition): boolean {
-  const readOnlyVerbs = ['list', 'get', 'read', 'search'];
-  const action = tool.name.split('_').slice(1).join('_');
-  return !readOnlyVerbs.some((verb) => action.startsWith(verb));
+  return mcpToolRequiresApproval(tool.name);
 }
 
 function cacheKey(userId: string, capability: string): string {
