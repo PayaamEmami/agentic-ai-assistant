@@ -6,7 +6,7 @@ import type {
   ToolCall,
   ToolDefinition,
 } from './types.js';
-import { extractTextFromParts, prepareTools, type PreparedTools } from './openai-mappers.js';
+import { extractTextFromParts, prepareTools, reasoningEffortForFunctionTools, type PreparedTools } from './openai-mappers.js';
 
 export interface WebCitation {
   url: string;
@@ -34,7 +34,7 @@ interface ResponsesRequestBody {
   store: false;
   stream?: boolean;
   max_output_tokens?: number;
-  reasoning?: { effort: 'none' };
+  reasoning?: { effort: 'none' | 'low' };
 }
 
 export interface BuiltResponsesRequest {
@@ -57,8 +57,9 @@ export function createResponsesTurnState(): ResponsesTurnState {
 /**
  * Hosted web search runs inside one Responses API call. Function tools stay
  * on the same request so the orchestrator can still call them. Reasoning is
- * disabled only when those function tools are present, matching chat
- * completions; research calls that only search keep the model's default.
+ * lowered only when those function tools are present. GPT-6.1 Sol's lowest
+ * supported effort is `low`; other chat models keep `none`. Research calls
+ * that only search keep the model's default.
  */
 export function buildResponsesRequest(input: {
   model: string;
@@ -66,12 +67,14 @@ export function buildResponsesRequest(input: {
   tools?: ToolDefinition[];
   maxTokens?: number;
   stream?: boolean;
+  hostedWebSearch?: boolean;
 }): BuiltResponsesRequest {
   const prepared = prepareTools(input.tools);
+  const hostedWebSearch = input.hostedWebSearch ?? true;
   const body: ResponsesRequestBody = {
     model: input.model,
     input: toResponsesInput(input.messages),
-    tools: buildResponsesTools(prepared),
+    tools: buildResponsesTools(prepared, hostedWebSearch),
     tool_choice: 'auto',
     store: false,
   };
@@ -83,7 +86,7 @@ export function buildResponsesRequest(input: {
     body.stream = true;
   }
   if ((prepared.tools?.length ?? 0) > 0) {
-    body.reasoning = { effort: 'none' };
+    body.reasoning = { effort: reasoningEffortForFunctionTools(input.model) };
   }
 
   return { body, aliasToOriginal: prepared.aliasToOriginal };
@@ -168,10 +171,14 @@ export function withWebCitations(text: string, citations: WebCitation[]): string
   return trimmed.length > 0 ? `${trimmed}\n\n${sources}` : sources;
 }
 
-function buildResponsesTools(prepared: PreparedTools): Array<Record<string, unknown>> {
-  const tools: Array<Record<string, unknown>> = [
-    { type: 'web_search', search_context_size: 'medium' },
-  ];
+function buildResponsesTools(
+  prepared: PreparedTools,
+  hostedWebSearch: boolean,
+): Array<Record<string, unknown>> {
+  const tools: Array<Record<string, unknown>> = [];
+  if (hostedWebSearch) {
+    tools.push({ type: 'web_search', search_context_size: 'medium' });
+  }
 
   for (const tool of prepared.tools ?? []) {
     tools.push({

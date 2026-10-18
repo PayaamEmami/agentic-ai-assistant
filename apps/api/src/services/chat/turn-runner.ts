@@ -53,6 +53,7 @@ export interface AssistantTurnOptions {
     id: string;
     title: string | null;
     isAutomation: boolean;
+    chatModel: string;
   };
   userId: string;
   requestContent: string;
@@ -268,6 +269,7 @@ export async function generateAssistantTurn(
         activeApps,
         signal,
         stream: streamHooks,
+        model: conversation.chatModel,
       });
       toolCalls = result.toolCalls;
       requiresApproval = result.requiresApproval;

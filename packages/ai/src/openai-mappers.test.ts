@@ -132,6 +132,19 @@ describe('buildChatCompletionCreateParams', () => {
     });
   });
 
+  it('uses low reasoning effort for Sol function tools', () => {
+    expect(
+      buildChatCompletionCreateParams({
+        model: 'gpt-6.1-sol',
+        messages,
+        tools,
+      }),
+    ).toMatchObject({
+      model: 'gpt-6.1-sol',
+      reasoning_effort: 'low',
+    });
+  });
+
   it('includes stream options for streaming requests', () => {
     expect(
       buildChatCompletionCreateParams({

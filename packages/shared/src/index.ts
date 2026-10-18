@@ -144,6 +144,15 @@ export {
   ClientTelemetryResponse,
 } from './dto.js';
 
+export {
+  CHAT_MODEL_IDS,
+  DEFAULT_NEW_CHAT_MODEL,
+  LEGACY_CHAT_MODEL,
+  PICKER_CHAT_MODELS,
+  isChatModelId,
+} from './chat-models.js';
+export type { ChatModelId } from './chat-models.js';
+
 export { AUTOMATION_EVENT_CHANNEL, TOOL_EVENT_CHANNEL } from './events.js';
 export type { RealtimeEvent } from './events.js';
 export type {

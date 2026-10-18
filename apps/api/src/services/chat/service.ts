@@ -10,7 +10,7 @@ import {
 } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import { attachmentRepository, conversationRepository, getPool, messageRepository, toolExecutionRepository } from '@aaa/db';
-import type { InterruptChatRunResponse } from '@aaa/shared';
+import { DEFAULT_NEW_CHAT_MODEL, type ChatModelId, type InterruptChatRunResponse } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
 import { logger } from '../../lib/logger.js';
@@ -24,7 +24,7 @@ import {
   deleteConversation as deleteOwnedConversation,
   getConversation as getOwnedConversation,
   listConversations as listOwnedConversations,
-  updateConversationTitle as updateOwnedConversationTitle,
+  updateConversation as updateOwnedConversation,
 } from './conversations.js';
 import { ChatRunRegistry } from './run-registry.js';
 import { ChatEventPublisher } from './event-publisher.js';
@@ -40,6 +40,7 @@ interface SendMessageOptions {
   conversationId?: string;
   attachmentIds?: string[];
   clientRunId?: string;
+  chatModel?: ChatModelId;
 }
 
 interface PreparedTurn {
@@ -48,6 +49,7 @@ interface PreparedTurn {
     title: string | null;
     userId: string;
     isAutomation: boolean;
+    chatModel: ChatModelId;
   };
   signal?: AbortSignal;
   assistantMessageId: string;
@@ -119,6 +121,7 @@ export class ChatService {
     conversationId?: string,
     attachmentIds?: string[],
     clientRunId?: string,
+    chatModel?: ChatModelId,
   ) {
     if (clientRunId !== undefined) {
       if (this.runRegistry.get(clientRunId)) {
@@ -140,6 +143,7 @@ export class ChatService {
         conversationId,
         attachmentIds,
         clientRunId,
+        chatModel,
       });
     } catch (error) {
       if (clientRunId) {
@@ -302,11 +306,30 @@ export class ChatService {
 
     const conversation =
       options.conversationId === undefined
-        ? await conversationRepository.create(userId, initialConversationTitle)
+        ? await conversationRepository.create(
+            userId,
+            initialConversationTitle,
+            false,
+            options.chatModel ?? DEFAULT_NEW_CHAT_MODEL,
+          )
         : await conversationRepository.findById(options.conversationId);
 
     if (!conversation || conversation.userId !== userId) {
       throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+
+    if (
+      options.conversationId !== undefined &&
+      options.chatModel !== undefined &&
+      options.chatModel !== conversation.chatModel
+    ) {
+      const updated = await conversationRepository.update(conversation.id, {
+        chatModel: options.chatModel,
+      });
+      if (!updated) {
+        throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+      }
+      conversation.chatModel = updated.chatModel;
     }
 
     if (activeRun) {
@@ -375,8 +398,12 @@ export class ChatService {
     return listOwnedConversations(userId);
   }
 
-  async updateConversationTitle(userId: string, conversationId: string, title: string) {
-    return updateOwnedConversationTitle(userId, conversationId, title);
+  async updateConversation(
+    userId: string,
+    conversationId: string,
+    patch: { title?: string; chatModel?: ChatModelId },
+  ) {
+    return updateOwnedConversation(userId, conversationId, patch);
   }
 
   async deleteConversation(userId: string, conversationId: string) {

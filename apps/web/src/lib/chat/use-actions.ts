@@ -12,6 +12,7 @@ import {
 import { api } from '../api-client';
 import { reportClientError } from '../client-logging';
 import { createClientId } from '../uuid';
+import { DEFAULT_NEW_CHAT_MODEL, type ChatModelId } from '@aaa/shared';
 import {
   buildConversationTitle,
   createErrorAssistantMessage,
@@ -95,7 +96,11 @@ export function useChatActions({
   }, [isSendingMessage, recoverSettledTurn]);
 
   const sendMessage = useCallback(
-    async (content: string, attachments: UploadedAttachment[] = []) => {
+    async (
+      content: string,
+      attachments: UploadedAttachment[] = [],
+      chatModel: ChatModelId = DEFAULT_NEW_CHAT_MODEL,
+    ) => {
       const trimmedContent = content.trim();
       if (!trimmedContent) {
         return;
@@ -122,6 +127,7 @@ export function useChatActions({
           currentConversationId,
           attachmentIds.length > 0 ? attachmentIds : undefined,
           clientRunId,
+          chatModel,
         );
 
         const timestamp = new Date().toISOString();
@@ -132,7 +138,10 @@ export function useChatActions({
           upsertConversation(previous, {
             id: response.conversationId,
             title: buildConversationTitle(trimmedContent),
-            createdAt: timestamp,
+            chatModel,
+            createdAt:
+              previous.find((conversation) => conversation.id === response.conversationId)
+                ?.createdAt ?? timestamp,
             updatedAt: timestamp,
           }),
         );

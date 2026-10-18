@@ -1,6 +1,7 @@
 import type {
   AssistantStage,
   AttachmentRefContent,
+  ChatModelId,
   CitationContent,
   MessageContent,
   MessageRoleType,
@@ -42,6 +43,7 @@ export interface ChatMessage {
 export interface ConversationSummary {
   id: string;
   title: string | null;
+  chatModel: ChatModelId;
   createdAt: string;
   updatedAt: string;
 }

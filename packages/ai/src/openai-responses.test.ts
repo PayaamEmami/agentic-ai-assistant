@@ -51,6 +51,23 @@ describe('buildResponsesRequest', () => {
       content: 'Tool result (call-1): 4',
     });
   });
+
+  it('sends Sol function tools with low reasoning and without hosted web search', () => {
+    const { body } = buildResponsesRequest({
+      model: 'gpt-6.1-sol',
+      messages: [{ role: 'user', content: 'Run the tool' }],
+      tools: [{ name: 'time.now', description: 'Get the time', parameters: { type: 'object' } }],
+      hostedWebSearch: false,
+    });
+
+    expect(body.reasoning).toEqual({ effort: 'low' });
+    expect(body.tools).toEqual([
+      expect.objectContaining({
+        type: 'function',
+        name: 'time_now',
+      }),
+    ]);
+  });
 });
 
 describe('applyResponsesStreamEvent', () => {

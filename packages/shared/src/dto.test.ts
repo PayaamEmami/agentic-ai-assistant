@@ -43,8 +43,14 @@ describe('DTO schemas', () => {
       clientRunId: userId,
     });
 
+    expect(SendMessageRequest.parse({ content: 'Summarize this', chatModel: 'gpt-6-luna' })).toEqual({
+      content: 'Summarize this',
+      chatModel: 'gpt-6-luna',
+    });
+
     expect(() => SendMessageRequest.parse({ content: '' })).toThrow();
     expect(() => SendMessageRequest.parse({ content: 'ok', attachmentIds: ['bad-id'] })).toThrow();
+    expect(() => SendMessageRequest.parse({ content: 'ok', chatModel: 'gpt-6-astra' })).toThrow();
   });
 
   it('validates approval decisions and update conversation requests', () => {
@@ -53,9 +59,14 @@ describe('DTO schemas', () => {
     expect(UpdateConversationRequest.parse({ title: '  Quarterly planning  ' })).toEqual({
       title: 'Quarterly planning',
     });
+    expect(UpdateConversationRequest.parse({ chatModel: 'gpt-6.1-sol' })).toEqual({
+      chatModel: 'gpt-6.1-sol',
+    });
 
     expect(() => ApprovalDecisionRequest.parse({ status: 'expired' })).toThrow();
     expect(() => UpdateConversationRequest.parse({ title: '   ' })).toThrow();
+    expect(() => UpdateConversationRequest.parse({})).toThrow();
+    expect(() => UpdateConversationRequest.parse({ chatModel: 'gpt-5.6-terra' })).toThrow();
   });
 
   it('validates upload response shape', () => {

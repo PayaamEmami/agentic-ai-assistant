@@ -1,11 +1,17 @@
 'use client';
 
-import { useCallback, useRef, useState, type SetStateAction } from 'react';
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
+import {
+  DEFAULT_NEW_CHAT_MODEL,
+  LEGACY_CHAT_MODEL,
+  type ChatModelId,
+} from '@aaa/shared';
 import { api } from '../api-client';
 import { isCurrentConversationLoad } from './conversation-load';
 import {
   buildConversationTitle,
   hasSettledAssistantContent,
+  keepLocalChatModels,
   mergeConversations,
   mergeRemoteConversationMessages,
   normalizeConversationSummary,
@@ -30,10 +36,15 @@ export function useChatConversations({
     undefined,
   );
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [draftChatModel, setDraftChatModel] = useState<ChatModelId>(DEFAULT_NEW_CHAT_MODEL);
   const [isLoadingConversations, setIsLoadingConversations] = useState(false);
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const currentConversationIdRef = useRef<string | undefined>(undefined);
   const loadGenerationRef = useRef(0);
+  const chatModelPatchRef = useRef<AbortController | null>(null);
+  const savedChatModelRef = useRef(new Map<string, ChatModelId>());
+  const chatModelEpochRef = useRef(0);
+  const conversationListRequestRef = useRef(0);
 
   const setCurrentConversationId = useCallback(
     (conversationId: SetStateAction<string | undefined>) => {
@@ -59,18 +70,41 @@ export function useChatConversations({
     return loadGenerationRef.current;
   }, []);
 
+  useEffect(() => {
+    for (const conversation of conversations) {
+      if (!savedChatModelRef.current.has(conversation.id)) {
+        savedChatModelRef.current.set(conversation.id, conversation.chatModel);
+      }
+    }
+  }, [conversations]);
+
   const loadConversations = useCallback(async () => {
+    const epochAtStart = chatModelEpochRef.current;
+    const requestId = ++conversationListRequestRef.current;
     setIsLoadingConversations(true);
     try {
       const response = await api.chat.listConversations();
+      if (requestId !== conversationListRequestRef.current) {
+        return;
+      }
       const remoteConversations = response.conversations.map(normalizeConversationSummary);
-      setConversations((previous) => mergeConversations(previous, remoteConversations));
+      const preserveLocalModels = chatModelEpochRef.current !== epochAtStart;
+      setConversations((previous) => {
+        const merged = mergeConversations(previous, remoteConversations);
+        const next = preserveLocalModels ? keepLocalChatModels(previous, merged) : merged;
+        for (const conversation of next) {
+          savedChatModelRef.current.set(conversation.id, conversation.chatModel);
+        }
+        return next;
+      });
     } catch (requestError) {
       setError(
         requestError instanceof Error ? requestError.message : 'Failed to load conversations',
       );
     } finally {
-      setIsLoadingConversations(false);
+      if (requestId === conversationListRequestRef.current) {
+        setIsLoadingConversations(false);
+      }
     }
   }, [setError]);
 
@@ -81,7 +115,8 @@ export function useChatConversations({
 
   const refreshConversation = useCallback(
     async (conversationId: string, loadGeneration = loadGenerationRef.current) => {
-      const remote = await loadConversationMessages(conversationId);
+      const epochAtStart = chatModelEpochRef.current;
+      const response = await api.chat.getConversation(conversationId);
       if (
         !isCurrentConversationLoad({
           requestedId: conversationId,
@@ -92,9 +127,20 @@ export function useChatConversations({
       ) {
         return;
       }
-      setMessages(remote);
+      const preserveLocalModel = chatModelEpochRef.current !== epochAtStart;
+      if (!preserveLocalModel) {
+        savedChatModelRef.current.set(conversationId, response.chatModel);
+      }
+      setConversations((previous) =>
+        previous.map((conversation) =>
+          conversation.id === conversationId && !preserveLocalModel
+            ? { ...conversation, chatModel: response.chatModel }
+            : conversation,
+        ),
+      );
+      setMessages(response.messages.map(normalizeMessage));
     },
-    [loadConversationMessages],
+    [],
   );
 
   const syncConversationMessages = useCallback(
@@ -164,6 +210,7 @@ export function useChatConversations({
       const loadGeneration = beginConversationLoad(conversationId);
 
       if (!conversationId) {
+        setDraftChatModel(DEFAULT_NEW_CHAT_MODEL);
         setMessages([]);
         return;
       }
@@ -192,7 +239,7 @@ export function useChatConversations({
     async (conversationId: string, title: string) => {
       setError(null);
       try {
-        const response = await api.chat.updateConversation(conversationId, title);
+        const response = await api.chat.updateConversation(conversationId, { title });
         setConversations((previous) =>
           upsertConversation(previous, normalizeConversationSummary(response.conversation)),
         );
@@ -261,6 +308,60 @@ export function useChatConversations({
     ],
   );
 
+  const setChatModel = useCallback(
+    async (model: ChatModelId) => {
+      setError(null);
+      const conversationId = currentConversationIdRef.current;
+      if (!conversationId) {
+        setDraftChatModel(model);
+        return;
+      }
+
+      setConversations((current) =>
+        current.map((conversation) =>
+          conversation.id === conversationId ? { ...conversation, chatModel: model } : conversation,
+        ),
+      );
+
+      chatModelPatchRef.current?.abort();
+      const controller = new AbortController();
+      chatModelPatchRef.current = controller;
+
+      try {
+        const response = await api.chat.updateConversation(
+          conversationId,
+          { chatModel: model },
+          controller.signal,
+        );
+        if (controller.signal.aborted || chatModelPatchRef.current !== controller) {
+          return;
+        }
+        const saved = normalizeConversationSummary(response.conversation);
+        savedChatModelRef.current.set(conversationId, saved.chatModel);
+        chatModelEpochRef.current += 1;
+        setConversations((current) => upsertConversation(current, saved));
+      } catch (requestError) {
+        if (controller.signal.aborted || chatModelPatchRef.current !== controller) {
+          return;
+        }
+        const revertTo = savedChatModelRef.current.get(conversationId);
+        if (revertTo) {
+          setConversations((current) =>
+            current.map((conversation) =>
+              conversation.id === conversationId
+                ? { ...conversation, chatModel: revertTo }
+                : conversation,
+            ),
+          );
+        }
+        setError(
+          requestError instanceof Error ? requestError.message : 'Failed to change chat model',
+        );
+      }
+    },
+    [setError],
+  );
+
   const upsertVoiceMessage = useCallback(
     (
       conversationId: string,
@@ -288,6 +389,7 @@ export function useChatConversations({
           title:
             existing?.title ??
             (role === 'user' ? buildConversationTitle(trimmed) : 'Untitled conversation'),
+          chatModel: existing?.chatModel ?? LEGACY_CHAT_MODEL,
           createdAt: existing?.createdAt ?? timestamp,
           updatedAt: timestamp,
         });
@@ -296,10 +398,18 @@ export function useChatConversations({
     [beginConversationLoad, setCurrentConversationId],
   );
 
+  const storedChatModel = conversations.find(
+    (conversation) => conversation.id === currentConversationId,
+  )?.chatModel;
+  const chatModel = currentConversationId
+    ? (storedChatModel ?? LEGACY_CHAT_MODEL)
+    : draftChatModel;
+
   return {
     conversations,
     currentConversationId,
     messages,
+    chatModel,
     isLoadingConversations,
     isLoadingMessages,
     loadConversations,
@@ -310,6 +420,7 @@ export function useChatConversations({
     selectConversation,
     renameConversation,
     deleteConversation,
+    setChatModel,
     upsertVoiceMessage,
     setConversations,
     setCurrentConversationId,

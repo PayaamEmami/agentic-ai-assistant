@@ -103,7 +103,7 @@ export class OrchestratorAgent implements Agent {
       this.modelProvider,
       {
         messages,
-        model: this.model,
+        model: context.model ?? this.model,
         tools: toToolDefinitions(context.availableTools),
         hostedWebSearch: true,
         signal: context.signal,

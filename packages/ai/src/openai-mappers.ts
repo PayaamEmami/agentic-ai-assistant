@@ -215,10 +215,22 @@ interface ChatCompletionRequestFields {
   tools?: OpenAI.ChatCompletionTool[];
 }
 
+/** GPT-6.1 Sol rejects reasoning effort "none" and cannot call functions on Chat Completions. */
+export const RESPONSES_FUNCTION_TOOL_MODEL = 'gpt-6.1-sol';
+
+export function reasoningEffortForFunctionTools(model: string): 'none' | 'low' {
+  return model === RESPONSES_FUNCTION_TOOL_MODEL ? 'low' : 'none';
+}
+
+export function requiresResponsesForFunctionTools(model: string, toolCount: number): boolean {
+  return model === RESPONSES_FUNCTION_TOOL_MODEL && toolCount > 0;
+}
+
 /**
  * Chat Completions is pinned to GPT-5.6+: use max_completion_tokens, and
- * disable reasoning whenever function tools are present. Agents still send
- * native tools on every text-chat turn.
+ * disable reasoning whenever function tools are present. GPT-6.1 Sol cannot
+ * use this path for tools; the provider sends those calls to Responses.
+ * Agents still send native tools on every text-chat turn.
  */
 export function buildChatCompletionCreateParams(
   request: ChatCompletionRequestFields & { stream: true },
@@ -240,7 +252,7 @@ export function buildChatCompletionCreateParams(
 
   if (request.tools && request.tools.length > 0) {
     params.tools = request.tools;
-    params.reasoning_effort = 'none';
+    params.reasoning_effort = reasoningEffortForFunctionTools(request.model);
   }
 
   if (request.stream) {

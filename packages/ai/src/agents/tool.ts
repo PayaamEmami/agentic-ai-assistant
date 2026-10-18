@@ -30,7 +30,7 @@ export class ToolAgent implements Agent {
       this.modelProvider,
       {
         messages,
-        model: this.model,
+        model: context.model ?? this.model,
         tools: toToolDefinitions(context.availableTools),
         signal: context.signal,
       },

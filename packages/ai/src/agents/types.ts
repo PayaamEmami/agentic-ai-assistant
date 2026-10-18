@@ -54,6 +54,9 @@ export interface AgentContext {
   // streams its model output to whichever sink is set for it.
   emitReasoningDelta?: (delta: string) => void;
   emitAnswerDelta?: (delta: string) => void;
+  // Set by a chat turn from the conversation's selected model. Callers that
+  // omit it keep the model the agent was constructed with.
+  model?: string;
 }
 
 export interface AgentVerificationResult {

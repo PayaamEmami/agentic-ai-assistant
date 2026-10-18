@@ -48,7 +48,7 @@ export class VerifierAgent implements Agent {
 
     const completion = await this.modelProvider.complete({
       messages: verifierMessages,
-      model: this.model,
+      model: context.model ?? this.model,
       signal: context.signal,
     });
 

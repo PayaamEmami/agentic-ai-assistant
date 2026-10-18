@@ -23,7 +23,7 @@ export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions
         });
       }
 
-      const { conversationId, content, attachmentIds, clientRunId } = parsed.data;
+      const { conversationId, content, attachmentIds, clientRunId, chatModel } = parsed.data;
       const userId = request.user!.id;
       const result = await chatService.sendMessage(
         userId,
@@ -31,6 +31,7 @@ export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions
         conversationId,
         attachmentIds,
         clientRunId,
+        chatModel,
       );
       return reply.status(200).send(result);
     });
@@ -62,10 +63,10 @@ export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions
         });
       }
 
-      const conversation = await chatService.updateConversationTitle(
+      const conversation = await chatService.updateConversation(
         request.user!.id,
         request.params.id,
-        parsed.data.title,
+        parsed.data,
       );
       return reply.status(200).send({ conversation });
     });

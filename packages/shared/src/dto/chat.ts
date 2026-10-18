@@ -1,12 +1,16 @@
 import { z } from 'zod';
+import { CHAT_MODEL_IDS } from '../chat-models.js';
 import { MessageContentDto } from './content.js';
 import { MessageRoleValues } from './enum-values.js';
+
+export const ChatModelIdSchema = z.enum(CHAT_MODEL_IDS);
 
 export const SendMessageRequest = z.object({
   conversationId: z.string().uuid().optional(),
   content: z.string().min(1).max(32000),
   attachmentIds: z.array(z.string().uuid()).optional(),
   clientRunId: z.string().uuid().optional(),
+  chatModel: ChatModelIdSchema.optional(),
 });
 export type SendMessageRequest = z.infer<typeof SendMessageRequest>;
 
@@ -37,6 +41,7 @@ export type UploadAttachmentResponse = z.infer<typeof UploadAttachmentResponse>;
 export const ConversationListItem = z.object({
   id: z.string().uuid(),
   title: z.string().nullable(),
+  chatModel: ChatModelIdSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 });
@@ -58,13 +63,19 @@ export type MessageDto = z.infer<typeof MessageDto>;
 export const ConversationDetailResponse = z.object({
   id: z.string().uuid(),
   title: z.string().nullable(),
+  chatModel: ChatModelIdSchema,
   messages: z.array(MessageDto),
 });
 export type ConversationDetailResponse = z.infer<typeof ConversationDetailResponse>;
 
-export const UpdateConversationRequest = z.object({
-  title: z.string().trim().min(1).max(120),
-});
+export const UpdateConversationRequest = z
+  .object({
+    title: z.string().trim().min(1).max(120).optional(),
+    chatModel: ChatModelIdSchema.optional(),
+  })
+  .refine((value) => value.title !== undefined || value.chatModel !== undefined, {
+    message: 'A conversation update needs a title or chat model',
+  });
 export type UpdateConversationRequest = z.infer<typeof UpdateConversationRequest>;
 
 export const UpdateConversationResponse = z.object({

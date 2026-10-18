@@ -9,6 +9,7 @@ import {
   mapMessages,
   mapToolCalls,
   prepareTools,
+  requiresResponsesForFunctionTools,
 } from './openai-mappers.js';
 import {
   applyResponsesStreamEvent,
@@ -39,11 +40,10 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async complete(request: CompletionRequest): Promise<CompletionResponse> {
-    if (request.hostedWebSearch) {
-      return this.completeWithHostedWebSearch(request);
-    }
-
     const model = request.model ?? this.defaults.model;
+    if (this.useResponsesApi(request, model)) {
+      return this.completeWithResponses(request);
+    }
     const telemetry = new OpenAiCallTelemetry('chat_complete', model);
     const preparedTools = prepareTools(request.tools);
     try {
@@ -104,12 +104,11 @@ export class OpenAIProvider implements ModelProvider {
   }
 
   async *streamComplete(request: CompletionRequest): AsyncIterable<StreamDelta> {
-    if (request.hostedWebSearch) {
-      yield* this.streamWithHostedWebSearch(request);
+    const model = request.model ?? this.defaults.model;
+    if (this.useResponsesApi(request, model)) {
+      yield* this.streamWithResponses(request);
       return;
     }
-
-    const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('chat_stream', model);
     const preparedTools = prepareTools(request.tools);
     try {
@@ -210,9 +209,14 @@ export class OpenAIProvider implements ModelProvider {
     }
   }
 
-  private async completeWithHostedWebSearch(
-    request: CompletionRequest,
-  ): Promise<CompletionResponse> {
+  private useResponsesApi(request: CompletionRequest, model: string): boolean {
+    return (
+      Boolean(request.hostedWebSearch) ||
+      requiresResponsesForFunctionTools(model, request.tools?.length ?? 0)
+    );
+  }
+
+  private async completeWithResponses(request: CompletionRequest): Promise<CompletionResponse> {
     const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('responses_complete', model);
     const { body, aliasToOriginal } = buildResponsesRequest({
@@ -220,6 +224,7 @@ export class OpenAIProvider implements ModelProvider {
       messages: request.messages,
       tools: request.tools,
       maxTokens: request.maxTokens,
+      hostedWebSearch: request.hostedWebSearch === true,
     });
 
     try {
@@ -276,9 +281,7 @@ export class OpenAIProvider implements ModelProvider {
     }
   }
 
-  private async *streamWithHostedWebSearch(
-    request: CompletionRequest,
-  ): AsyncIterable<StreamDelta> {
+  private async *streamWithResponses(request: CompletionRequest): AsyncIterable<StreamDelta> {
     const model = request.model ?? this.defaults.model;
     const telemetry = new OpenAiCallTelemetry('responses_stream', model);
     const { body, aliasToOriginal } = buildResponsesRequest({
@@ -287,6 +290,7 @@ export class OpenAIProvider implements ModelProvider {
       tools: request.tools,
       maxTokens: request.maxTokens,
       stream: true,
+      hostedWebSearch: request.hostedWebSearch === true,
     });
 
     try {

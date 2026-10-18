@@ -18,6 +18,9 @@ interface ModelPricing {
 
 const DEFAULT_PRICING: Record<string, ModelPricing> = {
   'gpt-5-mini': { inputPer1kUsd: 0.00025, outputPer1kUsd: 0.002 },
+  'gpt-5.6-luna': { inputPer1kUsd: 0.0002, outputPer1kUsd: 0.0012 },
+  'gpt-6-luna': { inputPer1kUsd: 0.0001, outputPer1kUsd: 0.0005 },
+  'gpt-6.1-sol': { inputPer1kUsd: 0.002, outputPer1kUsd: 0.01 },
   'text-embedding-3-small': { inputPer1kUsd: 0.00002 },
   'gpt-4o-mini-transcribe': { inputPer1kUsd: 0.0003 },
   'gpt-4o-mini-tts': { inputPer1kUsd: 0.0006 },

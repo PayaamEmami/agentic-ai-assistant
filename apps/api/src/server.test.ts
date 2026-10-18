@@ -82,7 +82,7 @@ function testServices(overrides: Partial<ApiServices> = {}): ApiServices {
       interruptRun: vi.fn().mockResolvedValue({ ok: true, status: 'interrupting' }),
       listConversations: vi.fn().mockResolvedValue([]),
       getConversation: vi.fn(),
-      updateConversationTitle: vi.fn(),
+      updateConversation: vi.fn(),
       deleteConversation: vi.fn().mockResolvedValue({ ok: true }),
     },
     personalizationService: {},

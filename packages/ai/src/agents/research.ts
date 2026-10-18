@@ -27,7 +27,7 @@ export class ResearchAgent implements Agent {
       this.modelProvider,
       {
         messages,
-        model: this.model,
+        model: context.model ?? this.model,
         hostedWebSearch: true,
         signal: context.signal,
       },

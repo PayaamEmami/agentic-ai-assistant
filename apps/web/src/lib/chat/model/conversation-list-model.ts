@@ -1,4 +1,4 @@
-import type { ConversationListItem } from '@aaa/shared';
+import { LEGACY_CHAT_MODEL, type ConversationListItem } from '@aaa/shared';
 import type { ConversationSummary } from './message-types';
 
 export function sortConversations(items: ConversationSummary[]): ConversationSummary[] {
@@ -15,6 +15,7 @@ export function normalizeConversationSummary(
   return {
     id: conversation.id,
     title: conversation.title,
+    chatModel: conversation.chatModel ?? LEGACY_CHAT_MODEL,
     createdAt: conversation.createdAt,
     updatedAt: conversation.updatedAt,
   };
@@ -59,4 +60,19 @@ export function mergeConversations(
   }
 
   return sortConversations(Array.from(map.values()));
+}
+
+/** Keeps a local chat model when a list response started before that model was saved. */
+export function keepLocalChatModels(
+  local: ConversationSummary[],
+  merged: ConversationSummary[],
+): ConversationSummary[] {
+  const localModels = new Map(local.map((item) => [item.id, item.chatModel]));
+  return merged.map((item) => {
+    const chatModel = localModels.get(item.id);
+    if (!chatModel || chatModel === item.chatModel) {
+      return item;
+    }
+    return { ...item, chatModel };
+  });
 }

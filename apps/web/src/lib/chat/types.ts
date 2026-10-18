@@ -5,6 +5,7 @@ import type {
   ConversationSummary,
   UploadedAttachment,
 } from './model/index';
+import type { ChatModelId } from '@aaa/shared';
 
 export interface PendingApproval {
   id: string;
@@ -36,7 +37,9 @@ export interface ChatContextValue {
   citations: CitationItem[];
   loading: ChatLoadingState;
   error: string | null;
-  sendMessage: (content: string, attachments?: UploadedAttachment[]) => Promise<void>;
+  chatModel: ChatModelId;
+  setChatModel: (model: ChatModelId) => Promise<void>;
+  sendMessage: (content: string, attachments?: UploadedAttachment[], chatModel?: ChatModelId) => Promise<void>;
   interruptMessage: () => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;

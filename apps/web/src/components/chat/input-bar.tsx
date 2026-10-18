@@ -21,6 +21,7 @@ import {
 } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { IconButton } from '@/components/ui/icon-button';
+import { ModelPicker } from '@/components/chat/model-picker';
 import { type UploadedAttachment, useChatContext } from '@/lib/chat';
 import { extractTransferFiles } from '@/lib/chat/transfer-files';
 import { reportClientError } from '@/lib/client-logging';
@@ -66,6 +67,9 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
     subscribeToolEvents,
     pendingApprovals,
     loading,
+    error,
+    chatModel,
+    setChatModel,
   } = useChatContext();
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
@@ -124,7 +128,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
     setMessage('');
     setAttachments([]);
 
-    await sendMessage(nextMessage, nextAttachments);
+    await sendMessage(nextMessage, nextAttachments, chatModel);
   };
 
   const handleFilePicker = () => {
@@ -301,6 +305,11 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
             className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 pr-4 text-sm text-foreground placeholder:text-foreground-inactive focus:outline-none"
           />
         </div>
+        <ModelPicker
+          chatModel={chatModel}
+          disabled={loading.isSendingMessage}
+          onChange={(model) => void setChatModel(model)}
+        />
         {loading.isSendingMessage ? (
           <IconButton
             size="lg"
@@ -349,6 +358,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
         )}
       </div>
       {liveVoice.error ? <p className="mt-3 text-xs text-error">{liveVoice.error}</p> : null}
+      {error ? <p className="mt-3 text-xs text-error">{error}</p> : null}
     </form>
   );
 });

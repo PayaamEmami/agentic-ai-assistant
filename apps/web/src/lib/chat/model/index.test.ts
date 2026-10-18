@@ -7,6 +7,7 @@ import {
   finalizeAssistantMessage,
   hasSettledAssistantContent,
   mergeConversations,
+  keepLocalChatModels,
   mergeRemoteConversationMessages,
   normalizeMessage,
   patchMessagesToolResult,
@@ -49,6 +50,15 @@ describe('chat model', () => {
         uri: undefined,
       },
       { type: 'text', text: '{"unknown":true}' },
+    ]);
+  });
+
+  it('keeps a newer local chat model when a list response is stale', () => {
+    const local = [conversation('shared', 'Thread', '2026-01-03T00:00:00.000Z', 'gpt-6.1-sol')];
+    const remote = [conversation('shared', 'Thread', '2026-01-01T00:00:00.000Z', 'gpt-6-luna')];
+
+    expect(keepLocalChatModels(local, mergeConversations(local, remote))).toEqual([
+      conversation('shared', 'Thread', '2026-01-01T00:00:00.000Z', 'gpt-6.1-sol'),
     ]);
   });
 
@@ -384,10 +394,16 @@ describe('chat model', () => {
   });
 });
 
-function conversation(id: string, title: string, updatedAt: string): ConversationSummary {
+function conversation(
+  id: string,
+  title: string,
+  updatedAt: string,
+  chatModel: ConversationSummary['chatModel'] = 'gpt-6-luna',
+): ConversationSummary {
   return {
     id,
     title,
+    chatModel,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt,
   };
