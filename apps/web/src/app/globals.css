@@ -112,6 +112,120 @@ label:has(input:not(:disabled)),
   padding: 0.15em 0;
 }
 
+.chat-code-block {
+  position: relative;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.chat-code-pre {
+  overflow-x: auto;
+  border-radius: 0.25rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-input);
+  padding: 0.75rem;
+  font-size: 0.75rem;
+  line-height: 1.6;
+}
+
+.chat-code-block pre code {
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
+  font-size: inherit;
+}
+
+.chat-code-block.is-single-line {
+  display: flex;
+  align-items: center;
+  width: max-content;
+  background: var(--color-surface-input);
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  padding-right: 0.3rem;
+}
+
+.chat-code-block.is-single-line .chat-code-pre {
+  width: max-content;
+  min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0.65rem 0.35rem 0.65rem 0.75rem;
+}
+
+.chat-code-block:not(.is-single-line) {
+  border: 1px solid var(--color-border);
+  border-radius: 0.25rem;
+  background: var(--color-surface-input);
+}
+
+.chat-code-block:not(.is-single-line) .chat-code-pre {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  margin-right: 2.45rem;
+  padding-right: 0.75rem;
+}
+
+.chat-code-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.75rem;
+  width: 1.75rem;
+  flex: none;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--color-foreground-muted);
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.chat-code-copy svg {
+  height: 0.875rem;
+  width: 0.875rem;
+}
+
+.chat-code-copy:hover {
+  background: var(--color-surface-hover);
+  color: var(--color-foreground);
+}
+
+.chat-code-copy:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 70%, transparent);
+  outline-offset: 2px;
+}
+
+.chat-code-copy.is-copied,
+.chat-code-copy.is-copied:hover {
+  color: var(--color-success);
+}
+
+.chat-code-block:not(.is-single-line) .chat-code-copy {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  z-index: 1;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chat-code-copy {
+    opacity: 0;
+  }
+
+  .chat-code-block:hover .chat-code-copy,
+  .chat-code-block:focus-within .chat-code-copy {
+    opacity: 1;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .voice-word-fade,
   .assistant-followup-reveal,

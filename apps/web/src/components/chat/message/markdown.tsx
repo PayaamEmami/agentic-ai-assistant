@@ -8,6 +8,7 @@ import remarkMath from 'remark-math';
 
 import 'katex/dist/katex.min.css';
 
+import { ChatCodeBlock } from './code-block';
 import { normalizeMathDelimiters } from './math';
 
 const markdownComponents: Components = {
@@ -57,7 +58,7 @@ const markdownComponents: Components = {
     </blockquote>
   ),
   hr: () => <hr className="border-border-subtle" />,
-  code: ({ className, children, ...props }) => {
+  code: ({ className, children, node: _node, ...props }) => {
     const isBlock = typeof className === 'string' && className.includes('language-');
     if (isBlock) {
       return (
@@ -75,11 +76,7 @@ const markdownComponents: Components = {
       </code>
     );
   },
-  pre: ({ children }) => (
-    <pre className="overflow-x-auto rounded border border-border bg-surface-input p-3 text-xs">
-      {children}
-    </pre>
-  ),
+  pre: ({ children }) => <ChatCodeBlock>{children}</ChatCodeBlock>,
   table: ({ children }) => (
     <div className="overflow-x-auto">
       <table className="w-full border-collapse text-xs">{children}</table>
