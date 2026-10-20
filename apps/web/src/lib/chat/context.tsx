@@ -58,6 +58,7 @@ const ChatContext = createContext<ChatContextValue | null>(null);
 export function ChatProvider({ children }: { children: React.ReactNode }) {
   const { token } = useAuthContext();
   const [error, setError] = useState<string | null>(null);
+  const [composerFocusRequestId, setComposerFocusRequestId] = useState(0);
   const messagesRef = useRef<ChatMessage[]>([]);
   const toolEvents = useToolEventBus();
 
@@ -82,6 +83,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     messagesRef.current = conversationsState.messages;
   }, [conversationsState.messages]);
+
+  const requestComposerFocus = useCallback(() => {
+    setComposerFocusRequestId((value) => value + 1);
+  }, []);
 
   const startLiveVoiceSession = useCallback(async () => {
     setError(null);
@@ -219,6 +224,8 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       interruptMessage: actions.interruptMessage,
       loadConversations: conversationsState.loadConversations,
       selectConversation: conversationsState.selectConversation,
+      composerFocusRequestId,
+      requestComposerFocus,
       renameConversation: conversationsState.renameConversation,
       deleteConversation: conversationsState.deleteConversation,
       uploadAttachment: attachments.uploadAttachment,
@@ -246,8 +253,10 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       conversationsState.loadConversations,
       conversationsState.messages,
       conversationsState.renameConversation,
+      composerFocusRequestId,
       conversationsState.selectConversation,
       conversationsState.syncConversationState,
+      requestComposerFocus,
       conversationsState.upsertVoiceMessage,
       error,
       loading,

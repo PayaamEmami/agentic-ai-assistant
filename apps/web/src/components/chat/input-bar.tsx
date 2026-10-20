@@ -70,6 +70,7 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
     error,
     chatModel,
     setChatModel,
+    composerFocusRequestId,
   } = useChatContext();
   const [message, setMessage] = useState('');
   const [attachments, setAttachments] = useState<UploadedAttachment[]>([]);
@@ -89,13 +90,13 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
       return;
     }
 
-    // Focus after paint so returning from a settings page wins over the
-    // control that started the navigation.
+    // Focus after paint so the new-chat button, or a control that navigated
+    // back from a settings page, does not keep the cursor.
     const frame = window.requestAnimationFrame(() => {
       focusMessageInput(messageInputRef.current);
     });
     return () => window.cancelAnimationFrame(frame);
-  }, [focusRequestId, liveVoice.isActive]);
+  }, [composerFocusRequestId, focusRequestId, liveVoice.isActive]);
 
   useEffect(() => {
     const textarea = messageInputRef.current;

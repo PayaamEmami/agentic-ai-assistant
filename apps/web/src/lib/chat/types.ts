@@ -43,6 +43,8 @@ export interface ChatContextValue {
   interruptMessage: () => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;
+  composerFocusRequestId: number;
+  requestComposerFocus: () => void;
   renameConversation: (conversationId: string, title: string) => Promise<void>;
   deleteConversation: (conversationId: string) => Promise<void>;
   uploadAttachment: (

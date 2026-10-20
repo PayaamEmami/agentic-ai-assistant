@@ -47,6 +47,7 @@ export function Sidebar({
     selectConversation,
     renameConversation,
     deleteConversation,
+    requestComposerFocus,
   } = useChatContext();
   const [editingConversationId, setEditingConversationId] = useState<string | null>(null);
   const [draftTitle, setDraftTitle] = useState('');
@@ -75,6 +76,9 @@ export function Sidebar({
   };
 
   const openChat = async (conversationId?: string) => {
+    if (!conversationId) {
+      requestComposerFocus();
+    }
     await selectConversation(conversationId);
     onCloseMobile();
     if (pathname !== '/chat') {
