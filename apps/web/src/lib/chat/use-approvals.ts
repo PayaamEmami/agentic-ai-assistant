@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { api } from '../api-client';
+import { api, requestErrorMessage } from '../api-client';
 import { parseApprovalStatus } from './model/index';
 import type { ApprovalStatusByToolExecution, PendingApproval } from './types';
 
@@ -45,7 +45,10 @@ export function useChatApprovals({ setError }: UseChatApprovalsOptions) {
         return next;
       });
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to load approvals');
+      const message = requestErrorMessage(requestError, 'Failed to load approvals');
+      if (message) {
+        setError(message);
+      }
     } finally {
       setIsLoadingApprovals(false);
     }
@@ -65,9 +68,10 @@ export function useChatApprovals({ setError }: UseChatApprovalsOptions) {
           }));
         }
       } catch (requestError) {
-        setError(
-          requestError instanceof Error ? requestError.message : 'Failed to decide approval',
-        );
+        const message = requestErrorMessage(requestError, 'Failed to decide approval');
+        if (message) {
+          setError(message);
+        }
         throw requestError;
       }
     },

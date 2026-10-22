@@ -10,7 +10,7 @@ import { useAuthContext } from '@/lib/auth-context';
 
 export default function Home() {
   const router = useRouter();
-  const { isAuthenticated, isReady, login, devLogin } = useAuthContext();
+  const { isAuthenticated, isReady, login, devLogin, sessionExpired } = useAuthContext();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -64,8 +64,11 @@ export default function Home() {
 
         <section className="rounded-3xl border border-border bg-surface-elevated p-8 shadow-sm">
           <p className="text-sm font-medium uppercase tracking-[0.2em] text-foreground-muted">
-            Sign in
+            {sessionExpired ? 'Session expired' : 'Sign in'}
           </p>
+          {sessionExpired ? (
+            <p className="mt-2 text-sm text-foreground-muted">Sign in to continue.</p>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
             <label className="block">

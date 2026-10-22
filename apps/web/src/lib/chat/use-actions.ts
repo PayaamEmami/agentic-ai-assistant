@@ -9,7 +9,7 @@ import {
   type MutableRefObject,
   type SetStateAction,
 } from 'react';
-import { api } from '../api-client';
+import { api, requestErrorMessage } from '../api-client';
 import { reportClientError } from '../client-logging';
 import { createClientId } from '../uuid';
 import { DEFAULT_NEW_CHAT_MODEL, type ChatModelId } from '@aaa/shared';
@@ -158,10 +158,11 @@ export function useChatActions({
 
         await Promise.all([loadConversations(), loadPendingApprovals()]);
       } catch (requestError) {
-        const message =
-          requestError instanceof Error ? requestError.message : 'Failed to send message';
-        setError(message);
-        setMessages((previous) => [...previous, createErrorAssistantMessage(message)]);
+        const message = requestErrorMessage(requestError, 'Failed to send message');
+        if (message) {
+          setError(message);
+          setMessages((previous) => [...previous, createErrorAssistantMessage(message)]);
+        }
         void reportClientError({
           event: 'client.chat.send_failed',
           component: 'chat-context',
@@ -204,7 +205,10 @@ export function useChatActions({
       }
     } catch (requestError) {
       setIsInterruptingMessage(false);
-      setError(requestError instanceof Error ? requestError.message : 'Failed to stop message');
+      const message = requestErrorMessage(requestError, 'Failed to stop message');
+      if (message) {
+        setError(message);
+      }
       throw requestError;
     }
   }, [loadConversations, recoverSettledTurn, setCurrentConversationId, setError]);

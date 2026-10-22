@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CreateAutomationScheduleRequest, UpdateAutomationScheduleRequest } from '@aaa/shared';
 import { useToast } from '@/components/ui/toast';
-import { api, type AutomationRun, type AutomationSchedule } from '@/lib/api-client';
+import { api, requestErrorMessage, type AutomationRun, type AutomationSchedule } from '@/lib/api-client';
 import { isRunActive } from './automation-status';
 
 /**
@@ -45,7 +45,10 @@ export function useAutomationSchedules() {
   useEffect(() => {
     void reload()
       .catch((error: unknown) => {
-        toast.error(error instanceof Error ? error.message : 'Failed to load automations');
+        const message = requestErrorMessage(error, 'Failed to load automations');
+        if (message) {
+          toast.error(message);
+        }
       })
       .finally(() => {
         if (mounted.current) {
@@ -78,7 +81,10 @@ export function useAutomationSchedules() {
       try {
         return await action();
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : failureMessage);
+        const message = requestErrorMessage(error, failureMessage);
+        if (message) {
+          toast.error(message);
+        }
         return null;
       } finally {
         if (mounted.current) {

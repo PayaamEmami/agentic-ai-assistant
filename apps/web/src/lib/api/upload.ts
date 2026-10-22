@@ -1,5 +1,5 @@
 import { createCorrelationId } from '../client-observability';
-import { API_BASE, ApiError, getAuthToken } from './client';
+import { API_BASE, ApiError, getAuthToken, notifySessionExpired, SessionExpiredError } from './client';
 
 export const uploadApi = {
   async uploadFile(file: File, options?: { indexForRag?: boolean }) {
@@ -18,6 +18,10 @@ export const uploadApi = {
         'x-correlation-id': createCorrelationId('upload'),
       },
     });
+    if (res.status === 401) {
+      notifySessionExpired();
+      throw new SessionExpiredError();
+    }
     if (!res.ok) {
       throw new ApiError(
         res.status,

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, buildWebSocketUrl, type AutomationRunEvent } from '@/lib/api-client';
+import { api, buildWebSocketUrl, notifySessionExpired, type AutomationRunEvent } from '@/lib/api-client';
 import { useAuthContext } from '@/lib/auth-context';
 
 interface RawEvent {
@@ -178,8 +178,13 @@ export function useRunActivity({
         }
       });
 
-      next.addEventListener('close', () => {
+      next.addEventListener('close', (event) => {
         if (!active) {
+          return;
+        }
+
+        if (event.code === 1008) {
+          notifySessionExpired();
           return;
         }
 

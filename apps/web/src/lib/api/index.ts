@@ -14,6 +14,12 @@ export {
   buildWebSocketUrl,
   clearStoredAuthToken,
   getStoredAuthToken,
+  isSessionExpiredError,
+  notifySessionExpired,
+  requestErrorMessage,
+  resetSessionExpired,
+  SessionExpiredError,
+  setSessionExpiredHandler,
   setStoredAuthToken,
 } from './client';
 

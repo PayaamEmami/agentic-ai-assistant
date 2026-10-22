@@ -6,7 +6,7 @@ import {
   LEGACY_CHAT_MODEL,
   type ChatModelId,
 } from '@aaa/shared';
-import { api } from '../api-client';
+import { api, requestErrorMessage } from '../api-client';
 import { isCurrentConversationLoad } from './conversation-load';
 import {
   buildConversationTitle,
@@ -98,9 +98,10 @@ export function useChatConversations({
         return next;
       });
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : 'Failed to load conversations',
-      );
+      const message = requestErrorMessage(requestError, 'Failed to load conversations');
+      if (message) {
+        setError(message);
+      }
     } finally {
       if (requestId === conversationListRequestRef.current) {
         setIsLoadingConversations(false);
@@ -222,9 +223,10 @@ export function useChatConversations({
         if (loadGeneration !== loadGenerationRef.current) {
           return;
         }
-        setError(
-          requestError instanceof Error ? requestError.message : 'Failed to load conversation',
-        );
+        const message = requestErrorMessage(requestError, 'Failed to load conversation');
+        if (message) {
+          setError(message);
+        }
         setMessages([]);
       } finally {
         if (loadGeneration === loadGenerationRef.current) {
@@ -244,9 +246,10 @@ export function useChatConversations({
           upsertConversation(previous, normalizeConversationSummary(response.conversation)),
         );
       } catch (requestError) {
-        setError(
-          requestError instanceof Error ? requestError.message : 'Failed to rename conversation',
-        );
+        const message = requestErrorMessage(requestError, 'Failed to rename conversation');
+        if (message) {
+          setError(message);
+        }
         throw requestError;
       }
     },
@@ -275,11 +278,10 @@ export function useChatConversations({
               await refreshConversation(nextConversationId, loadGeneration);
             } catch (requestError) {
               if (loadGeneration === loadGenerationRef.current) {
-                setError(
-                  requestError instanceof Error
-                    ? requestError.message
-                    : 'Failed to load conversation',
-                );
+                const message = requestErrorMessage(requestError, 'Failed to load conversation');
+                if (message) {
+                  setError(message);
+                }
                 setMessages([]);
               }
             } finally {
@@ -292,9 +294,10 @@ export function useChatConversations({
 
         await onDeleteConversation?.();
       } catch (requestError) {
-        setError(
-          requestError instanceof Error ? requestError.message : 'Failed to delete conversation',
-        );
+        const message = requestErrorMessage(requestError, 'Failed to delete conversation');
+        if (message) {
+          setError(message);
+        }
         throw requestError;
       }
     },
@@ -354,9 +357,10 @@ export function useChatConversations({
             ),
           );
         }
-        setError(
-          requestError instanceof Error ? requestError.message : 'Failed to change chat model',
-        );
+        const message = requestErrorMessage(requestError, 'Failed to change chat model');
+        if (message) {
+          setError(message);
+        }
       }
     },
     [setError],

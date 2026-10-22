@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
-import { api } from '../api-client';
+import { api, requestErrorMessage } from '../api-client';
 import type { UploadedAttachment } from './model/index';
 
 interface UseChatAttachmentsOptions {
@@ -25,9 +25,10 @@ export function useChatAttachments({ setError }: UseChatAttachmentsOptions) {
         documentId: response.documentId,
       } satisfies UploadedAttachment;
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : 'Failed to upload attachment',
-      );
+      const message = requestErrorMessage(requestError, 'Failed to upload attachment');
+      if (message) {
+        setError(message);
+      }
       throw requestError;
     } finally {
       setIsUploadingAttachment(false);

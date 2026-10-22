@@ -52,9 +52,49 @@ export class ApiError extends Error {
   }
 }
 
+export class SessionExpiredError extends ApiError {
+  constructor() {
+    super(401, 'Session expired', 'AUTH_INVALID');
+    this.name = 'SessionExpiredError';
+  }
+}
+
+type SessionExpiredHandler = () => void;
+
+let sessionExpiredHandler: SessionExpiredHandler | null = null;
+let authenticatedSessionExpired = false;
+
+export function setSessionExpiredHandler(handler: SessionExpiredHandler | null): void {
+  sessionExpiredHandler = handler;
+}
+
+export function notifySessionExpired(): void {
+  authenticatedSessionExpired = true;
+  sessionExpiredHandler?.();
+}
+
+export function resetSessionExpired(): void {
+  authenticatedSessionExpired = false;
+}
+
+export function isSessionExpiredError(error: unknown): boolean {
+  return error instanceof SessionExpiredError;
+}
+
+/** User-facing request text. Session expiry is handled by the sign-in page. */
+export function requestErrorMessage(error: unknown, fallback: string): string | null {
+  if (isSessionExpiredError(error)) {
+    return null;
+  }
+  return error instanceof Error ? error.message : fallback;
+}
+
 export async function getAuthToken(): Promise<string> {
   const token = getStoredAuthToken();
   if (!token) {
+    if (authenticatedSessionExpired) {
+      throw new SessionExpiredError();
+    }
     throw new ApiError(401, 'Authentication required', 'AUTH_REQUIRED');
   }
   return token;
@@ -97,6 +137,10 @@ async function execute(
   });
 
   if (!res.ok) {
+    if (res.status === 401 && authToken) {
+      notifySessionExpired();
+      throw new SessionExpiredError();
+    }
     const body = await res.json().catch(() => ({}));
     throw new ApiError(
       res.status,

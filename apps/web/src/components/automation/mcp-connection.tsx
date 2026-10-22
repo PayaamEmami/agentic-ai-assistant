@@ -7,7 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Field } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
-import { api, type McpConnectionStatus, type McpConnectionTest } from '@/lib/api-client';
+import {
+  api,
+  requestErrorMessage,
+  type McpConnectionStatus,
+  type McpConnectionTest,
+} from '@/lib/api-client';
 
 function connectionLabel(connection: McpConnectionStatus): string {
   return connection.serverName?.trim() || connection.capability;
@@ -54,7 +59,10 @@ export function McpConnectionSection() {
         toast.error(result.error ?? 'Could not reach the MCP server.');
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Failed to save the connection');
+      const message = requestErrorMessage(error, 'Failed to save the connection');
+      if (message) {
+        toast.error(message);
+      }
     } finally {
       setBusy(false);
     }

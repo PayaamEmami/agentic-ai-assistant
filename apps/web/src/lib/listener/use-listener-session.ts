@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, requestErrorMessage } from '@/lib/api-client';
 import type { ListenerInsight, ListenerSession } from '@/lib/api/listener';
 import { reportClientError } from '@/lib/client-logging';
 import { getListenerBrowserSupport, type ListenerBrowserSupport } from './browser-support';
@@ -98,10 +98,10 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
         ) {
           return;
         }
-        const message =
-          requestError instanceof Error
-            ? requestError.message
-            : 'Could not explain the selected text.';
+        const message = requestErrorMessage(requestError, 'Could not explain the selected text.');
+        if (!message) {
+          return;
+        }
         setError(message);
         void reportClientError({
           event: 'client.listener.explanation_failed',
@@ -159,13 +159,14 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
         })
         .catch((persistError) => {
           const activeSession = sessionRef.current;
-          const message =
-            persistError instanceof Error ? persistError.message : 'Failed to save transcript.';
-          setError(message);
+          const message = requestErrorMessage(persistError, 'Failed to save transcript.');
+          if (message) {
+            setError(message);
+          }
           void reportClientError({
             event: 'client.listener.transcript_persist_failed',
             component: 'use-listener-session',
-            message,
+            message: message ?? 'Failed to save transcript.',
             error: persistError,
             conversationId: activeSession?.conversationId,
           });
@@ -260,14 +261,15 @@ export function useListenerSession({ syncConversation }: UseListenerSessionOptio
       setPhase('listening');
     } catch (startError) {
       teardownMedia();
-      const message =
-        startError instanceof Error ? startError.message : 'Failed to start Listener Mode.';
-      setError(message);
-      setPhase('error');
+      const message = requestErrorMessage(startError, 'Failed to start Listener Mode.');
+      if (message) {
+        setError(message);
+        setPhase('error');
+      }
       void reportClientError({
         event: 'client.listener.start_failed',
         component: 'use-listener-session',
-        message,
+        message: message ?? 'Failed to start Listener Mode.',
         error: startError,
         conversationId: sessionRef.current?.conversationId,
       });

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from 'react';
 import { useToast } from '@/components/ui/toast';
-import { api, type AppSummary } from '@/lib/api-client';
+import { api, requestErrorMessage, type AppSummary } from '@/lib/api-client';
 import { pollAppSyncOutcome } from '@/lib/apps/poll-app-sync';
 import { appSyncOutcomeMessage, appSyncStartedMessage } from '@/lib/apps/sync-labels';
 
@@ -38,7 +38,10 @@ export function useAppSync(onReload: () => Promise<void>) {
           toast.warning(message);
         }
       } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to queue sync');
+        const message = requestErrorMessage(error, 'Failed to queue sync');
+        if (message) {
+          toast.error(message);
+        }
         throw error;
       } finally {
         setSyncingKind(null);

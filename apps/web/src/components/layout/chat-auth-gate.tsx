@@ -1,11 +1,21 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import { buttonClassName } from '@/components/ui/button-variants';
 import { useAuthContext } from '@/lib/auth-context';
 
 export function ChatAuthGate({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isReady, user } = useAuthContext();
+  const { isAuthenticated, isReady, sessionExpired, user } = useAuthContext();
+  const router = useRouter();
+  const redirectToSignIn = isReady && sessionExpired && !isAuthenticated;
+
+  useEffect(() => {
+    if (redirectToSignIn) {
+      router.replace('/');
+    }
+  }, [redirectToSignIn, router]);
 
   if (!isReady) {
     return (
@@ -13,6 +23,10 @@ export function ChatAuthGate({ children }: { children: React.ReactNode }) {
         <p className="text-sm text-foreground-muted">Checking your session...</p>
       </div>
     );
+  }
+
+  if (redirectToSignIn) {
+    return <div className="min-h-dvh bg-surface" />;
   }
 
   if (!isAuthenticated || !user) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ApiError, api } from '../api-client';
+import { ApiError, api, requestErrorMessage } from '../api-client';
 import type { ToolEventListener, ToolEventPayload } from '../tool-events';
 import { reportClientError } from '../client-logging';
 import {
@@ -172,9 +172,10 @@ export function useLiveVoiceSession({
         conversationIdRef.current = result.conversationId;
         return result.voiceTurnId;
       } catch (startError) {
-        setError(
-          startError instanceof Error ? startError.message : 'Failed to start the live voice turn.',
-        );
+        const message = requestErrorMessage(startError, 'Failed to start the live voice turn.');
+        if (message) {
+          setError(message);
+        }
         return null;
       } finally {
         pendingTurnStartPromiseRef.current = null;
@@ -308,11 +309,10 @@ export function useLiveVoiceSession({
         conversationId,
         voiceSessionId: sessionIdRef.current ?? undefined,
       });
-      setError(
-        persistError instanceof Error
-          ? persistError.message
-          : 'Failed to save the live voice turn.',
-      );
+      const message = requestErrorMessage(persistError, 'Failed to save the live voice turn.');
+      if (message) {
+        setError(message);
+      }
     } finally {
       isPersistingTurnRef.current = false;
     }
@@ -402,9 +402,12 @@ export function useLiveVoiceSession({
         voiceSessionId: sessionIdRef.current ?? undefined,
         context: { toolName, callId },
       });
-      forwardToolResultToRealtime(callId, {
-        error: submitError instanceof Error ? submitError.message : 'Voice tool submission failed.',
-      });
+      const message = requestErrorMessage(submitError, 'Voice tool submission failed.');
+      if (message) {
+        forwardToolResultToRealtime(callId, {
+          error: message,
+        });
+      }
     }
   };
 
@@ -630,11 +633,12 @@ export function useLiveVoiceSession({
         conversationId: conversationIdRef.current ?? undefined,
         voiceSessionId,
       });
-      const message =
-        startError instanceof Error ? startError.message : 'Failed to start live voice mode.';
-      setError(message);
-      setVoicePhase('error');
-      setConnectionLabel(message);
+      const message = requestErrorMessage(startError, 'Failed to start live voice mode.');
+      if (message) {
+        setError(message);
+        setVoicePhase('error');
+        setConnectionLabel(message);
+      }
     }
   };
 

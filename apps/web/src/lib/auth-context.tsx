@@ -9,7 +9,15 @@ import {
   useRef,
   useState,
 } from 'react';
-import { api, clearStoredAuthToken, getStoredAuthToken, setStoredAuthToken } from './api-client';
+import {
+  api,
+  clearStoredAuthToken,
+  getStoredAuthToken,
+  isSessionExpiredError,
+  resetSessionExpired,
+  setSessionExpiredHandler,
+  setStoredAuthToken,
+} from './api-client';
 
 interface AuthUser {
   id: string;
@@ -22,6 +30,7 @@ interface AuthContextValue {
   token: string | null;
   isReady: boolean;
   isAuthenticated: boolean;
+  sessionExpired: boolean;
   login: (email: string, password: string) => Promise<void>;
   // Account creation is intentionally disabled.
   // register: (email: string, password: string, displayName: string) => Promise<void>;
@@ -36,21 +45,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isReady, setIsReady] = useState(false);
+  const [sessionExpired, setSessionExpired] = useState(false);
   const authMutationRef = useRef(0);
 
   const applyAuth = useCallback((nextToken: string, nextUser: AuthUser) => {
     authMutationRef.current += 1;
+    resetSessionExpired();
     setStoredAuthToken(nextToken);
     setToken(nextToken);
     setUser(nextUser);
+    setSessionExpired(false);
     setIsReady(true);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback((reason: 'manual' | 'expired' = 'manual') => {
     authMutationRef.current += 1;
+    if (reason === 'manual') {
+      resetSessionExpired();
+    }
     clearStoredAuthToken();
     setToken(null);
     setUser(null);
+    setSessionExpired(reason === 'expired');
     setIsReady(true);
   }, []);
 
@@ -71,9 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         return;
       }
       setUser(response.user);
-    } catch {
+    } catch (error) {
       if (authMutationRef.current === refreshMutation && getStoredAuthToken() === existingToken) {
-        logout();
+        logout(isSessionExpiredError(error) ? 'expired' : 'manual');
       }
     } finally {
       if (authMutationRef.current === refreshMutation && getStoredAuthToken() === existingToken) {
@@ -99,6 +115,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 
   useEffect(() => {
+    setSessionExpiredHandler(() => {
+      logout('expired');
+    });
+    return () => setSessionExpiredHandler(null);
+  }, [logout]);
+
+  useEffect(() => {
     void refresh();
   }, [refresh]);
 
@@ -108,12 +131,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       token,
       isReady,
       isAuthenticated: user !== null && token !== null,
+      sessionExpired,
       login,
       devLogin,
-      logout,
+      logout: () => logout('manual'),
       refresh,
     }),
-    [devLogin, isReady, login, logout, refresh, token, user],
+    [devLogin, isReady, login, logout, refresh, sessionExpired, token, user],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from 'react';
 import { asString } from '@aaa/shared';
-import { buildWebSocketUrl } from '../api-client';
+import { buildWebSocketUrl, notifySessionExpired } from '../api-client';
 import type { AssistantStage, ToolResultContentBlock } from './model/index';
 import type { ToolEventPayload } from '../tool-events';
 
@@ -225,8 +225,13 @@ export function useChatWebSocket(options: UseChatWebSocketOptions) {
 
       next.addEventListener('message', handleMessage);
 
-      next.addEventListener('close', () => {
+      next.addEventListener('close', (event) => {
         if (!active || socket !== next) {
+          return;
+        }
+
+        if (event.code === 1008) {
+          notifySessionExpired();
           return;
         }
 

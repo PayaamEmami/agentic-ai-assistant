@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { api, type AppSummary, type GitHubRepositorySummary } from '@/lib/api-client';
+import { api, requestErrorMessage, type AppSummary, type GitHubRepositorySummary } from '@/lib/api-client';
 import { GitHubRepositorySelector } from '@/components/apps/github-repository-selector';
 import { IndexedSourcesSection } from '@/components/apps/indexed-sources-section';
 import { AppSyncButton } from '@/components/apps/app-sync-button';
@@ -74,7 +74,10 @@ export function AppManager() {
         message: 'Failed to load apps',
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to load apps');
+      const message = requestErrorMessage(error, 'Failed to load apps');
+      if (message) {
+        setActionError(message);
+      }
     } finally {
       if (showLoading) {
         setLoading(false);
@@ -109,7 +112,10 @@ export function AppManager() {
         message: `Failed to start ${kind} app connection`,
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to connect app');
+      const message = requestErrorMessage(error, 'Failed to connect app');
+      if (message) {
+        setActionError(message);
+      }
     }
   };
 
@@ -128,7 +134,10 @@ export function AppManager() {
         message: `Failed to queue ${kind} sync`,
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to queue sync');
+      const message = requestErrorMessage(error, 'Failed to queue sync');
+      if (message) {
+        setActionError(message);
+      }
     }
   };
 
@@ -147,7 +156,10 @@ export function AppManager() {
         message: 'Failed to save GitHub repositories',
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to save repositories');
+      const message = requestErrorMessage(error, 'Failed to save repositories');
+      if (message) {
+        setActionError(message);
+      }
     } finally {
       setSavingRepos(false);
     }
@@ -174,7 +186,10 @@ export function AppManager() {
         message: `Failed to disconnect ${kind} app`,
         error,
       });
-      setActionError(error instanceof Error ? error.message : 'Failed to disconnect app');
+      const message = requestErrorMessage(error, 'Failed to disconnect app');
+      if (message) {
+        setActionError(message);
+      }
     } finally {
       setDisconnectingKind(null);
     }

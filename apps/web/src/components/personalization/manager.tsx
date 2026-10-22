@@ -2,7 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert } from '@/components/ui/alert';
-import { api, type PersonalizationMemory, type PersonalizationMemoryKind } from '@/lib/api-client';
+import {
+  api,
+  requestErrorMessage,
+  type PersonalizationMemory,
+  type PersonalizationMemoryKind,
+} from '@/lib/api-client';
 import { MemoryComposer } from './memory-composer';
 import { MemoryList } from './memory-list';
 import {
@@ -57,9 +62,10 @@ export function PersonalizationManager() {
       setSavedTonePreference(loadedTonePreference);
       setMemories(sortMemories(response.memories));
     } catch (requestError) {
-      setError(
-        requestError instanceof Error ? requestError.message : 'Failed to load personalization.',
-      );
+      const message = requestErrorMessage(requestError, 'Failed to load personalization.');
+      if (message) {
+        setError(message);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -101,7 +107,10 @@ export function PersonalizationManager() {
           setSavedTonePreference(savedTonePreferenceValue);
           setProfileSaveStatus('Saved');
         } catch (requestError) {
-          setError(requestError instanceof Error ? requestError.message : 'Failed to save profile.');
+          const message = requestErrorMessage(requestError, 'Failed to save profile.');
+          if (message) {
+            setError(message);
+          }
         } finally {
           setIsSavingProfile(false);
         }
@@ -138,7 +147,10 @@ export function PersonalizationManager() {
       setNewMemoryContent('');
       setNewMemoryKind(null);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to create memory.');
+      const message = requestErrorMessage(requestError, 'Failed to create memory.');
+      if (message) {
+        setError(message);
+      }
     } finally {
       setIsCreatingMemory(false);
     }
@@ -170,7 +182,10 @@ export function PersonalizationManager() {
       );
       cancelEditingMemory();
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to update memory.');
+      const message = requestErrorMessage(requestError, 'Failed to update memory.');
+      if (message) {
+        setError(message);
+      }
     } finally {
       setPendingMemoryId(null);
     }
@@ -194,7 +209,10 @@ export function PersonalizationManager() {
         cancelEditingMemory();
       }
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : 'Failed to delete memory.');
+      const message = requestErrorMessage(requestError, 'Failed to delete memory.');
+      if (message) {
+        setError(message);
+      }
     } finally {
       setPendingMemoryId(null);
     }
