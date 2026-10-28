@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { assertLocalDataHosts } from './local-data.js';
 
 const envSchema = z.object({
   // Application
@@ -146,6 +147,9 @@ export function loadEnv(): Env {
       .map(([key, errs]) => `  ${key}: ${errs?.join(', ')}`)
       .join('\n');
     throw new Error(`Invalid environment variables:\n${missing}`);
+  }
+  if (result.data.NODE_ENV === 'development') {
+    assertLocalDataHosts(result.data.DATABASE_URL, result.data.REDIS_URL);
   }
   cachedEnv = result.data;
   return cachedEnv;

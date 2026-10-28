@@ -19,10 +19,10 @@ export const authApi = {
   me() {
     return request<{ user: { id: string; email: string; displayName: string } }>('/api/auth/me');
   },
-  devLogin(email: string, displayName: string) {
+  devLogin() {
     return requestPublic<AuthPayload>('/api/auth/dev-login', {
       method: 'POST',
-      body: JSON.stringify({ email, displayName }),
+      body: '{}',
     });
   },
 };

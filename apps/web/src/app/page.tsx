@@ -113,16 +113,22 @@ export default function Home() {
           </form>
 
           {process.env.NODE_ENV !== 'production' ? (
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => void handleDevLogin()}
-              disabled={isSubmitting}
-              fullWidth
-              className="mt-4 rounded-2xl border-dashed py-3"
-            >
-              Use development login
-            </Button>
+            <>
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void handleDevLogin()}
+                disabled={isSubmitting}
+                fullWidth
+                className="mt-4 rounded-2xl border-dashed py-3"
+              >
+                Use development login
+              </Button>
+              <p className="mt-3 text-center text-sm leading-6 text-foreground-muted">
+                Development login uses the local database. Chat calls the OpenAI key in .env.
+                Connecting MCP, Google, or GitHub leaves this machine.
+              </p>
+            </>
           ) : null}
         </section>
       </div>

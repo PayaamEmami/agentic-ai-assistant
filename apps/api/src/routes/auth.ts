@@ -6,10 +6,8 @@ import { verifyPassword } from '../lib/password.js';
 import { AppError } from '../lib/errors.js';
 import { authenticate } from '../middleware/auth.js';
 
-interface DevLoginBody {
-  email?: string;
-  displayName?: string;
-}
+const DEV_LOGIN_EMAIL = 'dev@localhost';
+const DEV_LOGIN_DISPLAY_NAME = 'Dev User';
 
 function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
@@ -48,17 +46,14 @@ export async function authRoutes(app: FastifyInstance) {
     });
   });
 
-  app.post<{ Body: DevLoginBody }>('/auth/dev-login', async (request, reply) => {
+  app.post('/auth/dev-login', async (_request, reply) => {
     if (app.config.nodeEnv === 'production') {
       throw new AppError(404, 'Not found', 'NOT_FOUND');
     }
 
-    const email = normalizeEmail(request.body?.email ?? 'dev@localhost');
-    const displayName = request.body?.displayName?.trim() || 'Dev User';
-
-    let user = await userRepository.findByEmail(email);
+    let user = await userRepository.findByEmail(DEV_LOGIN_EMAIL);
     if (!user) {
-      user = await userRepository.create(email, displayName);
+      user = await userRepository.create(DEV_LOGIN_EMAIL, DEV_LOGIN_DISPLAY_NAME);
     }
 
     const token = signAuthToken(user.id, user.email);

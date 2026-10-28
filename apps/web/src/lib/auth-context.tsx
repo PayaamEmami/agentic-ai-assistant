@@ -34,7 +34,7 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   // Account creation is intentionally disabled.
   // register: (email: string, password: string, displayName: string) => Promise<void>;
-  devLogin: (email?: string, displayName?: string) => Promise<void>;
+  devLogin: () => Promise<void>;
   logout: () => void;
   refresh: () => Promise<void>;
 }
@@ -106,13 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     [applyAuth],
   );
 
-  const devLogin = useCallback(
-    async (email = 'dev@localhost', displayName = 'Dev User') => {
-      const response = await api.auth.devLogin(email, displayName);
-      applyAuth(response.token, response.user);
-    },
-    [applyAuth],
-  );
+  const devLogin = useCallback(async () => {
+    const response = await api.auth.devLogin();
+    applyAuth(response.token, response.user);
+  }, [applyAuth]);
 
   useEffect(() => {
     setSessionExpiredHandler(() => {

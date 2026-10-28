@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "tsc -b && concurrently --kill-others-on-fail --names pkg,apps --prefix-colors blue,green \"tsc -b --watch --preserveWatchOutput\" \"pnpm --parallel --filter @aaa/api --filter @aaa/web --filter @aaa/worker run dev\"",
     "dev:local": "bash ./scripts/dev-local.sh",
+    "dev:local:reset": "DEV_LOCAL_RESET=1 bash ./scripts/dev-local.sh",
     "aws:provision": "bash ./infra/aws-ec2/provision.sh",
     "aws:deploy": "bash ./scripts/deploy-aws.sh",
     "build": "tsc -b && pnpm --filter @aaa/web run build",

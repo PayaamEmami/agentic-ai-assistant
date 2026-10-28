@@ -1,3 +1,4 @@
+export { assertLocalDataHosts } from './local-data.js';
 export {
   loadCredentialsEnv,
   loadDatabaseEnv,

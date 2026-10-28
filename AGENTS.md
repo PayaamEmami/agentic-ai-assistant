@@ -136,9 +136,15 @@ pnpm dev:local
 What it does:
 
 1. Requires a real `.env` in the repo root
-2. Starts PostgreSQL, Redis, and the local observability stack from `docker/docker-compose.yml`
-3. Runs DB migrations with `pnpm --filter @aaa/db migrate:up`
-4. Starts all app dev servers with `pnpm dev`
+2. Refuses to continue unless `DATABASE_URL` and `REDIS_URL` hosts are `localhost`, `127.0.0.1`, `::1`, or the Compose hostnames `postgres` and `redis`. API startup repeats that check when `NODE_ENV` is `development`, before any query
+3. Starts PostgreSQL, Redis, and the local observability stack from `docker/docker-compose.yml`
+4. Runs DB migrations with `pnpm --filter @aaa/db migrate:up`
+5. Seeds `dev@localhost` (no password) and a Welcome conversation when they are not already present. MCP, OAuth, and attachments stay empty
+6. Starts all app dev servers with `pnpm dev`
+
+`pnpm dev:local:reset` drops the Compose volumes, then migrates and seeds again.
+
+The home page shows **Use development login** outside production builds. That route only creates or enters `dev@localhost`. Chat still calls the OpenAI key in `.env`. Connecting MCP, Google, or GitHub leaves the machine.
 
 Windows note:
 

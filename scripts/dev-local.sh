@@ -189,12 +189,20 @@ set -a
 source .env
 set +a
 
+echo "Checking that DATABASE_URL and REDIS_URL are local..."
+pnpm --filter @aaa/api exec tsx "$ROOT_DIR/scripts/assert-local-data.ts"
+
 API_PORT="${API_PORT:-3001}"
 WORKER_OBSERVABILITY_PORT="${WORKER_OBSERVABILITY_PORT:-9464}"
 
 if [[ ! -d node_modules ]]; then
   echo "Installing dependencies..."
   pnpm install
+fi
+
+if [[ "${DEV_LOCAL_RESET:-}" == "1" ]]; then
+  echo "Removing local Postgres and Redis volumes..."
+  docker compose -f docker/docker-compose.yml down -v --remove-orphans
 fi
 
 echo "Starting local infrastructure..."
@@ -215,6 +223,11 @@ fi
 
 echo "Running database migrations..."
 pnpm --filter @aaa/db migrate:up
+
+echo "Seeding local development data..."
+docker compose -f docker/docker-compose.yml exec -T postgres \
+  psql -U "${POSTGRES_USER:-aaa}" -d "${POSTGRES_DB:-aaa}" -v ON_ERROR_STOP=1 \
+  < "$ROOT_DIR/packages/db/seed/local.sql"
 
 check_port_available 3000 "web"
 check_port_available "$API_PORT" "api"
