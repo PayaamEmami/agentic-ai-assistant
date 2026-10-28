@@ -29,6 +29,17 @@ export interface ToolExecutionRepository {
     offset?: number,
   ): Promise<ToolExecution[]>;
   listByMessage(messageId: string): Promise<ToolExecution[]>;
+  /**
+   * Fails tool rows that would still run after a resend cut: anything bound to a
+   * message after the target, plus unbound rows from a turn that stopped before
+   * linking a message. Returns the rows that changed.
+   */
+  failNonTerminalAfter(
+    conversationId: string,
+    createdAt: Date,
+    messageId: string,
+    output: unknown,
+  ): Promise<ToolExecution[]>;
   create(
     conversationId: string,
     messageId: string | null,
@@ -89,6 +100,34 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        WHERE message_id = $1
        ORDER BY started_at ASC, id ASC`,
       [messageId],
+    );
+    return result.rows;
+  },
+
+  async failNonTerminalAfter(
+    conversationId: string,
+    createdAt: Date,
+    messageId: string,
+    output: unknown,
+  ): Promise<ToolExecution[]> {
+    const pool = getPool();
+    const result = await pool.query<ToolExecutionRow>(
+      `UPDATE tool_executions
+       SET status = 'failed',
+           output = $4::jsonb,
+           completed_at = NOW()
+       WHERE conversation_id = $1
+         AND status IN ('pending', 'running', 'requires_approval')
+         AND (
+           message_id IS NULL
+           OR message_id IN (
+             SELECT id FROM messages
+             WHERE conversation_id = $1
+               AND (created_at, id) > ($2::timestamptz, $3::uuid)
+           )
+         )
+       RETURNING ${SELECT_COLUMNS}`,
+      [conversationId, createdAt, messageId, JSON.stringify(output)],
     );
     return result.rows;
   },

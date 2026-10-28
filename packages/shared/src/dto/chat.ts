@@ -20,6 +20,19 @@ export const SendMessageResponse = z.object({
 });
 export type SendMessageResponse = z.infer<typeof SendMessageResponse>;
 
+export const ResendMessageParams = z.object({
+  conversationId: z.string().uuid(),
+  messageId: z.string().uuid(),
+});
+export type ResendMessageParams = z.infer<typeof ResendMessageParams>;
+
+export const ResendMessageRequest = z.object({
+  content: z.string().min(1).max(32000),
+  clientRunId: z.string().uuid(),
+  chatModel: ChatModelIdSchema.optional(),
+});
+export type ResendMessageRequest = z.infer<typeof ResendMessageRequest>;
+
 export const InterruptChatRunResponse = z.object({
   ok: z.boolean(),
   status: z.enum(['interrupting', 'not_found']),

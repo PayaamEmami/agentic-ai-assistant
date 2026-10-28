@@ -40,6 +40,7 @@ export interface ChatContextValue {
   chatModel: ChatModelId;
   setChatModel: (model: ChatModelId) => Promise<void>;
   sendMessage: (content: string, attachments?: UploadedAttachment[], chatModel?: ChatModelId) => Promise<void>;
+  resendFromMessage: (messageId: string, content: string, chatModel?: ChatModelId) => Promise<void>;
   interruptMessage: () => Promise<void>;
   loadConversations: () => Promise<void>;
   selectConversation: (conversationId?: string) => Promise<void>;

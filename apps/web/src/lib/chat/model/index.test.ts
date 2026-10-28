@@ -10,6 +10,7 @@ import {
   keepLocalChatModels,
   mergeRemoteConversationMessages,
   normalizeMessage,
+  replaceUserMessageAndTruncate,
   patchMessagesToolResult,
   setAssistantStage,
   upsertVoiceMessageInList,
@@ -391,6 +392,45 @@ describe('chat model', () => {
     const merged = mergeRemoteConversationMessages(local, remote);
 
     expect(merged.map((message) => message.id)).toEqual(['user-1', 'assistant-1', 'local-user-2']);
+  });
+
+  it('rewrites a user message and drops the turns after it', () => {
+    const attachment = {
+      type: 'attachment_ref' as const,
+      attachmentId: 'file-1',
+      fileName: 'notes.pdf',
+    };
+    const messages: ChatMessage[] = [
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: 'first' }, attachment],
+      },
+      {
+        id: 'assistant-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:01.000Z',
+        content: [{ type: 'text', text: 'reply' }],
+      },
+      {
+        id: 'user-2',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:02.000Z',
+        content: [{ type: 'text', text: 'second' }],
+      },
+    ];
+
+    expect(replaceUserMessageAndTruncate(messages, 'user-1', 'revised')).toEqual([
+      {
+        id: 'user-1',
+        role: 'user',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [{ type: 'text', text: 'revised' }, attachment],
+      },
+    ]);
+    expect(replaceUserMessageAndTruncate(messages, 'missing', 'revised')).toBeNull();
+    expect(replaceUserMessageAndTruncate(messages, 'assistant-1', 'revised')).toBeNull();
   });
 });
 

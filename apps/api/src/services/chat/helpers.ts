@@ -6,6 +6,32 @@ export function throwIfAborted(signal: AbortSignal | undefined): void {
 
 const DEFAULT_MAX_CONVERSATION_TITLE_CHARS = 80;
 
+function isTextBlock(block: unknown): block is { type: 'text'; text: string } {
+  return (
+    Boolean(block) &&
+    typeof block === 'object' &&
+    !Array.isArray(block) &&
+    (block as { type?: unknown }).type === 'text' &&
+    typeof (block as { text?: unknown }).text === 'string'
+  );
+}
+
+/** First text block on a stored message. Chat writes a single text block. */
+export function readMessageText(content: unknown[]): string {
+  for (const block of content) {
+    if (isTextBlock(block)) {
+      return block.text;
+    }
+  }
+  return '';
+}
+
+/** Replaces text and keeps attachment and other non-text blocks in order. */
+export function rewriteUserMessageContent(content: unknown[], text: string): unknown[] {
+  const preserved = content.filter((block) => !isTextBlock(block));
+  return [{ type: 'text', text }, ...preserved];
+}
+
 export function buildConversationTitle(
   content: string,
   maxChars = DEFAULT_MAX_CONVERSATION_TITLE_CHARS,

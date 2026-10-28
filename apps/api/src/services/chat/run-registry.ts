@@ -35,4 +35,22 @@ export class ChatRunRegistry {
   finish(runId: string): void {
     this.activeRuns.delete(runId);
   }
+
+  listForConversation(userId: string, conversationId: string): ActiveChatRun[] {
+    const matches: ActiveChatRun[] = [];
+    for (const run of this.activeRuns.values()) {
+      if (run.userId === userId && run.conversationId === conversationId) {
+        matches.push(run);
+      }
+    }
+    return matches;
+  }
+
+  abortForConversation(userId: string, conversationId: string): void {
+    for (const run of this.listForConversation(userId, conversationId)) {
+      if (!run.controller.signal.aborted) {
+        run.controller.abort(new Error('Chat run interrupted'));
+      }
+    }
+  }
 }

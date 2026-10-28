@@ -55,6 +55,8 @@ export {
   AuthResponse,
   SendMessageRequest,
   SendMessageResponse,
+  ResendMessageParams,
+  ResendMessageRequest,
   InterruptChatRunResponse,
   UploadAttachmentResponse,
   ConversationListItem,

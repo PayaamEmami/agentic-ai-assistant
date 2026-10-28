@@ -1,5 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { SendMessageRequest, UpdateConversationRequest } from '@aaa/shared';
+import {
+  ResendMessageParams,
+  ResendMessageRequest,
+  SendMessageRequest,
+  UpdateConversationRequest,
+} from '@aaa/shared';
 import { authenticate } from '../middleware/auth.js';
 import { ChatService } from '../services/chat/index.js';
 
@@ -35,6 +40,36 @@ export async function chatRoutes(app: FastifyInstance, options: ChatRouteOptions
       );
       return reply.status(200).send(result);
     });
+
+    userApp.post<{ Params: { conversationId: string; messageId: string } }>(
+      '/conversations/:conversationId/messages/:messageId/resend',
+      async (request, reply) => {
+        const params = ResendMessageParams.safeParse(request.params);
+        if (!params.success) {
+          return reply.status(400).send({
+            error: { code: 'VALIDATION_ERROR', message: params.error.message },
+          });
+        }
+
+        const parsed = ResendMessageRequest.safeParse(request.body);
+        if (!parsed.success) {
+          return reply.status(400).send({
+            error: { code: 'VALIDATION_ERROR', message: parsed.error.message },
+          });
+        }
+
+        const { content, clientRunId, chatModel } = parsed.data;
+        const result = await chatService.resendFromMessage(
+          request.user!.id,
+          params.data.conversationId,
+          params.data.messageId,
+          content,
+          clientRunId,
+          chatModel,
+        );
+        return reply.status(200).send(result);
+      },
+    );
 
     userApp.post<{ Params: { runId: string } }>(
       '/chat/runs/:runId/interrupt',

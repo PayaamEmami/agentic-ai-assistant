@@ -84,7 +84,7 @@ When deciding where a change belongs:
 - Retrieval, indexing, embeddings, search: check `packages/retrieval`
 - External source integrations: check `packages/knowledge-sources`
 - Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Hydration (URL, API key, tool prefixes, CRS timeout, legacy `tools` vs `task-board` filtering) lives in `packages/mcp/src/connections.ts` and is shared with the worker. The API keeps the Redis tool cache. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
-- Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`; conversation CRUD is `conversations.ts`.
+- Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`; conversation CRUD is `conversations.ts`. Resend (`POST /api/conversations/:id/messages/:messageId/resend`) rewrites that user message, deletes later rows, and starts a new turn. It does not keep a branch.
 - Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
 - Logging, tracing, sanitization, metrics: check `packages/observability`
 - Worker→browser live events (tool execution, automation runs): Postgres `NOTIFY` on `TOOL_EVENT_CHANNEL` / `AUTOMATION_EVENT_CHANNEL` (`packages/shared`), relayed by the API over conversation WebSockets. New LISTEN channels must use `apps/api/src/lib/pg-notify-relay.ts` so disconnect reconnect/backoff stays consistent.

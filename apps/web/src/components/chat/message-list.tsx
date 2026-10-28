@@ -23,11 +23,25 @@ export function MessageList() {
   const pinnedRef = useRef(true);
   const programmaticScrollRef = useRef(false);
   const [emptyChatPrompt, setEmptyChatPrompt] = useState(EMPTY_CHAT_PROMPTS[0]);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [revealedMessageId, setRevealedMessageId] = useState<string | null>(null);
   const lastMessage = messages.at(-1);
 
   useEffect(() => {
     setEmptyChatPrompt(EMPTY_CHAT_PROMPTS[Math.floor(Math.random() * EMPTY_CHAT_PROMPTS.length)]);
   }, []);
+
+  useEffect(() => {
+    setEditingMessageId(null);
+    setRevealedMessageId(null);
+  }, [currentConversationId]);
+
+  useEffect(() => {
+    if (loading.isSendingMessage) {
+      setEditingMessageId(null);
+      setRevealedMessageId(null);
+    }
+  }, [loading.isSendingMessage]);
 
   useLayoutEffect(() => {
     pinnedRef.current = true;
@@ -75,6 +89,15 @@ export function MessageList() {
       ref={containerRef}
       onScroll={syncPinFromScroll}
       className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4 [overflow-anchor:none]"
+      onPointerUp={(event) => {
+        if (event.pointerType === 'mouse') {
+          return;
+        }
+        if ((window.getSelection()?.toString() ?? '').trim().length > 0) {
+          return;
+        }
+        setRevealedMessageId(null);
+      }}
     >
       {loading.isLoadingMessages && messages.length === 0 ? (
         <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -85,12 +108,19 @@ export function MessageList() {
           <p className="text-foreground-muted">{emptyChatPrompt}</p>
         </div>
       ) : (
-        messages.map((message) => (
+        messages.map((message, index) => (
           <Message
             key={message.id}
+            id={message.id}
             role={message.role}
             content={message.content}
             presentation={message.presentation}
+            hasLaterMessages={index < messages.length - 1}
+            isEditing={editingMessageId === message.id}
+            actionsRevealed={revealedMessageId === message.id}
+            onRevealActions={setRevealedMessageId}
+            onBeginEdit={setEditingMessageId}
+            onCancelEdit={() => setEditingMessageId(null)}
           />
         ))
       )}

@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import {
   AgentOrchestrator,
   type ChatProvider,
@@ -9,7 +10,15 @@ import {
   VerifierAgent,
 } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
-import { attachmentRepository, conversationRepository, getPool, messageRepository, toolExecutionRepository } from '@aaa/db';
+import {
+  approvalRepository,
+  attachmentRepository,
+  conversationRepository,
+  getPool,
+  messageRepository,
+  toolExecutionRepository,
+  type Conversation,
+} from '@aaa/db';
 import { DEFAULT_NEW_CHAT_MODEL, type ChatModelId, type InterruptChatRunResponse } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
@@ -29,7 +38,7 @@ import {
 import { ChatRunRegistry } from './run-registry.js';
 import { ChatEventPublisher } from './event-publisher.js';
 import { getLatestUserRequestText } from './history.js';
-import { buildConversationTitle } from './helpers.js';
+import { buildConversationTitle, readMessageText, rewriteUserMessageContent } from './helpers.js';
 import {
   CHAT_HISTORY_LIMIT,
   createAssistantPlaceholder,
@@ -42,6 +51,10 @@ interface SendMessageOptions {
   clientRunId?: string;
   chatModel?: ChatModelId;
 }
+
+const DEFAULT_RUN_SETTLE_TIMEOUT_MS = 5_000;
+const RUN_SETTLE_POLL_MS = 25;
+const RESEND_CANCELLED_OUTPUT = { reason: 'message_resent' };
 
 interface PreparedTurn {
   conversation: {
@@ -64,6 +77,7 @@ export class ChatService {
   private readonly runRegistry: ChatRunRegistry;
   private readonly eventPublisher: ChatEventPublisher;
   private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
+  private readonly runSettleTimeoutMs: number;
 
   constructor(options: {
     config: AppConfig;
@@ -74,6 +88,7 @@ export class ChatService {
     runRegistry?: ChatRunRegistry;
     eventPublisher?: ChatEventPublisher;
     enqueueToolExecutionJob?: EnqueueToolExecutionJob;
+    runSettleTimeoutMs?: number;
   }) {
     const { config } = options;
     this.retrievalBridge =
@@ -103,6 +118,7 @@ export class ChatService {
     this.eventPublisher = options.eventPublisher ?? new ChatEventPublisher();
     this.enqueueToolExecutionJob =
       options.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
+    this.runSettleTimeoutMs = options.runSettleTimeoutMs ?? DEFAULT_RUN_SETTLE_TIMEOUT_MS;
   }
 
   private turnRunnerDeps() {
@@ -152,44 +168,63 @@ export class ChatService {
       throw error;
     }
 
-    // Generate the assistant turn asynchronously and stream the result over the
-    // WebSocket. The HTTP request returns immediately so the client can render
-    // streamed tokens instead of blocking on the full multi-agent pipeline.
-    void generateAssistantTurn(this.turnRunnerDeps(), {
-      conversation: prepared.conversation,
-      userId,
-      requestContent: content,
-      signal: prepared.signal,
-      assistantMessageId: prepared.assistantMessageId,
-      initialConversationTitle: prepared.initialConversationTitle,
-    })
-      .catch((error) => {
-        logger.error(
-          {
-            event: 'chat.turn_failed',
-            outcome: 'failure',
-            conversationId: prepared.conversation.id,
-            error,
-          },
-          'Assistant turn failed after response was sent',
-        );
-        this.eventPublisher.error({
-          type: 'error',
-          conversationId: prepared.conversation.id,
-          code: 'ASSISTANT_TURN_FAILED',
-          message: 'The assistant ran into an error generating a response.',
-        });
-      })
-      .finally(() => {
-        if (clientRunId) {
-          this.runRegistry.finish(clientRunId);
-        }
-      });
+    return this.launchAssistantTurn(prepared, userId, content, clientRunId);
+  }
 
-    return {
-      conversationId: prepared.conversation.id,
-      messageId: prepared.assistantMessageId,
-    };
+  /**
+   * Rewrites a user message, deletes every later row, and starts a new turn
+   * from that point. Later messages are not kept as a branch.
+   */
+  async resendFromMessage(
+    userId: string,
+    conversationId: string,
+    messageId: string,
+    content: string,
+    clientRunId: string,
+    chatModel?: ChatModelId,
+  ) {
+    const text = content.trim();
+    if (!text) {
+      throw new AppError(400, 'Message content is required', 'VALIDATION_ERROR');
+    }
+
+    const conversation = await this.loadResendableConversation(userId, conversationId);
+    const target = await messageRepository.findById(messageId);
+    if (!target || target.conversationId !== conversation.id) {
+      throw new AppError(404, 'Message not found', 'MESSAGE_NOT_FOUND');
+    }
+    if (target.role !== 'user') {
+      throw new AppError(409, 'Only user messages can be edited', 'MESSAGE_NOT_EDITABLE');
+    }
+
+    this.runRegistry.abortForConversation(userId, conversation.id);
+    const idle = await this.waitForConversationIdle(userId, conversation.id);
+    if (!idle) {
+      throw new AppError(
+        409,
+        'This conversation is still stopping. Try again in a moment.',
+        'CONVERSATION_BUSY',
+      );
+    }
+
+    if (this.runRegistry.get(clientRunId)) {
+      throw new AppError(
+        409,
+        'A chat run with this id is already in progress',
+        'RUN_ALREADY_ACTIVE',
+      );
+    }
+    this.runRegistry.start(clientRunId, userId, conversation.id);
+
+    let prepared: PreparedTurn;
+    try {
+      prepared = await this.rewriteAndResume(conversation, messageId, text, clientRunId, chatModel);
+    } catch (error) {
+      this.runRegistry.finish(clientRunId);
+      throw error;
+    }
+
+    return this.launchAssistantTurn(prepared, userId, text, clientRunId);
   }
 
   /**
@@ -391,6 +426,147 @@ export class ChatService {
       signal,
       assistantMessageId,
       initialConversationTitle,
+    };
+  }
+
+  private launchAssistantTurn(
+    prepared: PreparedTurn,
+    userId: string,
+    requestContent: string,
+    clientRunId?: string,
+  ) {
+    // Generate the assistant turn asynchronously and stream the result over the
+    // WebSocket. The HTTP request returns immediately so the client can render
+    // streamed tokens instead of blocking on the full multi-agent pipeline.
+    void generateAssistantTurn(this.turnRunnerDeps(), {
+      conversation: prepared.conversation,
+      userId,
+      requestContent,
+      signal: prepared.signal,
+      assistantMessageId: prepared.assistantMessageId,
+      initialConversationTitle: prepared.initialConversationTitle,
+    })
+      .catch((error) => {
+        logger.error(
+          {
+            event: 'chat.turn_failed',
+            outcome: 'failure',
+            conversationId: prepared.conversation.id,
+            error,
+          },
+          'Assistant turn failed after response was sent',
+        );
+        this.eventPublisher.error({
+          type: 'error',
+          conversationId: prepared.conversation.id,
+          code: 'ASSISTANT_TURN_FAILED',
+          message: 'The assistant ran into an error generating a response.',
+        });
+      })
+      .finally(() => {
+        if (clientRunId) {
+          this.runRegistry.finish(clientRunId);
+        }
+      });
+
+    return {
+      conversationId: prepared.conversation.id,
+      messageId: prepared.assistantMessageId,
+    };
+  }
+
+  private async loadResendableConversation(userId: string, conversationId: string) {
+    const conversation = await conversationRepository.findById(conversationId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+    }
+    if (conversation.isAutomation) {
+      throw new AppError(
+        409,
+        'Automation conversations cannot be edited',
+        'AUTOMATION_CONVERSATION',
+      );
+    }
+    return conversation;
+  }
+
+  private async waitForConversationIdle(userId: string, conversationId: string): Promise<boolean> {
+    const started = Date.now();
+    while (this.runRegistry.listForConversation(userId, conversationId).length > 0) {
+      if (Date.now() - started >= this.runSettleTimeoutMs) {
+        return false;
+      }
+      await delay(RUN_SETTLE_POLL_MS);
+    }
+    return true;
+  }
+
+  private async rewriteAndResume(
+    conversation: Conversation,
+    messageId: string,
+    text: string,
+    clientRunId: string,
+    chatModel?: ChatModelId,
+  ): Promise<PreparedTurn> {
+    const history = await messageRepository.listByConversation(conversation.id);
+    const target = history.find((message) => message.id === messageId);
+    if (!target || target.role !== 'user') {
+      throw new AppError(404, 'Message not found', 'MESSAGE_NOT_FOUND');
+    }
+
+    const failedTools = await toolExecutionRepository.failNonTerminalAfter(
+      conversation.id,
+      target.createdAt,
+      target.id,
+      RESEND_CANCELLED_OUTPUT,
+    );
+    await Promise.all(
+      failedTools.map(async (execution) => {
+        if (execution.approvalId) {
+          await approvalRepository.decide(execution.approvalId, 'rejected');
+        }
+      }),
+    );
+    await messageRepository.deleteAfter(conversation.id, target.createdAt, target.id);
+    await messageRepository.setContent(
+      target.id,
+      rewriteUserMessageContent(target.content, text),
+    );
+
+    const patch: { title?: string; chatModel?: ChatModelId } = {};
+    const isFirstMessage = history[0]?.id === target.id;
+    const nextTitle = buildConversationTitle(text);
+    const previousTitle = buildConversationTitle(readMessageText(target.content));
+    if (
+      isFirstMessage &&
+      nextTitle &&
+      previousTitle &&
+      conversation.title === previousTitle &&
+      conversation.title !== nextTitle
+    ) {
+      patch.title = nextTitle;
+    }
+    if (chatModel !== undefined && chatModel !== conversation.chatModel) {
+      patch.chatModel = chatModel;
+    }
+    let currentConversation = conversation;
+    if (patch.title !== undefined || patch.chatModel !== undefined) {
+      const updated = await conversationRepository.update(conversation.id, patch);
+      if (!updated) {
+        throw new AppError(404, 'Conversation not found', 'CONVERSATION_NOT_FOUND');
+      }
+      currentConversation = updated;
+    }
+
+    const assistantMessageId = await createAssistantPlaceholder(currentConversation.id);
+    const activeRun = this.runRegistry.get(clientRunId);
+
+    return {
+      conversation: currentConversation,
+      signal: activeRun?.controller.signal,
+      assistantMessageId,
+      initialConversationTitle:
+        currentConversation.title === null ? buildConversationTitle(text) : undefined,
     };
   }
 

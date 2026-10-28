@@ -31,4 +31,18 @@ describe('ChatRunRegistry', () => {
     const second = registry.start('run-1', 'user-1', 'conversation-1');
     expect(second.controller).not.toBe(first.controller);
   });
+
+  it('aborts only the matching user and conversation', () => {
+    const registry = new ChatRunRegistry();
+    const matching = registry.start('run-1', 'user-1', 'conversation-1');
+    const otherConversation = registry.start('run-2', 'user-1', 'conversation-2');
+    const otherUser = registry.start('run-3', 'user-2', 'conversation-1');
+
+    registry.abortForConversation('user-1', 'conversation-1');
+
+    expect(matching.controller.signal.aborted).toBe(true);
+    expect(otherConversation.controller.signal.aborted).toBe(false);
+    expect(otherUser.controller.signal.aborted).toBe(false);
+    expect(registry.listForConversation('user-1', 'conversation-1')).toEqual([matching]);
+  });
 });

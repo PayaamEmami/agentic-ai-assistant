@@ -76,6 +76,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     setCurrentConversationId: conversationsState.setCurrentConversationId,
     setMessages: conversationsState.setMessages,
     loadConversations: conversationsState.loadConversations,
+    refreshConversation: conversationsState.refreshConversation,
     pullSettledAssistantTurn: conversationsState.pullSettledAssistantTurn,
     loadPendingApprovals: approvals.loadPendingApprovals,
   });
@@ -221,6 +222,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
       chatModel: conversationsState.chatModel,
       setChatModel: conversationsState.setChatModel,
       sendMessage: actions.sendMessage,
+      resendFromMessage: actions.resendFromMessage,
       interruptMessage: actions.interruptMessage,
       loadConversations: conversationsState.loadConversations,
       selectConversation: conversationsState.selectConversation,
@@ -238,6 +240,7 @@ export function ChatProvider({ children }: { children: React.ReactNode }) {
     }),
     [
       actions.interruptMessage,
+      actions.resendFromMessage,
       actions.sendMessage,
       approvals.approvalStatusesByToolExecution,
       approvals.approveAction,

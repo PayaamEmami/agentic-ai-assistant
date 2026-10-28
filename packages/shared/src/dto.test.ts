@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   ApprovalDecisionRequest,
   AuthCredentialsRequest,
+  ResendMessageRequest,
   SendMessageRequest,
   UpdateConversationRequest,
   UploadAttachmentResponse,
@@ -49,6 +50,20 @@ describe('DTO schemas', () => {
     });
 
     expect(() => SendMessageRequest.parse({ content: '' })).toThrow();
+    expect(() =>
+      ResendMessageRequest.parse({ content: 'Try again', clientRunId: 'not-a-uuid' }),
+    ).toThrow();
+    expect(
+      ResendMessageRequest.parse({
+        content: 'Try again',
+        clientRunId: userId,
+        chatModel: 'gpt-6-luna',
+      }),
+    ).toEqual({
+      content: 'Try again',
+      clientRunId: userId,
+      chatModel: 'gpt-6-luna',
+    });
     expect(() => SendMessageRequest.parse({ content: 'ok', attachmentIds: ['bad-id'] })).toThrow();
     expect(() => SendMessageRequest.parse({ content: 'ok', chatModel: 'gpt-6-astra' })).toThrow();
   });

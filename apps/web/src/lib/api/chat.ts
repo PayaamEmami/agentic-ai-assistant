@@ -16,6 +16,21 @@ export const chatApi = {
       body: JSON.stringify({ content, conversationId, attachmentIds, clientRunId, chatModel }),
     });
   },
+  resendFromMessage(
+    conversationId: string,
+    messageId: string,
+    content: string,
+    clientRunId: string,
+    chatModel?: ChatModelId,
+  ) {
+    return request<{ conversationId: string; messageId: string }>(
+      `/api/conversations/${conversationId}/messages/${messageId}/resend`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ content, clientRunId, chatModel }),
+      },
+    );
+  },
   interruptRun(runId: string) {
     return request<{
       ok: boolean;

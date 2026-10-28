@@ -302,8 +302,8 @@ export const InputBar = forwardRef<InputBarHandle>(function InputBar(_, ref) {
               }
             }}
             rows={1}
-            placeholder="Type like nobody's screenshotting..."
-            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 pr-4 text-sm text-foreground placeholder:text-foreground-inactive focus:outline-none"
+            aria-label="Message"
+            className="min-h-10 flex-1 resize-none bg-transparent px-2 py-2 pr-4 text-base text-foreground focus:outline-none"
           />
         </div>
         <ModelPicker

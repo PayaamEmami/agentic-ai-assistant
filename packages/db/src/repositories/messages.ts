@@ -17,6 +17,11 @@ export interface MessageRepository {
    * Without `limit`, returns the full conversation history.
    */
   listByConversation(conversationId: string, limit?: number, offset?: number): Promise<Message[]>;
+  /**
+   * Deletes messages strictly after `(createdAt, messageId)` in conversation order.
+   * Returns the number of rows removed.
+   */
+  deleteAfter(conversationId: string, createdAt: Date, messageId: string): Promise<number>;
   create(conversationId: string, role: string, content: unknown[]): Promise<Message>;
   updateToolResultBlock(
     id: string,
@@ -75,6 +80,17 @@ export const messageRepository: MessageRepository = {
       [conversationId, limit, offset],
     );
     return result.rows;
+  },
+
+  async deleteAfter(conversationId: string, createdAt: Date, messageId: string): Promise<number> {
+    const pool = getPool();
+    const result = await pool.query(
+      `DELETE FROM messages
+       WHERE conversation_id = $1
+         AND (created_at, id) > ($2::timestamptz, $3::uuid)`,
+      [conversationId, createdAt, messageId],
+    );
+    return result.rowCount ?? 0;
   },
 
   async create(conversationId: string, role: string, content: unknown[]): Promise<Message> {

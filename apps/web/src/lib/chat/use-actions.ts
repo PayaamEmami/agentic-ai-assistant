@@ -18,6 +18,7 @@ import {
   createErrorAssistantMessage,
   createOptimisticUserMessage,
   createStreamingAssistantMessage,
+  replaceUserMessageAndTruncate,
   upsertConversation,
   type ChatMessage,
   type ConversationSummary,
@@ -32,6 +33,7 @@ interface UseChatActionsOptions {
   setCurrentConversationId: Dispatch<SetStateAction<string | undefined>>;
   setMessages: Dispatch<SetStateAction<ChatMessage[]>>;
   loadConversations: () => Promise<void>;
+  refreshConversation: (conversationId: string) => Promise<void>;
   pullSettledAssistantTurn: (
     conversationId: string,
     assistantMessageId: string,
@@ -43,11 +45,13 @@ const SETTLE_POLL_INTERVAL_MS = 4_000;
 
 export function useChatActions({
   currentConversationId,
+  messagesRef,
   setError,
   setConversations,
   setCurrentConversationId,
   setMessages,
   loadConversations,
+  refreshConversation,
   pullSettledAssistantTurn,
   loadPendingApprovals,
 }: UseChatActionsOptions) {
@@ -185,6 +189,95 @@ export function useChatActions({
     ],
   );
 
+  const resendFromMessage = useCallback(
+    async (messageId: string, content: string, chatModel: ChatModelId = DEFAULT_NEW_CHAT_MODEL) => {
+      const trimmedContent = content.trim();
+      if (!trimmedContent || !currentConversationId || messageId.startsWith('local-')) {
+        return;
+      }
+      if (activeRunIdRef.current) {
+        return;
+      }
+
+      const snapshot = messagesRef.current;
+      const nextMessages = replaceUserMessageAndTruncate(snapshot, messageId, trimmedContent);
+      if (!nextMessages) {
+        return;
+      }
+
+      setError(null);
+      setIsSendingMessage(true);
+      setIsInterruptingMessage(false);
+
+      const clientRunId = createClientId();
+      activeRunIdRef.current = clientRunId;
+      activeRunConversationIdRef.current = currentConversationId;
+      setMessages(nextMessages);
+
+      try {
+        const response = await api.chat.resendFromMessage(
+          currentConversationId,
+          messageId,
+          trimmedContent,
+          clientRunId,
+          chatModel,
+        );
+
+        const timestamp = new Date().toISOString();
+        activeRunConversationIdRef.current = response.conversationId;
+        activeAssistantMessageIdRef.current = response.messageId;
+        setCurrentConversationId(response.conversationId);
+        setMessages((previous) => {
+          const truncated =
+            replaceUserMessageAndTruncate(previous, messageId, trimmedContent) ?? previous;
+          if (truncated.some((message) => message.id === response.messageId)) {
+            return truncated;
+          }
+          return [...truncated, createStreamingAssistantMessage(response.messageId)];
+        });
+        setConversations((previous) =>
+          previous.map((conversation) =>
+            conversation.id === response.conversationId
+              ? { ...conversation, updatedAt: timestamp }
+              : conversation,
+          ),
+        );
+
+        await Promise.all([loadConversations(), loadPendingApprovals()]);
+      } catch (requestError) {
+        try {
+          await refreshConversation(currentConversationId);
+        } catch {
+          setMessages(snapshot);
+        }
+        const message = requestErrorMessage(requestError, 'Failed to resend message');
+        if (message) {
+          setError(message);
+        }
+        void reportClientError({
+          event: 'client.chat.resend_failed',
+          component: 'chat-context',
+          message: 'Failed to resend chat message',
+          error: requestError,
+          conversationId: currentConversationId,
+        });
+        settleActiveRun();
+      }
+    },
+    [
+      currentConversationId,
+      loadConversations,
+      loadPendingApprovals,
+      messagesRef,
+      refreshConversation,
+      setConversations,
+      setCurrentConversationId,
+      setError,
+      setMessages,
+      settleActiveRun,
+    ],
+  );
+
   const interruptMessage = useCallback(async () => {
     const activeRunId = activeRunIdRef.current;
     if (!activeRunId) {
@@ -217,6 +310,7 @@ export function useChatActions({
     isSendingMessage,
     isInterruptingMessage,
     sendMessage,
+    resendFromMessage,
     interruptMessage,
     settleActiveRun,
     recoverSettledTurn,

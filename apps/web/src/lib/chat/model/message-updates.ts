@@ -377,3 +377,35 @@ export function upsertVoiceMessageInList(
       : item,
   );
 }
+
+export function userMessagePlainText(content: MessageContentBlock[]): string {
+  return content
+    .filter(
+      (block): block is Extract<MessageContentBlock, { type: 'text' }> => block.type === 'text',
+    )
+    .map((block) => block.text)
+    .join('\n');
+}
+
+/**
+ * Rewrites one user message and drops every row after it.
+ * Returns null when that message is not in the list.
+ */
+export function replaceUserMessageAndTruncate(
+  messages: ChatMessage[],
+  messageId: string,
+  text: string,
+): ChatMessage[] | null {
+  const index = messages.findIndex((message) => message.id === messageId);
+  const target = index >= 0 ? messages[index] : undefined;
+  if (!target || target.role !== 'user') {
+    return null;
+  }
+
+  const preserved = target.content.filter((block) => block.type !== 'text');
+  const next: ChatMessage = {
+    ...target,
+    content: [{ type: 'text', text }, ...preserved],
+  };
+  return [...messages.slice(0, index), next];
+}
