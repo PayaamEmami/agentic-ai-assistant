@@ -1,7 +1,5 @@
 # AGENTS.md
 
-This file orients AI coding agents and human readers to this repository. It explains what the project is, how it is organized, and the guidance to follow when working here.
-
 ## Overview
 
 Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a Next.js web app, Fastify API, and BullMQ worker. Shared TypeScript packages handle orchestration, retrieval, tools, database access, and observability on top of PostgreSQL and Redis. The web app includes text chat, speech-to-speech voice, and a silent Listener Mode for live transcription and insight explanations.
@@ -22,16 +20,15 @@ Agentic AI Assistant is a pnpm monorepo for a multi-surface AI assistant with a 
 
 ## Infrastructure
 
-Production runs on AWS with a containerized web, API, worker, Postgres, and Redis stack:
+Production runs on AWS. See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, and rollback.
 
-- **EC2 + Docker Compose** run the application containers and stateful services
-- **Postgres with pgvector** stores app data, attachments, memory, and embeddings
-- **Redis + BullMQ** handle background jobs and queues
-- **S3** stores deployment artifacts
-- **Caddy** reverse-proxies web and API traffic; custom-domain Caddy TLS or CloudFront can provide public HTTPS
-- **GitHub Actions** runs CI and deploys changes from `main`
+Ops notes to keep in sync with that README:
 
-See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deployment, and rollback details.
+- Prod Compose has no Prometheus/Grafana/Loki stack; observability is local-dev oriented.
+- CD skips CloudFront invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is unset; set `CADDY_SITE_ADDRESS` for origin TLS when not behind CloudFront.
+- CI and Docker images pin the same pnpm version (`9.15.4`).
+- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days; there is still **no automated Postgres backup** — that remains an operational gap.
+- Deploy waits for Docker `healthy` (API/worker `/health/ready`), not merely `running`.
 
 ## Repository Structure
 
@@ -62,31 +59,13 @@ See [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for provisioning, deplo
 └── tsconfig.base.json        # Shared TypeScript configuration
 ```
 
-Production ops notes (keep in sync with `infra/aws-ec2/README.md`):
-
-- Prod Compose has no Prometheus/Grafana/Loki stack; observability is local-dev oriented.
-- CD skips CloudFront invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is unset; set `CADDY_SITE_ADDRESS` for origin TLS when not behind CloudFront.
-- CI and Docker images pin the same pnpm version (`9.15.4`).
-- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days; there is still **no automated Postgres backup** — that remains an operational gap.
-- Deploy waits for Docker `healthy` (API/worker `/health/ready`), not merely `running`.
-
 ## Change Routing Guide
 
-When deciding where a change belongs:
+The tree above is the default owner for a change. These paths are easier to miss:
 
-- UI, app routes, client interactions: start in `apps/web`
-- HTTP endpoints, auth, uploads, WebSocket flows: start in `apps/api`
-- Async jobs and queue consumers: start in `apps/worker`
-- Shared contracts between apps: check `packages/shared`
-- DB schema or persistence changes: check `packages/db`
-- Model or tool orchestration behavior: check `packages/ai`
-- Native tool provider behavior: check `packages/tool-providers`
-- Retrieval, indexing, embeddings, search: check `packages/retrieval`
-- External source integrations: check `packages/knowledge-sources`
 - Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Hydration (URL, API key, tool prefixes, CRS timeout, legacy `tools` vs `task-board` filtering) lives in `packages/mcp/src/connections.ts` and is shared with the worker. The API keeps the Redis tool cache. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
 - Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`; conversation CRUD is `conversations.ts`. Resend (`POST /api/conversations/:id/messages/:messageId/resend`) rewrites that user message, deletes later rows, and starts a new turn. It does not keep a branch.
 - Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
-- Logging, tracing, sanitization, metrics: check `packages/observability`
 - Worker→browser live events (tool execution, automation runs): Postgres `NOTIFY` on `TOOL_EVENT_CHANNEL` / `AUTOMATION_EVENT_CHANNEL` (`packages/shared`), relayed by the API over conversation WebSockets. New LISTEN channels must use `apps/api/src/lib/pg-notify-relay.ts` so disconnect reconnect/backoff stays consistent.
 
 ## Model Providers
@@ -116,7 +95,7 @@ Intentional coupling (out of scope for provider swaps):
 A schedule is a prompt plus a cadence. When it fires, the API runs that prompt through the same chat turn as a normal message, so connected tools and MCP servers are available. Settings live at `/chat/automation`.
 
 - MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL and tool prefixes in `settings`, API key in `encrypted_credentials`). One row per server. The capability slug comes from the server name (`tools`, `crs`, …). Chat and scheduled prompts load tools from every connected server. A server that exposes several tool prefixes is routed by the prefixes saved at connect time; an exact capability match still wins, so an older `task-board` row keeps receiving `tasks_*` calls.
-- Every MCP request rechecks the saved URL. `assertPublicHttpsUrl` rejects non-public literals (loopback, link-local, CGNAT `100.64.0.0/10`, unique-local, and NAT64, 6to4, or IPv4-mapped addresses whose embedded IPv4 is private). Hostnames are resolved, every address is checked, and `fetchPinned` connects to that address so a name that resolves to loopback or the LAN cannot receive the bearer key. Redirects are refused.
+- Every MCP request resolves the saved URL, rejects it when any address is non-public, and pins the connection to the address it checked. Redirects are refused. Do not replace that with a hostname-only string check.
 - Schedules and run history live in `automation_schedules` (`prompt`, cron, timezone), `automation_runs`, and append-only `automation_run_events`.
 - The worker ticks due schedules in `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`) and enqueues `automation` jobs. The API consumes those jobs and calls `ChatService.runScheduledPrompt`. Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat. Each prompt turn and tool execution refreshes the heartbeat. At most one in-flight run is allowed per schedule.
 - `maxRunsPerDay` counts completed and skipped runs with `trigger = 'schedule'` only, so Run now does not consume the slot. When the cap blocks a fire, the scheduler sets `next_run_at` to the next cron instant and does not insert a run. A schedule that already has a run in progress stays due and retries on a later tick. If `claimDue` succeeds but inserting the run hits the active-run unique constraint, restore the previous `next_run_at` so that slot is not dropped.
@@ -147,11 +126,7 @@ What it does:
 
 The home page shows **Use development login** outside production builds. That route only creates or enters `dev@localhost`. Chat still calls the OpenAI key in `.env`. Connecting MCP, Google, or GitHub leaves the machine.
 
-Windows note:
-
-- `pnpm dev:local` runs `bash ./scripts/dev-local.sh`
-- Use WSL or Git Bash for that workflow
-- If Docker Desktop is closed, the script tries `docker desktop start` and then a PowerShell launch fallback before waiting for the daemon
+`pnpm dev:local` runs `bash ./scripts/dev-local.sh` (WSL or Git Bash on Windows).
 
 Useful local URLs:
 
@@ -186,52 +161,9 @@ Notes:
 - If you change DB schema, migrations, or persistence flows, also run the relevant `packages/db` migration or integration steps needed to prove the change works
 - If you cannot run a needed check because of missing credentials, services, or environment, say so explicitly
 
-## Common Commands
-
-Install dependencies:
-
-```bash
-pnpm install
-```
-
-Run all apps in dev mode:
-
-```bash
-pnpm dev
-```
-
-Run tests:
-
-```bash
-pnpm test
-pnpm test:watch
-pnpm test:coverage
-```
-
-Run tests for one workspace:
-
-```bash
-pnpm --filter @aaa/shared test
-pnpm --filter @aaa/api test
-```
-
-Build everything:
-
-```bash
-pnpm build
-```
-
 ## Logging Notes
 
-- Local logs may be written under `.logs/`
-- During `pnpm dev:local`, API and worker logging is redirected for the local observability stack
 - Do not intentionally log bearer tokens, OAuth codes, credentials, prompts, transcripts, uploaded file contents, or other secret-bearing payloads
-
-## Production Notes
-
-- Production uses Docker-based deployment from `.github/workflows/cd.yml`
-- CI validation lives in `.github/workflows/ci.yml`
-- See the Infrastructure section above and [`infra/aws-ec2/README.md`](infra/aws-ec2/README.md) for deploy and rollback details
 
 ## Maintenance
 
