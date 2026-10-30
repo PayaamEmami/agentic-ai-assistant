@@ -34,6 +34,7 @@ export async function fetchWithTelemetry(
   input: string | URL | Request,
   init: RequestInit | undefined,
   options: TelemetryFetchOptions,
+  transport: typeof fetch = fetch,
 ): Promise<Response> {
   const url = safeUrl(input);
   const method = init?.method ?? 'GET';
@@ -66,7 +67,7 @@ export async function fetchWithTelemetry(
       );
 
       try {
-        const response = await fetch(input, init);
+        const response = await transport(input, init);
         const durationMs = Date.now() - startedAt;
         const outcome = response.ok ? 'success' : 'failure';
         outboundRequestCounter.inc({

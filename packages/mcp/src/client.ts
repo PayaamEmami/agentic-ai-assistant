@@ -8,6 +8,7 @@ import {
   type McpToolCallResult,
   type McpToolDefinition,
 } from './types.js';
+import { fetchPinned } from './pinned-fetch.js';
 import { assertPublicHttpsUrl } from './url.js';
 
 const DEFAULT_PROTOCOL_VERSION = '2025-06-18';
@@ -24,6 +25,13 @@ interface JsonRpcResponse {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requestUrl(input: string | URL | Request): string {
+  if (typeof input === 'string') {
+    return input;
+  }
+  return input instanceof URL ? input.href : input.url;
 }
 
 /**
@@ -176,8 +184,12 @@ export class McpClient {
           eventPrefix: 'mcp.request',
           logResponseBodyOnFailure: false,
         },
+        (input, requestInit) => fetchPinned(requestUrl(input), requestInit),
       );
     } catch (error) {
+      if (error instanceof McpError) {
+        throw error;
+      }
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw new McpError(`MCP request "${method}" timed out`);
       }

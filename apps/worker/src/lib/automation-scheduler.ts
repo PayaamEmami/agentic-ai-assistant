@@ -5,6 +5,7 @@ import {
   automationScheduleRepository,
   conversationRepository,
   isPgUniqueViolation,
+  type AutomationSchedule,
 } from '@aaa/db';
 import { computeNextRunAt, startOfDayInTimeZone } from '@aaa/shared';
 import { logger } from './logger.js';
@@ -22,6 +23,27 @@ const SCHEDULER_LOCK_TTL_SECONDS = 50;
 const QUEUED_STALE_MS = 15 * 60 * 1000;
 /** Each prompt turn and tool call refreshes the heartbeat, so this is a crash bound. */
 const RUNNING_STALE_MS = 90 * 60 * 1000;
+
+async function resolveNextRunAt(schedule: AutomationSchedule, now: Date): Promise<Date | null> {
+  try {
+    return computeNextRunAt(schedule.cron, schedule.timezone, now);
+  } catch (error) {
+    logger.error(
+      {
+        event: 'automation.schedule.invalid_cron',
+        outcome: 'failure',
+        scheduleId: schedule.id,
+        error,
+      },
+      'Disabling automation schedule with an invalid cron expression',
+    );
+    await automationScheduleRepository.update(schedule.id, schedule.userId, {
+      enabled: false,
+      nextRunAt: null,
+    });
+    return null;
+  }
+}
 
 async function enqueueOrFailRun(
   runId: string,
@@ -68,27 +90,33 @@ export async function scheduleDueAutomations(redis: Redis): Promise<void> {
   const due = await automationScheduleRepository.listDue(now);
 
   for (const schedule of due) {
-    // Skip before claiming so a blocked fire keeps next_run_at due and retries
-    // on a later tick instead of permanently dropping the slot.
     const runsToday = await automationScheduleRepository.countRunsToday(
       schedule.id,
       startOfDayInTimeZone(now, schedule.timezone),
     );
     if (runsToday >= schedule.maxRunsPerDay) {
-      logger.info(
-        {
-          event: 'automation.schedule.rate_limited',
-          outcome: 'success',
-          scheduleId: schedule.id,
-          runsToday,
-          maxRunsPerDay: schedule.maxRunsPerDay,
-        },
-        'Skipping automation run: daily limit reached',
-      );
+      // Drop this slot. Leaving next_run_at in the past makes the next local
+      // day fire at midnight, and that run then consumes the new day's cap.
+      const nextRunAt = await resolveNextRunAt(schedule, now);
+      if (nextRunAt) {
+        await automationScheduleRepository.deferDue(schedule.id, now, nextRunAt);
+        logger.info(
+          {
+            event: 'automation.schedule.rate_limited',
+            outcome: 'success',
+            scheduleId: schedule.id,
+            runsToday,
+            maxRunsPerDay: schedule.maxRunsPerDay,
+          },
+          'Skipping automation run: daily limit reached',
+        );
+      }
       continue;
     }
 
     if (await automationRunRepository.hasActiveRunForSchedule(schedule.id)) {
+      // Stay due. The in-progress run still owns this slot, and a later tick
+      // should retry it instead of jumping to the next cron time.
       logger.info(
         {
           event: 'automation.schedule.already_running',
@@ -103,23 +131,8 @@ export async function scheduleDueAutomations(redis: Redis): Promise<void> {
     // Advance the schedule only once we intend to create a run. If enqueueing
     // or the run itself fails, the schedule still moves on rather than firing
     // repeatedly every tick.
-    let nextRunAt: Date | null = null;
-    try {
-      nextRunAt = computeNextRunAt(schedule.cron, schedule.timezone, now);
-    } catch (error) {
-      logger.error(
-        {
-          event: 'automation.schedule.invalid_cron',
-          outcome: 'failure',
-          scheduleId: schedule.id,
-          error,
-        },
-        'Disabling automation schedule with an invalid cron expression',
-      );
-      await automationScheduleRepository.update(schedule.id, schedule.userId, {
-        enabled: false,
-        nextRunAt: null,
-      });
+    const nextRunAt = await resolveNextRunAt(schedule, now);
+    if (!nextRunAt) {
       continue;
     }
 

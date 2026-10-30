@@ -9,9 +9,12 @@ const { mocks } = vi.hoisted(() => ({
     hasActiveRunForSchedule: vi.fn(),
     claimDue: vi.fn(),
     restoreClaim: vi.fn(),
+    deferDue: vi.fn(),
+    updateSchedule: vi.fn(),
     createConversation: vi.fn(),
     deleteConversation: vi.fn(),
     createRun: vi.fn(),
+    computeNextRunAt: vi.fn(),
     loggerInfo: vi.fn(),
     loggerError: vi.fn(),
     loggerWarn: vi.fn(),
@@ -31,6 +34,8 @@ vi.mock('@aaa/db', () => ({
     countRunsToday: mocks.countRunsToday,
     claimDue: mocks.claimDue,
     restoreClaim: mocks.restoreClaim,
+    deferDue: mocks.deferDue,
+    update: mocks.updateSchedule,
   },
   conversationRepository: {
     create: mocks.createConversation,
@@ -60,7 +65,7 @@ vi.mock('../jobs/automation/run-log.js', () => ({
 }));
 
 vi.mock('@aaa/shared', () => ({
-  computeNextRunAt: () => new Date('2026-10-16T12:00:00.000Z'),
+  computeNextRunAt: mocks.computeNextRunAt,
   startOfDayInTimeZone: () => new Date('2026-10-15T00:00:00.000Z'),
 }));
 
@@ -86,6 +91,8 @@ describe('scheduleDueAutomations', () => {
     mocks.countRunsToday.mockResolvedValue(0);
     mocks.hasActiveRunForSchedule.mockResolvedValue(false);
     mocks.claimDue.mockResolvedValue(true);
+    mocks.deferDue.mockResolvedValue(true);
+    mocks.computeNextRunAt.mockReturnValue(new Date('2026-10-16T12:00:00.000Z'));
     mocks.createConversation.mockResolvedValue({ id: 'conversation-1' });
   });
 
@@ -103,5 +110,53 @@ describe('scheduleDueAutomations', () => {
     );
     expect(mocks.deleteConversation).toHaveBeenCalledWith('conversation-1');
     expect(mocks.enqueueAutomationJob).not.toHaveBeenCalled();
+    expect(mocks.deferDue).not.toHaveBeenCalled();
+  });
+
+  it('advances next_run_at when the daily cap is reached and does not enqueue', async () => {
+    mocks.countRunsToday.mockResolvedValue(schedule.maxRunsPerDay);
+
+    await scheduleDueAutomations({
+      set: vi.fn().mockResolvedValue('OK'),
+    } as never);
+
+    expect(mocks.deferDue).toHaveBeenCalledWith(
+      'schedule-1',
+      expect.any(Date),
+      new Date('2026-10-16T12:00:00.000Z'),
+    );
+    expect(mocks.claimDue).not.toHaveBeenCalled();
+    expect(mocks.createRun).not.toHaveBeenCalled();
+    expect(mocks.enqueueAutomationJob).not.toHaveBeenCalled();
+  });
+
+  it('leaves the slot due when a run is already in progress', async () => {
+    mocks.hasActiveRunForSchedule.mockResolvedValue(true);
+
+    await scheduleDueAutomations({
+      set: vi.fn().mockResolvedValue('OK'),
+    } as never);
+
+    expect(mocks.deferDue).not.toHaveBeenCalled();
+    expect(mocks.claimDue).not.toHaveBeenCalled();
+    expect(mocks.createRun).not.toHaveBeenCalled();
+  });
+
+  it('disables the schedule when a capped fire has an invalid cron', async () => {
+    mocks.countRunsToday.mockResolvedValue(schedule.maxRunsPerDay);
+    mocks.computeNextRunAt.mockImplementation(() => {
+      throw new Error('bad cron');
+    });
+
+    await scheduleDueAutomations({
+      set: vi.fn().mockResolvedValue('OK'),
+    } as never);
+
+    expect(mocks.updateSchedule).toHaveBeenCalledWith('schedule-1', 'user-1', {
+      enabled: false,
+      nextRunAt: null,
+    });
+    expect(mocks.deferDue).not.toHaveBeenCalled();
+    expect(mocks.claimDue).not.toHaveBeenCalled();
   });
 });

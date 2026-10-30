@@ -29,15 +29,9 @@ function isSensitiveKey(key: string): boolean {
 }
 
 function sanitizeString(value: string): string {
-  if (/bearer\s+[a-z0-9._-]+/i.test(value)) {
-    return value.replace(/bearer\s+[a-z0-9._-]+/gi, 'Bearer [Redacted]');
-  }
-
-  if (/^(postgres(ql)?|redis):\/\/[^/]+/i.test(value)) {
-    return '[Redacted Connection String]';
-  }
-
-  return value;
+  return value
+    .replace(/bearer\s+[a-z0-9._-]+/gi, 'Bearer [Redacted]')
+    .replace(/\b(?:postgres(?:ql)?|redis):\/\/[^\n]*/gi, '[Redacted Connection String]');
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -139,8 +133,10 @@ export function serializeError(error: unknown): SerializedError {
     message: sanitizeString(error.message),
   };
 
+  // The stack's first line repeats the message, so a token removed from
+  // `message` is still present unless the stack is redacted too.
   if (typeof error.stack === 'string') {
-    result.stack = error.stack;
+    result.stack = sanitizeString(error.stack);
   }
 
   const maybeCode = (error as { code?: unknown }).code;

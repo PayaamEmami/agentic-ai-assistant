@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { McpClient, unwrapMcpToolData } from './client.js';
 import { McpError, McpToolError } from './types.js';
 
+vi.mock('./pinned-fetch.js', () => ({
+  fetchPinned: (input: string, init?: RequestInit) => globalThis.fetch(input, init),
+}));
+
 const SERVER_URL = 'https://mcp.example.com/';
 
 interface StubResponse {

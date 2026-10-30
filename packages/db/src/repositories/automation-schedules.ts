@@ -47,7 +47,16 @@ export interface AutomationScheduleRepository {
    * Undo claimDue when the run row could not be created, so the fire stays due.
    */
   restoreClaim(id: string, lastRunAt: Date | null, nextRunAt: Date | null): Promise<void>;
+  /**
+   * Moves a due schedule to a later cron time without recording a run or
+   * touching last_run_at. Returns false when the slot was already claimed.
+   */
+  deferDue(id: string, now: Date, nextRunAt: Date): Promise<boolean>;
   delete(id: string, userId: string): Promise<boolean>;
+  /**
+   * Completed or skipped scheduled fires since `since`. Manual runs do not
+   * count, so Run now cannot consume the day's scheduled slot.
+   */
   countRunsToday(id: string, since: Date): Promise<number>;
 }
 
@@ -194,6 +203,20 @@ export const automationScheduleRepository: AutomationScheduleRepository = {
     );
   },
 
+  async deferDue(id: string, now: Date, nextRunAt: Date): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool.query(
+      `UPDATE automation_schedules
+       SET next_run_at = $2, updated_at = NOW()
+       WHERE id = $1
+         AND enabled
+         AND next_run_at IS NOT NULL
+         AND next_run_at <= $3`,
+      [id, nextRunAt, now],
+    );
+    return (result.rowCount ?? 0) > 0;
+  },
+
   async delete(id: string, userId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool.query(
@@ -215,6 +238,7 @@ export const automationScheduleRepository: AutomationScheduleRepository = {
       `SELECT COUNT(*)::text AS count FROM automation_runs
        WHERE schedule_id = $1
          AND started_at >= $2
+         AND trigger = 'schedule'
          AND status IN ('completed', 'skipped')`,
       [id, since],
     );
