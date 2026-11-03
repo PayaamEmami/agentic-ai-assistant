@@ -105,6 +105,16 @@ function toAttachmentPromptText(attachment: NonNullable<DbAttachment>): string {
   return `${header}\n\nThis file is available to tools, but its contents are not inlined in the prompt.`;
 }
 
+function isPdfAttachment(attachment: NonNullable<DbAttachment>): boolean {
+  if (attachment.mimeType === 'application/pdf') {
+    return true;
+  }
+
+  const genericMimeType =
+    attachment.mimeType === 'application/octet-stream' || attachment.mimeType.length === 0;
+  return genericMimeType && attachment.fileName.toLowerCase().endsWith('.pdf');
+}
+
 export async function toAgentHistoryMessages(
   messages: DbMessage[],
   userId: string,
@@ -175,6 +185,20 @@ export async function toAgentHistoryMessages(
               url: `data:${attachment.mimeType};base64,${attachment.data.toString('base64')}`,
               detail: 'auto',
             },
+          });
+          continue;
+        }
+
+        if (isPdfAttachment(attachment)) {
+          contentParts.push({
+            type: 'text',
+            text: `Attached file "${attachment.fileName}" (application/pdf).`,
+          });
+          contentParts.push({
+            type: 'input_file',
+            fileName: attachment.fileName,
+            mimeType: 'application/pdf',
+            fileData: `data:application/pdf;base64,${attachment.data.toString('base64')}`,
           });
           continue;
         }

@@ -30,6 +30,10 @@ export function mapUserContent(
       };
     }
 
+    if (part.type === 'input_file') {
+      throw new Error('PDF attachments require the Responses API');
+    }
+
     return {
       type: 'image_url',
       image_url: {

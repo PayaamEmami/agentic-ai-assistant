@@ -11,7 +11,15 @@ export interface ChatImagePart {
   };
 }
 
-export type ChatContentPart = ChatTextPart | ChatImagePart;
+export interface ChatFilePart {
+  type: 'input_file';
+  fileName: string;
+  mimeType: 'application/pdf';
+  /** Data URL: `data:application/pdf;base64,...`. */
+  fileData: string;
+}
+
+export type ChatContentPart = ChatTextPart | ChatImagePart | ChatFilePart;
 
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';

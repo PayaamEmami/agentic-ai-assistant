@@ -29,8 +29,8 @@ export interface ResponsesTurnState {
 interface ResponsesRequestBody {
   model: string;
   input: Array<Record<string, unknown>>;
-  tools: Array<Record<string, unknown>>;
-  tool_choice: 'auto';
+  tools?: Array<Record<string, unknown>>;
+  tool_choice?: 'auto';
   store: false;
   stream?: boolean;
   max_output_tokens?: number;
@@ -71,13 +71,16 @@ export function buildResponsesRequest(input: {
 }): BuiltResponsesRequest {
   const prepared = prepareTools(input.tools);
   const hostedWebSearch = input.hostedWebSearch ?? true;
+  const tools = buildResponsesTools(prepared, hostedWebSearch);
   const body: ResponsesRequestBody = {
     model: input.model,
     input: toResponsesInput(input.messages),
-    tools: buildResponsesTools(prepared, hostedWebSearch),
-    tool_choice: 'auto',
     store: false,
   };
+  if (tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = 'auto';
+  }
 
   if (input.maxTokens !== undefined) {
     body.max_output_tokens = input.maxTokens;
@@ -222,6 +225,14 @@ function toResponsesContent(
 function toResponsesContentPart(part: ChatContentPart): Record<string, unknown> {
   if (part.type === 'text') {
     return { type: 'input_text', text: part.text };
+  }
+
+  if (part.type === 'input_file') {
+    return {
+      type: 'input_file',
+      filename: part.fileName,
+      file_data: part.fileData,
+    };
   }
 
   return {

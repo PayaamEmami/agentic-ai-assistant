@@ -3,6 +3,7 @@ export type {
   ChatContentPart,
   ChatTextPart,
   ChatImagePart,
+  ChatFilePart,
   ToolCall,
   CompletionRequest,
   CompletionResponse,

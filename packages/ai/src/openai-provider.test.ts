@@ -80,4 +80,39 @@ describe('OpenAIProvider chat routing', () => {
       reasoning_effort: 'none',
     });
   });
+
+  it('sends a Luna request that includes a PDF through the Responses API', async () => {
+    const fileData = 'data:application/pdf;base64,JVBERi0=';
+    await provider().complete({
+      model: 'gpt-6-luna',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Attached file "notes.pdf" (application/pdf).' },
+            {
+              type: 'input_file',
+              fileName: 'notes.pdf',
+              mimeType: 'application/pdf',
+              fileData,
+            },
+          ],
+        },
+      ],
+    });
+
+    expect(mocks.chatCreate).not.toHaveBeenCalled();
+    expect(mocks.responsesCreate).toHaveBeenCalledTimes(1);
+    const body = mocks.responsesCreate.mock.calls[0]?.[0] as {
+      tools?: unknown;
+      tool_choice?: unknown;
+      input: Array<{ content: unknown }>;
+    };
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect(body.input[0]?.content).toEqual([
+      { type: 'input_text', text: 'Attached file "notes.pdf" (application/pdf).' },
+      { type: 'input_file', filename: 'notes.pdf', file_data: fileData },
+    ]);
+  });
 });

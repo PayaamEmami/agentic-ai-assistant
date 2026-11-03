@@ -68,6 +68,41 @@ describe('buildResponsesRequest', () => {
       }),
     ]);
   });
+
+  it('sends a PDF as an input_file and omits tools when search and function tools are off', () => {
+    const fileData = 'data:application/pdf;base64,JVBERi0=';
+    const { body } = buildResponsesRequest({
+      model: 'gpt-6-luna',
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'Attached file "notes.pdf" (application/pdf).' },
+            {
+              type: 'input_file',
+              fileName: 'notes.pdf',
+              mimeType: 'application/pdf',
+              fileData,
+            },
+          ],
+        },
+      ],
+      hostedWebSearch: false,
+    });
+
+    expect(body.tools).toBeUndefined();
+    expect(body.tool_choice).toBeUndefined();
+    expect(body.input).toEqual([
+      {
+        type: 'message',
+        role: 'user',
+        content: [
+          { type: 'input_text', text: 'Attached file "notes.pdf" (application/pdf).' },
+          { type: 'input_file', filename: 'notes.pdf', file_data: fileData },
+        ],
+      },
+    ]);
+  });
 });
 
 describe('applyResponsesStreamEvent', () => {

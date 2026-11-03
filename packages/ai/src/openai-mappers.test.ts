@@ -24,6 +24,24 @@ describe('mapMessages', () => {
   it('throws when a tool message lacks a toolCallId', () => {
     expect(() => mapMessages([{ role: 'tool', content: 'x' }])).toThrow(/toolCallId/);
   });
+
+  it('rejects a PDF part on the Chat Completions path', () => {
+    expect(() =>
+      mapMessages([
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'input_file',
+              fileName: 'notes.pdf',
+              mimeType: 'application/pdf',
+              fileData: 'data:application/pdf;base64,JVBERi0=',
+            },
+          ],
+        },
+      ]),
+    ).toThrow(/Responses API/);
+  });
 });
 
 describe('prepareTools', () => {

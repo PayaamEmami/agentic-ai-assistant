@@ -28,6 +28,13 @@ import type {
   TranscriptionResponse,
 } from './types.js';
 
+function requestIncludesInputFile(request: CompletionRequest): boolean {
+  return request.messages.some(
+    (message) =>
+      Array.isArray(message.content) && message.content.some((part) => part.type === 'input_file'),
+  );
+}
+
 export type { OpenAIProviderModelConfig };
 
 export class OpenAIProvider implements ModelProvider {
@@ -212,7 +219,8 @@ export class OpenAIProvider implements ModelProvider {
   private useResponsesApi(request: CompletionRequest, model: string): boolean {
     return (
       Boolean(request.hostedWebSearch) ||
-      requiresResponsesForFunctionTools(model, request.tools?.length ?? 0)
+      requiresResponsesForFunctionTools(model, request.tools?.length ?? 0) ||
+      requestIncludesInputFile(request)
     );
   }
 
