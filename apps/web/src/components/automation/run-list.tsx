@@ -87,7 +87,7 @@ export function RunList({ runs, onReload }: RunListProps) {
   if (runs.length === 0) {
     return (
       <p className="text-sm text-foreground-muted">
-        No runs yet. Use Run now or wait for the next scheduled fire.
+        No runs yet.
       </p>
     );
   }

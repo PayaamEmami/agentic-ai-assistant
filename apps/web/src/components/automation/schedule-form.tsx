@@ -114,7 +114,7 @@ export function ScheduleForm({
           disabled={busy}
           rows={5}
           className="min-h-28 w-full"
-          placeholder="What should the assistant do each time this runs?"
+          placeholder="Summarize what changed overnight."
         />
       </Field>
 
@@ -209,7 +209,6 @@ export function ScheduleForm({
         onCheckedChange={setEnabled}
         disabled={busy}
         label="Enabled"
-        description="When off, the scheduler skips this prompt."
       />
 
       <div className="flex flex-wrap gap-2">

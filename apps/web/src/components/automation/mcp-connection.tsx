@@ -102,13 +102,7 @@ export function McpConnectionSection() {
 
   return (
     <section className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <h2 className="text-base font-medium text-foreground">MCP servers</h2>
-      </div>
-      <p className="max-w-2xl text-sm text-foreground-muted">
-        Connect MCP servers so chat and scheduled prompts can use their tools. Each server keeps
-        its own URL and API key.
-      </p>
+      <h2 className="text-base font-medium text-foreground">MCP servers</h2>
 
       {loading ? (
         <p className="text-sm text-foreground-muted">Loading connections...</p>
@@ -160,7 +154,6 @@ export function McpConnectionSection() {
           )}
 
           <div className="space-y-4">
-            <h3 className="text-sm font-medium text-foreground">Add a server</h3>
             <Field label="MCP server URL">
               <Input
                 value={serverUrl}
@@ -175,7 +168,7 @@ export function McpConnectionSection() {
                 type="password"
                 value={apiKey}
                 onChange={(event) => setApiKey(event.target.value)}
-                placeholder="API key"
+                placeholder="••••••••"
                 autoComplete="off"
               />
             </Field>

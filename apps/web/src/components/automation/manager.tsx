@@ -33,25 +33,19 @@ export function AutomationManager() {
       <McpConnectionSection />
 
       <section className="space-y-4 border-t border-border pt-8">
-        <div className="space-y-1">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-medium text-foreground">Schedules</h2>
-            <IconButton
-              onClick={() => {
-                setCreating(true);
-                setEditingId(null);
-              }}
-              disabled={busy}
-              title="New schedule"
-              aria-label="New schedule"
-            >
-              <PlusIcon width={18} height={18} />
-            </IconButton>
-          </div>
-          <p className="max-w-2xl text-sm text-foreground-muted">
-            Write a prompt and choose when it should run. Each fire uses the same assistant as
-            chat, including whatever tools and MCP servers are connected.
-          </p>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-base font-medium text-foreground">Schedules</h2>
+          <IconButton
+            onClick={() => {
+              setCreating(true);
+              setEditingId(null);
+            }}
+            disabled={busy}
+            title="New schedule"
+            aria-label="New schedule"
+          >
+            <PlusIcon width={18} height={18} />
+          </IconButton>
         </div>
 
         {loading ? (
