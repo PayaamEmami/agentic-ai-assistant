@@ -8,7 +8,6 @@ import {
   type PersonalizationMemory,
   type PersonalizationMemoryKind,
 } from '@/lib/api-client';
-import { MemoryComposer } from './memory-composer';
 import { MemoryList } from './memory-list';
 import {
   MEMORY_KIND_ORDER,
@@ -29,8 +28,8 @@ export function PersonalizationManager() {
   const [profileSaveStatus, setProfileSaveStatus] = useState<string | null>(null);
 
   const [memories, setMemories] = useState<PersonalizationMemory[]>([]);
-  const [newMemoryKind, setNewMemoryKind] = useState<PersonalizationMemoryKind | null>(null);
-  const [newMemoryContent, setNewMemoryContent] = useState('');
+  const [draftKind, setDraftKind] = useState<PersonalizationMemoryKind | null>(null);
+  const [draftContent, setDraftContent] = useState('');
   const [isCreatingMemory, setIsCreatingMemory] = useState(false);
   const [editingMemoryId, setEditingMemoryId] = useState<string | null>(null);
   const [editingMemoryContent, setEditingMemoryContent] = useState('');
@@ -41,7 +40,7 @@ export function PersonalizationManager() {
       MEMORY_KIND_ORDER.map((kind) => ({
         kind,
         memories: memories.filter((memory) => memory.kind === kind),
-      })).filter((group) => group.memories.length > 0),
+      })),
     [memories],
   );
   const hasProfileChanges =
@@ -129,9 +128,30 @@ export function PersonalizationManager() {
     return () => window.clearTimeout(timeout);
   }, [profileSaveStatus]);
 
+  const cancelEditingMemory = () => {
+    setEditingMemoryId(null);
+    setEditingMemoryContent('');
+  };
+
+  const beginDraft = (kind: PersonalizationMemoryKind) => {
+    cancelEditingMemory();
+    if (draftKind === kind) {
+      document.getElementById(`memory-draft-${kind}`)?.focus();
+      return;
+    }
+
+    setDraftKind(kind);
+    setDraftContent('');
+  };
+
+  const cancelDraft = () => {
+    setDraftKind(null);
+    setDraftContent('');
+  };
+
   const handleCreateMemory = async () => {
-    const content = newMemoryContent.trim();
-    if (!content || !newMemoryKind) {
+    const content = draftContent.trim();
+    if (!content || !draftKind) {
       return;
     }
 
@@ -140,12 +160,12 @@ export function PersonalizationManager() {
 
     try {
       const response = await api.personalization.createMemory({
-        kind: newMemoryKind,
+        kind: draftKind,
         content,
       });
       setMemories((previous) => sortMemories([...previous, response.memory]));
-      setNewMemoryContent('');
-      setNewMemoryKind(null);
+      setDraftContent('');
+      setDraftKind(null);
     } catch (requestError) {
       const message = requestErrorMessage(requestError, 'Failed to create memory.');
       if (message) {
@@ -157,13 +177,9 @@ export function PersonalizationManager() {
   };
 
   const beginEditingMemory = (memory: PersonalizationMemory) => {
+    cancelDraft();
     setEditingMemoryId(memory.id);
     setEditingMemoryContent(memory.content);
-  };
-
-  const cancelEditingMemory = () => {
-    setEditingMemoryId(null);
-    setEditingMemoryContent('');
   };
 
   const handleSaveMemory = async (memoryId: string) => {
@@ -235,23 +251,21 @@ export function PersonalizationManager() {
             onTonePreferenceChange={setTonePreference}
           />
 
-          <section className="border-t border-border pt-6">
+          <section className="space-y-6 border-t border-border pt-8">
             <h2 className="text-base font-medium text-foreground">Memories</h2>
-
-            <MemoryComposer
-              kind={newMemoryKind}
-              content={newMemoryContent}
-              isCreating={isCreatingMemory}
-              onKindChange={setNewMemoryKind}
-              onContentChange={setNewMemoryContent}
-              onCreate={() => void handleCreateMemory()}
-            />
 
             <MemoryList
               groups={memoryGroups}
+              draftKind={draftKind}
+              draftContent={draftContent}
+              isCreating={isCreatingMemory}
               editingMemoryId={editingMemoryId}
               editingMemoryContent={editingMemoryContent}
               pendingMemoryId={pendingMemoryId}
+              onBeginDraft={beginDraft}
+              onDraftContentChange={setDraftContent}
+              onCancelDraft={cancelDraft}
+              onCreate={() => void handleCreateMemory()}
               onBeginEdit={beginEditingMemory}
               onCancelEdit={cancelEditingMemory}
               onEditingContentChange={setEditingMemoryContent}

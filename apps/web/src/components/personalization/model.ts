@@ -27,6 +27,15 @@ export const MEMORY_KIND_SINGULAR_LABELS: Record<PersonalizationMemoryKind, stri
   instruction: 'instruction',
 };
 
+export const MEMORY_KIND_PLACEHOLDERS: Record<PersonalizationMemoryKind, string> = {
+  fact: 'Lives in Seattle',
+  preference: 'Prefers short answers',
+  relationship: 'Works with Ada on the lab',
+  project: 'Building the assistant',
+  person: 'Ada leads the lab',
+  instruction: 'Ask before changing production',
+};
+
 export function sortMemories(memories: PersonalizationMemory[]) {
   return [...memories].sort((left, right) => {
     const kindDelta = MEMORY_KIND_ORDER.indexOf(left.kind) - MEMORY_KIND_ORDER.indexOf(right.kind);

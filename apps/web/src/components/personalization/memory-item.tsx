@@ -30,21 +30,24 @@ export function MemoryItem({
   onDelete,
 }: MemoryItemProps) {
   return (
-    <div className="group rounded-xl px-3 py-2 transition hover:bg-surface-hover">
+    <div className="rounded-xl border border-border bg-surface-elevated px-3 py-2.5">
       {isEditing ? (
         <div className="space-y-3">
           <Textarea
             value={editingContent}
             onChange={(event) => onEditingContentChange(event.target.value)}
-            rows={4}
+            rows={3}
             maxLength={2000}
             disabled={isPending}
+            autoFocus
             className="w-full"
+            onKeyDown={(event) => {
+              if (event.key === 'Escape') {
+                onCancelEdit();
+              }
+            }}
           />
           <div className="flex items-center justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={onCancelEdit} disabled={isPending}>
-              Cancel
-            </Button>
             <Button
               size="sm"
               onClick={() => onSave(memory.id)}
@@ -52,12 +55,15 @@ export function MemoryItem({
             >
               {isPending ? 'Saving...' : 'Save'}
             </Button>
+            <Button variant="secondary" size="sm" onClick={onCancelEdit} disabled={isPending}>
+              Cancel
+            </Button>
           </div>
         </div>
       ) : (
-        <div className="flex items-start gap-2">
+        <div className="flex items-start justify-between gap-3">
           <p className="min-w-0 flex-1 text-sm leading-6 text-foreground">{memory.content}</p>
-          <div className="flex items-center gap-1 opacity-0 transition group-hover:opacity-100 group-focus-within:opacity-100">
+          <div className="flex shrink-0 items-center gap-1">
             <IconButton
               size="sm"
               onClick={() => onBeginEdit(memory)}
