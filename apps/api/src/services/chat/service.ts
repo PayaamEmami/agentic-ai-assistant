@@ -147,7 +147,7 @@ export class ChatService {
       throw error;
     }
 
-    return this.launchAssistantTurn(prepared, userId, content, clientRunId);
+    return this.launchAssistantTurn(prepared, userId, clientRunId);
   }
 
   /**
@@ -203,7 +203,7 @@ export class ChatService {
       throw error;
     }
 
-    return this.launchAssistantTurn(prepared, userId, text, clientRunId);
+    return this.launchAssistantTurn(prepared, userId, clientRunId);
   }
 
   /**
@@ -217,7 +217,6 @@ export class ChatService {
     return generateAssistantTurn(this.turnRunnerDeps(), {
       conversation: prepared.conversation,
       userId,
-      requestContent: content,
       signal: prepared.signal,
       assistantMessageId: prepared.assistantMessageId,
       initialConversationTitle: prepared.initialConversationTitle,
@@ -298,7 +297,6 @@ export class ChatService {
     const result = await generateAssistantTurn(this.turnRunnerDeps(), {
       conversation,
       userId: conversation.userId,
-      requestContent,
     });
     return {
       continued: true,
@@ -411,7 +409,6 @@ export class ChatService {
   private launchAssistantTurn(
     prepared: PreparedTurn,
     userId: string,
-    requestContent: string,
     clientRunId?: string,
   ) {
     // Generate the assistant turn asynchronously and stream the result over the
@@ -420,7 +417,6 @@ export class ChatService {
     void generateAssistantTurn(this.turnRunnerDeps(), {
       conversation: prepared.conversation,
       userId,
-      requestContent,
       signal: prepared.signal,
       assistantMessageId: prepared.assistantMessageId,
       initialConversationTitle: prepared.initialConversationTitle,

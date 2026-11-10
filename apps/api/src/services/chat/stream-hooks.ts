@@ -11,11 +11,6 @@ export interface AssistantStreamHooks {
   onAnswerDelta?: (delta: string) => void;
 }
 
-export interface AssistantStreamHooksBundle {
-  hooks: AssistantStreamHooks;
-  collectThinkingSegments(): ThinkingSegment[];
-}
-
 /**
  * Wires a chat turn's streaming callbacks to WebSocket events. Stage changes
  * and answer tokens are published as they happen.
@@ -24,8 +19,8 @@ export function createAssistantStreamHooks(
   eventPublisher: ChatEventPublisher,
   conversationId: string,
   assistantMessageId: string,
-): AssistantStreamHooksBundle {
-  const hooks: AssistantStreamHooks = {
+): AssistantStreamHooks {
+  return {
     onStage: (stage) => {
       eventPublisher.assistantStatus({
         type: 'assistant.status',
@@ -46,6 +41,4 @@ export function createAssistantStreamHooks(
       });
     },
   };
-
-  return { hooks, collectThinkingSegments: () => [] };
 }

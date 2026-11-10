@@ -88,13 +88,44 @@ function mergeUsage(
   };
 }
 
+function publishVisibleAnswer(
+  content: string | null,
+  onTextDelta: ((delta: string) => void) | undefined,
+): void {
+  if (!onTextDelta || content == null || content.length === 0) {
+    return;
+  }
+  onTextDelta(content);
+}
+
+function withInlineResults(
+  messages: ChatMessage[],
+  completion: CompletionResponse,
+  roundResults: InlineToolResult[],
+): ChatMessage[] {
+  return [
+    ...messages,
+    {
+      role: 'assistant',
+      content: completion.content ?? '',
+      toolCalls: completion.toolCalls,
+    },
+    ...roundResults.map((result) => ({
+      role: 'tool' as const,
+      content: result.output,
+      toolCallId: result.callId,
+      name: result.name,
+    })),
+  ];
+}
+
 async function completeOrStream(
   provider: ChatProvider,
   request: CompletionRequest,
-  onTextDelta?: (delta: string) => void,
+  stream: boolean,
   onWebSearch?: () => void,
 ): Promise<CompletionResponse> {
-  if (!onTextDelta) {
+  if (!stream) {
     const response = await provider.complete(request);
     if (response.webSearchUsed) {
       onWebSearch?.();
@@ -102,6 +133,8 @@ async function completeOrStream(
     return response;
   }
 
+  // Text from a round that also calls a tool is not the answer. The caller
+  // publishes the kept reply after this returns, so tokens stay buffered here.
   let content = '';
   let finishReason: CompletionResponse['finishReason'] = 'stop';
   let usage: CompletionResponse['usage'] = {
@@ -115,7 +148,6 @@ async function completeOrStream(
   for await (const delta of provider.streamComplete(request)) {
     if (delta.type === 'text' && delta.text) {
       content += delta.text;
-      onTextDelta(delta.text);
     } else if (delta.type === 'tool_call' && delta.toolCall) {
       toolCallsById.set(delta.toolCall.id, delta.toolCall);
     } else if (delta.type === 'web_search') {
@@ -161,8 +193,8 @@ async function completeOrStream(
 export async function runModelTurn(input: RunModelTurnInput): Promise<ModelTurnResult> {
   let messages = input.messages;
   let usage: CompletionResponse['usage'] | undefined;
-  let response: string | null = null;
   const inlineResults: InlineToolResult[] = [];
+  const stream = input.onTextDelta !== undefined || input.onWebSearch !== undefined;
 
   for (let attempt = 0; attempt < MAX_MODEL_CALLS; attempt++) {
     throwIfAborted(input.signal);
@@ -175,16 +207,16 @@ export async function runModelTurn(input: RunModelTurnInput): Promise<ModelTurnR
         hostedWebSearch: true,
         signal: input.signal,
       },
-      input.onTextDelta,
+      stream,
       input.onWebSearch,
     );
     usage = mergeUsage(usage, completion.usage);
-    response = completion.content;
 
     const calls = completion.toolCalls.map(parseToolCall);
     if (calls.length === 0) {
+      publishVisibleAnswer(completion.content, input.onTextDelta);
       return {
-        response,
+        response: completion.content,
         toolCalls: [],
         inlineResults,
         stagedExternalTools: false,
@@ -210,37 +242,70 @@ export async function runModelTurn(input: RunModelTurnInput): Promise<ModelTurnR
 
     const canContinue =
       external.length === 0 && inline.length > 0 && attempt < MAX_MODEL_CALLS - 1;
-    if (!canContinue) {
-      return {
-        response,
-        toolCalls: external,
-        inlineResults,
-        stagedExternalTools: external.length > 0,
-        usage,
-      };
+    if (canContinue) {
+      messages = withInlineResults(messages, completion, roundResults);
+      continue;
     }
 
-    messages = [
-      ...messages,
-      {
-        role: 'assistant',
-        content: completion.content ?? '',
-        toolCalls: completion.toolCalls,
-      },
-      ...roundResults.map((result) => ({
-        role: 'tool' as const,
-        content: result.output,
-        toolCallId: result.callId,
-        name: result.name,
-      })),
-    ];
+    if (external.length === 0 && roundResults.length > 0) {
+      return finishAfterInlineCap(input, messages, completion, roundResults, inlineResults, usage);
+    }
+
+    publishVisibleAnswer(completion.content, input.onTextDelta);
+    return {
+      response: completion.content,
+      toolCalls: external,
+      inlineResults,
+      stagedExternalTools: external.length > 0,
+      usage,
+    };
   }
 
+  throw new Error('Model turn ended without a result');
+}
+
+/**
+ * The search cap was spent on workspace search. One more call can answer from
+ * those excerpts or stage a different tool. Further workspace searches are not run.
+ */
+async function finishAfterInlineCap(
+  input: RunModelTurnInput,
+  messages: ChatMessage[],
+  completion: CompletionResponse,
+  roundResults: InlineToolResult[],
+  inlineResults: InlineToolResult[],
+  usage: CompletionResponse['usage'] | undefined,
+): Promise<ModelTurnResult> {
+  throwIfAborted(input.signal);
+  const stream = input.onTextDelta !== undefined || input.onWebSearch !== undefined;
+  const finalCompletion = await completeOrStream(
+    input.provider,
+    {
+      messages: withInlineResults(messages, completion, roundResults),
+      model: input.model,
+      tools: input.tools,
+      hostedWebSearch: true,
+      signal: input.signal,
+    },
+    stream,
+    input.onWebSearch,
+  );
+  const mergedUsage = mergeUsage(usage, finalCompletion.usage);
+  const finalExternal = finalCompletion.toolCalls
+    .map(parseToolCall)
+    .filter((call) => call.name !== input.inlineToolName);
+  const response =
+    finalCompletion.content?.trim()
+      ? finalCompletion.content
+      : finalExternal.length === 0
+        ? inlineResults.map((result) => result.output).join('\n\n')
+        : finalCompletion.content;
+  publishVisibleAnswer(response, input.onTextDelta);
   return {
     response,
-    toolCalls: [],
+    toolCalls: finalExternal,
     inlineResults,
-    stagedExternalTools: false,
-    usage,
+    stagedExternalTools: finalExternal.length > 0,
+    usage: mergedUsage,
   };
 }

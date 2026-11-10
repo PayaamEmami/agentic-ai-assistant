@@ -61,7 +61,6 @@ export interface AssistantTurnOptions {
     chatModel: string;
   };
   userId: string;
-  requestContent: string;
   signal?: AbortSignal;
   initialConversationTitle?: string;
   assistantMessageId?: string;
@@ -211,9 +210,8 @@ export async function generateAssistantTurn(
       ),
     );
 
-    // Wire streaming callbacks to WebSocket events and accumulate the
-    // per-stage "thinking" trace for persistence after streaming completes.
-    const { hooks: streamHooks, collectThinkingSegments } = createAssistantStreamHooks(
+    const toolContexts = toAgentToolContexts(availableTools);
+    const streamHooks = createAssistantStreamHooks(
       deps.eventPublisher,
       conversation.id,
       assistantMessageId,
@@ -233,13 +231,13 @@ export async function generateAssistantTurn(
             role: 'system',
             content: buildChatTurnPrompt({
               personalContext,
-              availableTools: toAgentToolContexts(availableTools),
+              availableTools: toolContexts,
               activeApps,
             }),
           },
           ...messageHistory,
         ],
-        tools: toAgentToolContexts(availableTools).map((tool) => ({
+        tools: toolContexts.map((tool) => ({
           name: tool.name,
           description: tool.description ?? `Tool: ${tool.name}`,
           parameters: tool.parameters ?? {},
@@ -350,7 +348,7 @@ export async function generateAssistantTurn(
     const displayedCitations = selectDisplayedCitations(assistantResponse, retrieval);
     const assistantContent = buildAssistantMessageContent({
       assistantResponse,
-      thinkingSegments: collectThinkingSegments(),
+      thinkingSegments: [],
       toolResultBlocks: [...inlineResultBlocks, ...toolResultBlocks],
       displayedCitations,
     });

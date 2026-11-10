@@ -156,7 +156,6 @@ describe('ChatService.resendFromMessage', () => {
       expect.anything(),
       expect.objectContaining({
         userId,
-        requestContent: 'Revised',
         assistantMessageId: assistantId,
         conversation: expect.objectContaining({ id: conversationId, title: 'Revised' }),
       }),

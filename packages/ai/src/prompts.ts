@@ -16,9 +16,9 @@ export interface SystemPromptContext {
    */
   includeToolGuidance?: boolean;
   /**
-   * When false, the retrieval/citation guidance block is omitted. Useful for
-   * runtimes that cannot inject retrieved context (for example, voice without
-   * per-turn RAG wiring). Defaults to the value of `includeToolGuidance`.
+   * When false, the retrieval guidance block is omitted. That block describes
+   * excerpts already pasted into the prompt. Chat and voice leave it off and
+   * load notes through search_workspace instead. Defaults to `includeToolGuidance`.
    */
   includeRetrievalGuidance?: boolean;
 }
@@ -70,7 +70,7 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
 }
 
 export function buildChatTurnPrompt(context: SystemPromptContext): string {
-  return `${buildSystemPrompt(context)}
+  return `${buildSystemPrompt({ ...context, includeRetrievalGuidance: false })}
 
 Turn instructions:
 - Hosted web search is available. Use it for a current public fact. Skip it for the user's own files, casual chat, and live tool work. Do not claim a web search happened unless that tool ran.
