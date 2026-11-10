@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Markdown } from './markdown';
 import { WordFadeText } from './assistant-text';
+import { codingTaskCardContent } from './coding-task-card';
 import {
   getDisplayToolStatus,
   getToolStatusLabel,
@@ -74,12 +75,14 @@ export function ContentBlock({
       block.status,
       block.toolExecutionId ? approvalStatusesByToolExecution[block.toolExecutionId] : undefined,
     );
+    const codingTask = block.toolName === 'github.coding_task';
+    const codingResult = codingTask ? codingTaskCardContent(block.output) : null;
 
     return (
       <div className="rounded border border-border bg-surface-input p-2">
         <div className="mb-1 flex items-center justify-between gap-2">
           <p className="text-xs font-medium text-foreground">
-            Tool: {block.toolName ?? block.toolExecutionId ?? 'tool_result'}
+            {codingTask ? 'Coding task' : `Tool: ${block.toolName ?? block.toolExecutionId ?? 'tool_result'}`}
           </p>
           <Badge variant={getToolStatusVariant(displayStatus)} className="text-[11px]">
             {getToolStatusLabel(displayStatus)}
@@ -111,7 +114,25 @@ export function ContentBlock({
         {block.detail ? (
           <p className="mt-2 text-xs text-foreground-muted">{block.detail}</p>
         ) : null}
-        {typeof block.output === 'undefined' ? null : (
+        {codingTask ? (
+          codingResult ? (
+            <div className="mt-2 space-y-1 text-xs text-foreground">
+              {codingResult.summary ? <p className="whitespace-pre-wrap">{codingResult.summary}</p> : null}
+              {codingResult.error ? <p className="text-foreground-muted">{codingResult.error}</p> : null}
+              {codingResult.branch ? <p className="text-foreground-muted">Branch {codingResult.branch}</p> : null}
+              {codingResult.pullRequestUrl ? (
+                <a
+                  className="text-accent underline underline-offset-2 hover:opacity-80 break-words"
+                  href={codingResult.pullRequestUrl}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  Pull request
+                </a>
+              ) : null}
+            </div>
+          ) : null
+        ) : typeof block.output === 'undefined' ? null : (
           <pre className="mt-2 overflow-x-auto text-xs text-foreground">
             {stringify(block.output)}
           </pre>

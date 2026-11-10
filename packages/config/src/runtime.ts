@@ -24,6 +24,8 @@ export interface ApiConfig {
   databasePoolSize: number;
   redisUrl: string;
   llmChatProvider: Env['LLM_CHAT_PROVIDER'];
+  llmEmbeddingProvider: Env['LLM_EMBEDDING_PROVIDER'];
+  realtimeProvider: Env['REALTIME_PROVIDER'];
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
@@ -63,6 +65,9 @@ export interface WorkerConfig {
   databaseUrl: string;
   databasePoolSize: number;
   llmChatProvider: Env['LLM_CHAT_PROVIDER'];
+  llmEmbeddingProvider: Env['LLM_EMBEDDING_PROVIDER'];
+  codingAgentProvider: Env['CODING_AGENT_PROVIDER'];
+  cursorApiKey: string | undefined;
   openaiApiKey: string;
   openaiModel: string;
   openaiEmbeddingModel: string;
@@ -122,6 +127,8 @@ export function loadApiConfig(): ApiConfig {
     databasePoolSize: env.DATABASE_POOL_SIZE,
     redisUrl: env.REDIS_URL,
     llmChatProvider: env.LLM_CHAT_PROVIDER,
+    llmEmbeddingProvider: env.LLM_EMBEDDING_PROVIDER,
+    realtimeProvider: env.REALTIME_PROVIDER,
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,
@@ -164,6 +171,9 @@ export function loadWorkerConfig(): WorkerConfig {
     databaseUrl: env.DATABASE_URL,
     databasePoolSize: env.DATABASE_POOL_SIZE,
     llmChatProvider: env.LLM_CHAT_PROVIDER,
+    llmEmbeddingProvider: env.LLM_EMBEDDING_PROVIDER,
+    codingAgentProvider: env.CODING_AGENT_PROVIDER,
+    cursorApiKey: env.CURSOR_API_KEY?.trim() || undefined,
     openaiApiKey: env.OPENAI_API_KEY,
     openaiModel: env.OPENAI_MODEL,
     openaiEmbeddingModel: env.OPENAI_EMBEDDING_MODEL,

@@ -49,6 +49,10 @@ const envSchema = z.object({
 
   // Model providers
   LLM_CHAT_PROVIDER: z.enum(['openai']),
+  LLM_EMBEDDING_PROVIDER: z.enum(['openai']).default('openai'),
+  REALTIME_PROVIDER: z.enum(['openai']).default('openai'),
+  CODING_AGENT_PROVIDER: z.enum(['cursor']).default('cursor'),
+  CURSOR_API_KEY: z.string().optional(),
   OPENAI_API_KEY: z.string(),
   OPENAI_MODEL: z.string().min(1),
   OPENAI_EMBEDDING_MODEL: z.string().min(1),

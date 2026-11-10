@@ -73,23 +73,33 @@ The tree above is the default owner for a change. These paths are easier to miss
 Chat completions, embeddings, and realtime speech are three separate seams. The in-app picker switches Luna and Sol inside the chat seam. `conversations.chat_model` stores those OpenAI model ids.
 
 - `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription). `OpenAIProvider` is the only implementation today.
-- Two narrow seams are derived from it and are what consumers depend on:
-  - `ChatProvider` = `complete` + `streamComplete` (used by the chat turn, `ChatService`, and the coding task runner)
+- Callers depend on narrow seams, not on `OpenAIProvider`:
+  - `ChatProvider` = `complete` + `streamComplete` (used by the chat turn, `ChatService`, and listener insight explanations)
   - `EmbeddingProvider` = `embed` (used by `RetrievalBridge`, `UploadService`, and the worker embedding job)
-- Construct providers through the factory in `packages/ai/src/provider-factory.ts`:
-  - `createChatProvider(apiKey, modelConfig, provider)` selects the chat provider from `LLM_CHAT_PROVIDER` (only `openai` implemented; unknown values throw).
-  - `createEmbeddingProvider(apiKey, modelConfig)` is always OpenAI. The `embeddings.vector` column is `vector(1536)`.
-- To add a chat provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. The chat turn and services need no changes because they depend on the interfaces, not `OpenAIProvider`. That registration does not move embeddings or realtime.
+  - `RealtimeProvider` = `connectVoice` + `connectListener` + `toolName` (used by `VoiceService` and `ListenerService`). The browser keeps the WebRTC connection. The provider turns the SDP offer and session description into the answer SDP.
+- Construct providers through the factory in `packages/ai/src/provider-factory.ts`. Unknown names throw.
+  - `createChatProvider(apiKey, modelConfig, provider)` selects from `LLM_CHAT_PROVIDER`.
+  - `createEmbeddingProvider(apiKey, modelConfig, provider)` selects from `LLM_EMBEDDING_PROVIDER`.
+  - `createRealtimeProvider(apiKey, provider)` selects from `REALTIME_PROVIDER`.
+- Only `openai` is registered on each seam. To add a provider: implement the interface, register it in the matching factory, and widen that enum in `packages/config/src/env.ts`. Callers stay on the interface.
+- The OpenAI realtime implementation builds the voice and listener session documents and posts the SDP offer. It sends `OpenAI-Safety-Identifier` as a sha256 of the user id. `toolName` is how voice maps a tool call back to the name it sent.
 
-Intentional coupling (out of scope for provider swaps):
+Constraints that stay with a provider swap:
 
-- Embeddings are pinned to OpenAI regardless of `LLM_CHAT_PROVIDER`, because the `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). Changing embedding dimensions requires a DB migration and re-embedding.
-- Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`. Voice and Listener share the SDP proxy in `apps/api/src/services/realtime/sdp-exchange.ts`, which sends `OpenAI-Safety-Identifier` as a sha256 of the user id.
-- Hosted web search is an OpenAI Responses API tool (`web_search`), not a worker-executed function. Every text chat turn sets `hostedWebSearch` on the completion request; the model chooses whether to search (`tool_choice: auto`). Voice and Listener do not get it. The chat UI stage for a search that runs is `searching`. Workspace search is the `search_workspace` function: the API runs it against pgvector during the turn and feeds the excerpts back. Other function tools still return to the app for approval and worker execution.
+- The `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). A provider with a different width needs a migration and a re-embedding.
+- Hosted web search stays on the chat request. Every text chat turn sets `hostedWebSearch` on the completion; the model chooses whether to search (`tool_choice: auto`). The OpenAI chat provider turns that flag into the Responses API `web_search` tool. Voice and Listener do not get it. The chat UI stage for a search that runs is `searching`. Workspace search is the `search_workspace` function: the API runs it against pgvector during the turn and feeds the excerpts back. Other function tools still return to the app for approval and worker execution.
 - Chat PDF attachments are sent as Responses API `input_file` parts built from the stored bytes, including on calls that would otherwise use Chat Completions, and they are not indexed for retrieval.
-- Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
+- Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) calls `RealtimeProvider.connectListener`. The OpenAI implementation opens a transcription-only session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
-- Interactive chat stores the model on `conversations.chat_model` and the composer can switch it before any later message in that thread. The picker offers `gpt-6.1-sol` and `gpt-6-luna`. New threads start on `gpt-6-luna`. Existing threads, including hidden automation conversations, were backfilled to `gpt-5.6-luna` and stay there until changed. Voice, Listener, embeddings, and scheduled automation do not use the picker. A chat turn passes that stored model to the model call. Text chat always sets hosted web search, so the turn uses the Responses API. `gpt-6.1-sol` function tools use `reasoning.effort` `low`, because Sol rejects `none` and cannot call functions on Chat Completions. `gpt-6-luna` and `gpt-5.6-luna` use `none` on that Responses request. Callers that do not set hosted web search, such as the coding task runner, still use Chat Completions for those two models.
+- Interactive chat stores the model on `conversations.chat_model` and the composer can switch it before any later message in that thread. The picker offers `gpt-6.1-sol` and `gpt-6-luna`. New threads start on `gpt-6-luna`. Existing threads, including hidden automation conversations, were backfilled to `gpt-5.6-luna` and stay there until changed. Voice, Listener, embeddings, and scheduled automation do not use the picker. A chat turn passes that stored model to the model call. Text chat always sets hosted web search, so the turn uses the Responses API. `gpt-6.1-sol` function tools use `reasoning.effort` `low`, because Sol rejects `none` and cannot call functions on Chat Completions. `gpt-6-luna` and `gpt-5.6-luna` use `none` on that Responses request. A completion request that does not set hosted web search still uses Chat Completions for those two models.
+
+## Coding agents
+
+Repository tasks use a separate seam from the chat model. `github.coding_task` resolves the repo through the connected GitHub tools, then hands the task to `CodingAgent` (`packages/tool-providers/src/coding-agent.ts`). Callers depend on that interface (`start` and `fetch`), not on a particular client.
+
+- `createCodingAgent` reads `CODING_AGENT_PROVIDER` and throws on an unknown value. The only implementation today is the Cursor cloud agent (`CursorCodingAgent`), authenticated with `CURSOR_API_KEY`. The model is omitted so the account default is used. The create call does not set `autoCreatePR`. The task text decides whether the run changes code, merges, opens a pull request, or reports that nothing was needed. A branch or pull request URL is stored only when the provider returns one.
+- The worker records a `coding_runs` row and returns without finishing the tool execution. A poller calls `fetch` until the snapshot is terminal, or until the run has been open for 2 hours. The first `UPDATE … WHERE status = 'running'` wins. That completion writes the summary onto the tool execution, publishes `tool.done`, and enqueues the existing chat continuation. While the run is open, the poller refreshes the parent automation run heartbeat.
+- To add a provider: implement `CodingAgent`, register it in `createCodingAgent`, and widen the `CODING_AGENT_PROVIDER` enum in `packages/config/src/env.ts`. The tool handler, poller, and chat card do not change.
 
 ## Scheduled prompts
 

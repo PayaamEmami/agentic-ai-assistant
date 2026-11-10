@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { createRealtimeProvider, type RealtimeProvider } from '@aaa/ai';
 import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, getLogger } from '@aaa/observability';
 import {
@@ -24,10 +25,8 @@ import {
 } from '../retrieval/helpers.js';
 import {
   buildRealtimeInstructions,
-  buildRealtimeSessionConfig,
   extractMessageText,
   latestUserMessageText,
-  toRealtimeToolName,
 } from './realtime-instructions.js';
 import { createToolCall } from '../tools/call-service.js';
 import {
@@ -36,7 +35,6 @@ import {
 } from '../tools/execution-queue.js';
 import { loadAvailableTools, type AvailableTool } from '../tools/loader.js';
 import { buildConversationTitle } from '../chat/helpers.js';
-import { exchangeRealtimeSdp } from '../realtime/sdp-exchange.js';
 
 // Voice keeps a tighter recent-history window than text chat (see chat-service
 // HISTORY_LIMIT) to bound realtime prompt size and latency.
@@ -75,12 +73,16 @@ export class VoiceService {
   private readonly preparedTurns = new Map<string, PreparedTurnCache>();
   private readonly config: AppConfig;
   private readonly enqueueToolExecutionJob: EnqueueToolExecutionJob;
+  private readonly realtime: RealtimeProvider;
 
   constructor(
     config: AppConfig,
     personalizationService?: PersonalizationService,
     retrievalBridge?: RetrievalBridge,
-    options?: { enqueueToolExecutionJob?: EnqueueToolExecutionJob },
+    options?: {
+      enqueueToolExecutionJob?: EnqueueToolExecutionJob;
+      realtimeProvider?: RealtimeProvider;
+    },
   ) {
     this.personalizationService = personalizationService ?? new PersonalizationService();
     this.retrievalBridge =
@@ -91,6 +93,9 @@ export class VoiceService {
     this.config = config;
     this.enqueueToolExecutionJob =
       options?.enqueueToolExecutionJob ?? defaultEnqueueToolExecutionJob;
+    this.realtime =
+      options?.realtimeProvider ??
+      createRealtimeProvider(config.openaiApiKey, config.realtimeProvider);
   }
 
   private cachePreparedTurn(voiceTurnId: string, cache: PreparedTurnCache): void {
@@ -241,19 +246,24 @@ export class VoiceService {
     const model = this.config.openaiRealtimeModel;
     const voice = this.config.openaiRealtimeVoice;
     const transcriptionModel = this.config.openaiStandardTranscriptionModel;
-    const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
-    const sessionConfig = buildRealtimeSessionConfig(
+    const instructions = buildRealtimeInstructions(
+      personalContext,
+      recentMessages,
+      availableTools,
+      (name) => this.realtime.toolName(name),
+    );
+    const exchange = await this.realtime.connectVoice({
+      userId,
+      sdp,
       model,
       voice,
       transcriptionModel,
       instructions,
-      availableTools,
-    );
-    const exchange = await exchangeRealtimeSdp({
-      apiKey: this.config.openaiApiKey,
-      userId,
-      sdp,
-      sessionConfig,
+      tools: availableTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: tool.parameters,
+      })),
       telemetry: {
         component: 'voice-service',
         eventPrefix: 'voice.sdp_exchange',
@@ -384,7 +394,12 @@ export class VoiceService {
       loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
 
-    const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
+    const instructions = buildRealtimeInstructions(
+      personalContext,
+      recentMessages,
+      availableTools,
+      (name) => this.realtime.toolName(name),
+    );
 
     getLogger({
       component: 'voice-service',
@@ -465,7 +480,8 @@ export class VoiceService {
     const availableTools = await loadAvailableTools(userId).catch(() => [] as AvailableTool[]);
     const tool = availableTools.find(
       (candidate) =>
-        candidate.name === params.toolName || toRealtimeToolName(candidate.name) === params.toolName,
+        candidate.name === params.toolName ||
+        this.realtime.toolName(candidate.name) === params.toolName,
     );
     if (!tool) {
       throw new AppError(400, `Unknown tool: ${params.toolName}`, 'VOICE_TOOL_UNKNOWN');

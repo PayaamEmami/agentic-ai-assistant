@@ -76,24 +76,14 @@ function summarizeHistory(messages: DbMessage[]): string {
   return joined.slice(joined.length - MAX_HISTORY_CHARS).trimStart();
 }
 
-export function toRealtimeToolName(name: string): string {
-  return name.replace(/[^a-zA-Z0-9_-]/g, '_') || 'tool';
-}
-
-function toRealtimePromptToolContexts(tools: AvailableTool[]): PromptToolContext[] {
+function toRealtimePromptToolContexts(
+  tools: AvailableTool[],
+  toolName: (name: string) => string,
+): PromptToolContext[] {
   return tools.map((tool) => ({
-    name: toRealtimeToolName(tool.name),
+    name: toolName(tool.name),
     description: tool.description,
     requiresApproval: tool.requiresApproval,
-  }));
-}
-
-function toRealtimeToolDefinitions(tools: AvailableTool[]): Array<Record<string, unknown>> {
-  return tools.map((tool) => ({
-    type: 'function',
-    name: toRealtimeToolName(tool.name),
-    description: tool.description,
-    parameters: tool.parameters,
   }));
 }
 
@@ -101,11 +91,12 @@ export function buildRealtimeInstructions(
   personalContext: string | null,
   recentMessages: DbMessage[],
   availableTools: AvailableTool[],
+  toolName: (name: string) => string,
 ): string {
   const hasTools = availableTools.length > 0;
   const basePrompt = buildSystemPrompt({
     personalContext: personalContext ?? undefined,
-    availableTools: hasTools ? toRealtimePromptToolContexts(availableTools) : undefined,
+    availableTools: hasTools ? toRealtimePromptToolContexts(availableTools, toolName) : undefined,
     includeToolGuidance: hasTools,
     includeRetrievalGuidance: false,
   });
@@ -128,41 +119,4 @@ export function buildRealtimeInstructions(
   }
 
   return sections.join('\n\n');
-}
-
-export function buildRealtimeSessionConfig(
-  model: string,
-  voice: string,
-  transcriptionModel: string,
-  instructions: string,
-  tools: AvailableTool[],
-): Record<string, unknown> {
-  const hasTools = tools.length > 0;
-  return {
-    type: 'realtime',
-    model,
-    instructions,
-    tools: hasTools ? toRealtimeToolDefinitions(tools) : [],
-    tool_choice: hasTools ? 'auto' : 'none',
-    audio: {
-      input: {
-        noise_reduction: {
-          type: 'near_field',
-        },
-        transcription: {
-          model: transcriptionModel,
-        },
-        turn_detection: {
-          type: 'server_vad',
-          create_response: false,
-          interrupt_response: true,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 3000,
-        },
-      },
-      output: {
-        voice,
-      },
-    },
-  };
 }

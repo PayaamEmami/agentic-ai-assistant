@@ -97,6 +97,7 @@ export class RetrievalBridge {
       createEmbeddingProvider(
         config.openaiApiKey,
         openAIProviderModelConfigFromApiConfig(config),
+        config.llmEmbeddingProvider,
       );
     this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }

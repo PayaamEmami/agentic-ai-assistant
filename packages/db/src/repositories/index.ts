@@ -30,6 +30,15 @@ export type { AppSourceStats, IndexedSourceSummary, Source, SourceRepository } f
 export { toolExecutionRepository } from './tool-executions.js';
 export type { ToolExecution, ToolExecutionRepository } from './tool-executions.js';
 
+export { codingRunRepository } from './coding-runs.js';
+export type {
+  CodingRun,
+  CodingRunCreateInput,
+  CodingRunRepository,
+  CodingRunSettlement,
+  CodingRunStatus,
+} from './coding-runs.js';
+
 export { approvalRepository } from './approvals.js';
 export type { Approval, ApprovalRepository } from './approvals.js';
 

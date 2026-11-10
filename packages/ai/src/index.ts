@@ -16,12 +16,28 @@ export type {
 } from './types.js';
 
 export type { ModelProvider, ChatProvider, EmbeddingProvider } from './model-provider.js';
+export type {
+  RealtimeExchangeResult,
+  RealtimeListenerConnectInput,
+  RealtimeProvider,
+  RealtimeTool,
+  RealtimeVoiceConnectInput,
+} from './realtime-provider.js';
 export type { OpenAIProviderModelConfig } from './openai-provider.js';
 
 export { OpenAIProvider } from './openai-provider.js';
+export { OpenAIRealtimeProvider } from './openai-realtime-provider.js';
 
-export type { ChatProviderName } from './provider-factory.js';
-export { createChatProvider, createEmbeddingProvider } from './provider-factory.js';
+export type {
+  ChatProviderName,
+  EmbeddingProviderName,
+  RealtimeProviderName,
+} from './provider-factory.js';
+export {
+  createChatProvider,
+  createEmbeddingProvider,
+  createRealtimeProvider,
+} from './provider-factory.js';
 
 export { buildChatTurnPrompt, buildSystemPrompt } from './prompts.js';
 export type { PromptToolContext, SystemPromptContext } from './prompts.js';

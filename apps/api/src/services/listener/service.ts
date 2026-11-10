@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import type { ChatProvider } from '@aaa/ai';
+import { createRealtimeProvider, type ChatProvider, type RealtimeProvider } from '@aaa/ai';
 import { conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, getLogger } from '@aaa/observability';
 import type {
@@ -10,7 +10,6 @@ import type {
 } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
-import { exchangeRealtimeSdp } from '../realtime/sdp-exchange.js';
 
 const SESSION_TTL_MS = 4 * 60 * 60 * 1000;
 const TRANSCRIPT_ROLLOVER_CHARS = 12_000;
@@ -41,29 +40,6 @@ function transcriptText(content: unknown[]): { text: string; durationMs?: number
   return {
     text: typeof block?.['text'] === 'string' ? block['text'] : '',
     durationMs: typeof block?.['durationMs'] === 'number' ? block['durationMs'] : undefined,
-  };
-}
-
-export function buildListenerSessionConfig(model: string): Record<string, unknown> {
-  return {
-    type: 'transcription',
-    audio: {
-      input: {
-        noise_reduction: {
-          type: 'near_field',
-        },
-        transcription: {
-          model,
-          delay: 'low',
-          prompt: 'Educational video, lecture, tutorial, or spoken explanation.',
-        },
-        turn_detection: {
-          type: 'server_vad',
-          prefix_padding_ms: 300,
-          silence_duration_ms: 600,
-        },
-      },
-    },
   };
 }
 
@@ -151,10 +127,16 @@ export class ListenerService {
   private readonly sessions = new Map<string, ListenerSession>();
   private readonly autoAnalysisInFlight = new Set<string>();
 
+  private readonly realtime: RealtimeProvider;
+
   constructor(
     private readonly config: AppConfig,
     private readonly chatProvider: ChatProvider,
-  ) {}
+    realtimeProvider?: RealtimeProvider,
+  ) {
+    this.realtime =
+      realtimeProvider ?? createRealtimeProvider(config.openaiApiKey, config.realtimeProvider);
+  }
 
   private pruneSessions(): void {
     const now = Date.now();
@@ -234,14 +216,10 @@ export class ListenerService {
     sdp: string,
   ): Promise<string> {
     await this.requireSession(userId, sessionId, conversationId);
-    const sessionConfig = buildListenerSessionConfig(
-      this.config.openaiStreamingTranscriptionModel,
-    );
-    const exchange = await exchangeRealtimeSdp({
-      apiKey: this.config.openaiApiKey,
+    const exchange = await this.realtime.connectListener({
       userId,
       sdp,
-      sessionConfig,
+      model: this.config.openaiStreamingTranscriptionModel,
       telemetry: {
         component: 'listener-service',
         eventPrefix: 'listener.sdp_exchange',

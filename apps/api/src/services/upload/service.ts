@@ -101,6 +101,7 @@ export class UploadService {
       createEmbeddingProvider(
         config.openaiApiKey,
         openAIProviderModelConfigFromApiConfig(config),
+        config.llmEmbeddingProvider,
       );
     this.embeddingModel = options?.embeddingModel ?? config.openaiEmbeddingModel;
   }

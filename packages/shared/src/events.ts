@@ -64,7 +64,7 @@ export interface ToolProgressEvent {
   conversationId: string;
   toolExecutionId: string;
   toolName: string;
-  phase: 'clone' | 'plan' | 'edit' | 'validate' | 'commit' | 'push' | 'pr_update' | 'done';
+  phase: string;
   message: string;
 }
 

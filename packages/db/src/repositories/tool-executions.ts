@@ -49,6 +49,11 @@ export interface ToolExecutionRepository {
   ): Promise<ToolExecution>;
   updateStatus(id: string, status: string, output?: unknown): Promise<void>;
   /**
+   * Completes a tool execution that is still running. Returns null when another
+   * worker already moved it, so a late poll cannot continue the chat twice.
+   */
+  finishIfRunning(id: string, status: 'completed' | 'failed', output: unknown): Promise<ToolExecution | null>;
+  /**
    * Atomically move a tool execution into `running` when it is still `pending`.
    * Returns null when another worker already claimed it or the row is terminal.
    */
@@ -174,6 +179,24 @@ export const toolExecutionRepository: ToolExecutionRepository = {
        WHERE id = $3`,
       [status, JSON.stringify(output), id],
     );
+  },
+
+  async finishIfRunning(
+    id: string,
+    status: 'completed' | 'failed',
+    output: unknown,
+  ): Promise<ToolExecution | null> {
+    const pool = getPool();
+    const result = await pool.query<ToolExecutionRow>(
+      `UPDATE tool_executions
+       SET status = $2,
+           output = $3::jsonb,
+           completed_at = NOW()
+       WHERE id = $1 AND status = 'running'
+       RETURNING ${SELECT_COLUMNS}`,
+      [id, status, JSON.stringify(output)],
+    );
+    return result.rows[0] ?? null;
   },
 
   async claimForExecution(id: string): Promise<ToolExecution | null> {

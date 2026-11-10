@@ -1,9 +1,10 @@
+import { loadWorkerConfig } from '@aaa/config';
 import { isMcpToolName, toRemoteMcpToolName, unwrapMcpToolData } from '@aaa/mcp';
-import type { ToolProgressEvent } from '@aaa/shared';
-import { CodingTaskRunner } from '@aaa/tool-providers';
-import { publishToolEvent, updateInlineToolResult } from './events.js';
+import { CodingAgentError, createCodingAgent, GitHubToolProvider } from '@aaa/tool-providers';
+import { acceptCodingTask } from './coding-task.js';
 import {
   resolveGitHubRepo,
+  resolveGitHubToken,
   withGitHubProvider,
   withGoogleProvider,
   withMcpClient,
@@ -16,7 +17,6 @@ import {
   requireReviewEvent,
   requireString,
   toNumberArray,
-  toStringArray,
 } from './validation.js';
 
 const nativeToolHandlers: Record<string, ToolHandler> = {
@@ -135,47 +135,51 @@ const githubToolHandlers: Record<string, ToolHandler> = {
         body: asString(input['body']),
       }),
     ),
-  'github.coding_task': ({
+  'github.coding_task': async ({
     userId,
     conversationId,
     toolExecutionId,
     toolName,
     input,
     assistantMessageId,
-  }) =>
-    withGitHubProvider(userId, async (_provider, token) => {
-      const runner = new CodingTaskRunner({
-        githubToken: token,
+    correlationId,
+  }) => {
+    try {
+      const token = await resolveGitHubToken(userId);
+      const provider = new GitHubToolProvider(token);
+      const repo = await resolveGitHubRepo(requireString(input, 'repo'), provider);
+      const pullNumber = asNumber(input['targetPullNumber']);
+      const config = loadWorkerConfig();
+      return await acceptCodingTask({
+        agent: createCodingAgent({
+          provider: config.codingAgentProvider,
+          apiKey: config.cursorApiKey,
+        }),
+        userId,
         conversationId,
         toolExecutionId,
-        progress: {
-          report: async ({ phase, message }) => {
-            await updateInlineToolResult(assistantMessageId, toolExecutionId, {
-              status: 'running',
-              detail: message,
-            });
-            const event: ToolProgressEvent = {
-              type: 'tool.progress',
-              conversationId,
-              toolExecutionId,
-              toolName,
-              phase,
-              message,
-            };
-            await publishToolEvent(event);
-          },
-        },
-      });
-
-      return runner.run({
-        repo: await resolveGitHubRepo(requireString(input, 'repo'), _provider),
+        toolName,
+        messageId: assistantMessageId,
+        correlationId,
+        repo,
         task: requireString(input, 'task'),
-        toolExecutionId,
         baseBranch: asString(input['baseBranch']),
-        targetPullNumber: asNumber(input['targetPullNumber']),
-        validationCommands: toStringArray(input['validationCommands']),
+        pullRequestUrl:
+          typeof pullNumber === 'number'
+            ? `https://github.com/${repo}/pull/${pullNumber}`
+            : undefined,
       });
-    }),
+    } catch (error) {
+      if (error instanceof CodingAgentError) {
+        return { success: false, result: null, error: error.userMessage };
+      }
+      return {
+        success: false,
+        result: null,
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  },
 };
 
 const googleToolHandlers: Record<string, ToolHandler> = {
@@ -261,6 +265,7 @@ export async function executeTool(
   toolName: string,
   input: Record<string, unknown>,
   assistantMessageId: string | null,
+  correlationId: string,
 ): Promise<ToolExecutionResult> {
   const handler = isMcpToolName(toolName) ? mcpToolHandler : toolHandlers[toolName];
   if (!handler) {
@@ -274,5 +279,6 @@ export async function executeTool(
     toolName,
     input,
     assistantMessageId,
+    correlationId,
   });
 }

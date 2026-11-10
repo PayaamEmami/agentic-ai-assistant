@@ -252,7 +252,7 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
   {
     name: 'github.coding_task',
     description:
-      'Run a long-lived GitHub coding task in a worker sandbox. It can clone a repo, make code changes, validate them, push a branch, and create or update a pull request.',
+      'Hand a repository task to the coding-agent provider. The run stays open until that provider finishes, then returns its summary. A branch or pull request is included only when the run produced one.',
     parameters: {
       type: 'object',
       properties: {
@@ -260,11 +260,6 @@ export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
         task: { type: 'string' },
         baseBranch: { type: 'string' },
         targetPullNumber: { type: 'number' },
-        validationCommands: {
-          type: 'array',
-          items: { type: 'string' },
-          maxItems: 10,
-        },
       },
       required: ['repo', 'task'],
       additionalProperties: false,

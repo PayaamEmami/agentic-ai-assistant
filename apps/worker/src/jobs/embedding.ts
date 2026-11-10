@@ -39,6 +39,7 @@ export async function handleEmbedding(job: Job<EmbeddingJobData>): Promise<void>
   const provider = createEmbeddingProvider(
     config.openaiApiKey,
     openAIProviderModelConfigFromWorkerConfig(config),
+    config.llmEmbeddingProvider,
   );
   const result = await provider.embed({
     input: chunks.map((chunk) => chunk.content),

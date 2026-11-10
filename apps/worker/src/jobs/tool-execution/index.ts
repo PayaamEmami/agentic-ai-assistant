@@ -5,7 +5,9 @@ import { logger } from '../../lib/logger.js';
 import { enqueueChatContinuationJob } from '../../lib/chat-continuation-queue.js';
 import { publishToolEvent, updateInlineToolResult } from './events.js';
 import { executeTool } from './handlers.js';
-import type { ToolExecutionResult } from './types.js';
+import { isDeferredToolResult, type ToolExecutionResult } from './types.js';
+
+type SettledToolExecutionResult = Exclude<ToolExecutionResult, { deferred: true }>;
 
 type ToolExecutionRecord = NonNullable<Awaited<ReturnType<typeof toolExecutionRepository.findById>>>;
 
@@ -16,7 +18,7 @@ interface FinalizeToolExecutionInput {
   correlationId: string;
   messageId: string | null;
   originMode: ToolExecutionRecord['originMode'];
-  result: ToolExecutionResult;
+  result: SettledToolExecutionResult;
 }
 
 export async function finalizeToolExecution({
@@ -179,7 +181,23 @@ export async function handleToolExecution(job: Job<ToolExecutionJobData>): Promi
     toolName,
     job.data.input,
     execution.messageId,
+    correlationId,
   );
+
+  if (isDeferredToolResult(result)) {
+    logger.info(
+      {
+        event: 'tool.execution.deferred',
+        outcome: 'success',
+        toolExecutionId,
+        toolName,
+        conversationId,
+        correlationId,
+      },
+      'Tool execution stays running until the coding agent finishes',
+    );
+    return;
+  }
 
   await finalizeToolExecution({
     toolExecutionId,

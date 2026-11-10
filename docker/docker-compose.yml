@@ -36,6 +36,8 @@ services:
       OTEL_SERVICE_NAMESPACE: aaa
       LOG_FILE_ENABLED: 'false'
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      CODING_AGENT_PROVIDER: ${CODING_AGENT_PROVIDER:-cursor}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
       S3_BUCKET: aaa-uploads
       S3_REGION: us-west-1
     depends_on:
@@ -57,6 +59,8 @@ services:
       WORKER_OBSERVABILITY_HOST: 0.0.0.0
       WORKER_OBSERVABILITY_PORT: '9464'
       OPENAI_API_KEY: ${OPENAI_API_KEY:-sk-placeholder}
+      CODING_AGENT_PROVIDER: ${CODING_AGENT_PROVIDER:-cursor}
+      CURSOR_API_KEY: ${CURSOR_API_KEY:-}
     depends_on:
       - postgres
       - redis

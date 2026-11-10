@@ -1,4 +1,4 @@
-import { createChatProvider, createEmbeddingProvider } from '@aaa/ai';
+import { createChatProvider, createEmbeddingProvider, createRealtimeProvider } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import type { AppConfig } from '../config.js';
 import { ApprovalService } from './approval/index.js';
@@ -31,7 +31,12 @@ export function buildApiServices(config: AppConfig): ApiServices {
     modelConfig,
     config.llmChatProvider,
   );
-  const embeddingProvider = createEmbeddingProvider(config.openaiApiKey, modelConfig);
+  const embeddingProvider = createEmbeddingProvider(
+    config.openaiApiKey,
+    modelConfig,
+    config.llmEmbeddingProvider,
+  );
+  const realtimeProvider = createRealtimeProvider(config.openaiApiKey, config.realtimeProvider);
   const personalizationService = new PersonalizationService();
   const retrievalBridge = new RetrievalBridge(config, embeddingProvider, {
     embeddingModel: config.openaiEmbeddingModel,
@@ -56,13 +61,14 @@ export function buildApiServices(config: AppConfig): ApiServices {
       retrievalBridge,
       enqueueToolExecutionJob,
     }),
-    listenerService: new ListenerService(config, chatProvider),
+    listenerService: new ListenerService(config, chatProvider, realtimeProvider),
     personalizationService,
     uploadService: new UploadService(config, embeddingProvider, {
       embeddingModel: config.openaiEmbeddingModel,
     }),
     voiceService: new VoiceService(config, personalizationService, retrievalBridge, {
       enqueueToolExecutionJob,
+      realtimeProvider,
     }),
   };
 }

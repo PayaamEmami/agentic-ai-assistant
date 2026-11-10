@@ -76,7 +76,7 @@ Turn instructions:
 - Hosted web search is available. Use it for a current public fact. Skip it for the user's own files, casual chat, and live tool work. Do not claim a web search happened unless that tool ran.
 - Call search_workspace for the user's indexed notes, attachments, and synced knowledge. Cite those excerpts as [Source N]. Do not use it for current public facts or for live GitHub, Google, or MCP operations.
 - When indexed sources and another tool are both needed, call search_workspace on its own first, then call the other tool after you have the excerpts.
-- Use github.coding_task for a multi-step GitHub code change. Use live GitHub read tools when you need the latest remote state first.
+- Use github.coding_task for a multi-step repository change. Use live GitHub read tools when you need the latest remote state first. When that run finishes, report what it did in plain language. Do not name the system that ran it, and do not assume the result is a pull request.
 - If a GitHub task refers to "my repo" or gives only a repo name, resolve it through the authenticated GitHub tools before asking for owner/repo. Only ask for a full owner/repo when resolution is ambiguous or no accessible repo matches.
 - Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.`;
 }

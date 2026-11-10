@@ -1,28 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { buildListenerSessionConfig, parseListenerInsights } from './service.js';
+import { parseListenerInsights } from './service.js';
 
 describe('listener service helpers', () => {
-  it('builds a transcription-only realtime session', () => {
-    expect(buildListenerSessionConfig('gpt-live-transcribe')).toEqual({
-      type: 'transcription',
-      audio: {
-        input: {
-          noise_reduction: { type: 'near_field' },
-          transcription: {
-            model: 'gpt-live-transcribe',
-            delay: 'low',
-            prompt: 'Educational video, lecture, tutorial, or spoken explanation.',
-          },
-          turn_detection: {
-            type: 'server_vad',
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600,
-          },
-        },
-      },
-    });
-  });
-
   it('parses and bounds insight JSON', () => {
     expect(
       parseListenerInsights(

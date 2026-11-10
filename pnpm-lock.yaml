@@ -419,21 +419,12 @@ importers:
 
   packages/tool-providers:
     dependencies:
-      '@aaa/ai':
-        specifier: workspace:*
-        version: link:../ai
-      '@aaa/config':
-        specifier: workspace:*
-        version: link:../config
       '@aaa/integrations':
         specifier: workspace:*
         version: link:../integrations
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
-      '@aaa/shared':
-        specifier: workspace:*
-        version: link:../shared
     devDependencies:
       '@types/node':
         specifier: ^20.0.0

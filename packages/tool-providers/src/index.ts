@@ -7,9 +7,12 @@ export type {
   GoogleDriveToolProviderOptions,
 } from './google-drive-tool-provider.js';
 
-export { CodingTaskRunner } from './coding-task-runner.js';
+export { CodingAgentError, codingAgentPrompt, repositoryUrl } from './coding-agent.js';
 export type {
-  GitHubCodingTaskInput,
-  CodingTaskProgressReporter,
-  CodingTaskResult,
-} from './coding-task-runner.js';
+  CodingAgent,
+  CodingAgentRequest,
+  CodingAgentSnapshot,
+  CodingAgentStatus,
+} from './coding-agent.js';
+export { createCodingAgent } from './coding-agent-factory.js';
+export { CursorCodingAgent, snapshotFromRun } from './cursor-coding-agent.js';

@@ -37,6 +37,7 @@ vi.mock('../lib/logger.js', () => ({
 vi.mock('@aaa/config', () => ({
   loadWorkerConfig: vi.fn(() => ({
     openaiApiKey: 'test-key',
+    llmEmbeddingProvider: 'openai',
     openaiModel: 'gpt-5-mini',
     openaiEmbeddingModel: 'text-embedding-3-small',
     openaiStandardTranscriptionModel: 'transcribe-test',

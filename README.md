@@ -20,6 +20,8 @@ When you send a message, the assistant answers. If it needs something the conver
 - **Your files** — Notes, attachments, and files from connected accounts
 - **Connected apps** — GitHub, Google, and other tools. Changes wait for your approval
 
+A repository task is handed to a coding-agent provider, separate from the chat model. The assistant tells you what happened in the same conversation. You can change that provider without changing the conversation.
+
 ### Live Voice
 
 Live voice makes the assistant feel more natural to work with by letting users talk through ideas, ask follow-up questions, and keep a conversational flow without leaving the chat experience.
@@ -33,13 +35,13 @@ Personalization settings control both assistant behavior and long-term memory. C
 Provider apps connect once per external provider and expose separate internal capabilities:
 
 - **Knowledge** — Used for sync, indexing, and retrieval, such as using docs or repository context for RAG
-- **Tools** — Used for live tool access and side-effectful operations, such as editing docs in Google Drive or making code changes in a GitHub repository
+- **Tools** — Used for live tool access and side-effectful operations, such as editing docs in Google Drive or handing a repository task to the coding-agent provider
 
 ## Architecture
 
 ### System Architecture
 
-AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage. The in-app picker chooses the chat model for a thread. The Next.js web app talks to a Fastify API over REST and WebSocket. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
+The browser talks to the web app. Chat goes through the API. Voice connects onward to the model provider. The API stores conversations, memory, and files in PostgreSQL, and uses Redis to hand off slower work. The worker does that work: syncing connected accounts, preparing search, running tools you approved, and checking on repository tasks.
 
 ```mermaid
 flowchart TB
@@ -57,32 +59,30 @@ flowchart TB
   end
 
   subgraph external [External]
-    openai[OpenAI]
-    providers["GitHub / Google"]
+    model["Model provider"]
+    providers["Connected apps"]
+    coding["Coding-agent provider"]
   end
 
   browser --> web
   web -->|"REST + WebSocket"| api
-  web -.->|"WebRTC realtime"| openai
+  web -.->|"WebRTC realtime"| model
   api --> pg
   api --> redis
-  api --> openai
+  api --> model
   api --> providers
   worker --> redis
   worker --> pg
-  worker --> openai
+  worker --> model
   worker --> providers
+  worker --> coding
 ```
 
-Text chat streams tokens and tool events over WebSocket. When the model calls a live tool, the API records it, requests approval if needed, and enqueues execution on the worker. After a non-voice tool finishes, a chat-continuation job returns to the API so the model can continue the turn. Workspace search runs in the API during the turn. Connected apps split into knowledge (sync, index, retrieve) and tools (live reads and writes against GitHub and Google).
+The model provider answers and handles live voice. Connected apps are the accounts you link, such as GitHub and Google. Repository work goes to its own coding-agent provider, which you can change without changing the conversation. The worker starts the task and brings the summary back. In production, the web app, API, worker, and databases run on one host behind a reverse proxy. See the infrastructure docs for deploy details.
 
-Shared packages own the seams between apps: the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat completions go through that gateway, so the in-app picker can switch Luna and Sol on a thread. Embeddings stay on OpenAI because stored vectors are 1536-dimensional. Voice and Listener Mode use OpenAI Realtime and do not go through the chat-provider gateway.
+### From Message to Reply
 
-Production runs the web, API, worker, and data services on a single host behind a reverse proxy. See the infrastructure docs for deploy details.
-
-### Chat turn
-
-A text message can search the public web, search the user's own files, or call a live tool. The model decides which. A search of the user's files runs in the API, and the model continues in the same turn. Writes still wait for approval, then run on the worker, and a later turn continues from the tool result.
+You send a message, and the model answers. If the conversation does not already have what it needs, the model can check a public fact, search your files, or use a connected app. A change to a document or a repository waits for your approval, then runs in the background. When it finishes, the model tells you what happened.
 
 ```mermaid
 flowchart TD
