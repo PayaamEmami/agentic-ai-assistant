@@ -8,14 +8,6 @@ import {
 import { getPool } from '@aaa/db';
 import { AppError } from '../../lib/errors.js';
 
-const MEMORY_KIND_ORDER: MemoryKind[] = [
-  'fact',
-  'preference',
-  'relationship',
-  'project',
-  'person',
-  'instruction',
-];
 const MEMORY_KIND_LABELS: Record<MemoryKind, string> = {
   fact: 'Facts',
   preference: 'Preferences',
@@ -24,9 +16,36 @@ const MEMORY_KIND_LABELS: Record<MemoryKind, string> = {
   person: 'People',
   instruction: 'Instructions',
 };
-const MAX_MEMORIES_PER_KIND = 2;
+const MAX_INSTRUCTIONS = 4;
+const MIN_CONTEXT_MEMORIES = 4;
 const MAX_MEMORY_CONTENT_CHARS = 180;
 const MAX_PERSONAL_CONTEXT_CHARS = 2500;
+const QUERY_STOPWORDS = new Set([
+  'about',
+  'does',
+  'from',
+  'have',
+  'info',
+  'information',
+  'know',
+  'like',
+  'show',
+  'tell',
+  'that',
+  'them',
+  'they',
+  'this',
+  'what',
+  'when',
+  'where',
+  'which',
+  'with',
+  'would',
+  'your',
+  'you',
+  'me',
+  'my',
+]);
 
 export interface PersonalizationProfileState {
   writingStyle: string | null;
@@ -65,7 +84,90 @@ function trimNullable(value: string | null | undefined): string | null | undefin
   return normalized.length > 0 ? normalized : null;
 }
 
-export function buildPersonalContext(state: PersonalizationState): string | undefined {
+function queryTokens(query: string | undefined): string[] {
+  if (!query) {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .map((token) => token.trim())
+        .filter((token) => token.length >= 3 && !QUERY_STOPWORDS.has(token)),
+    ),
+  );
+}
+
+function tokenOverlap(tokens: string[], content: string): number {
+  if (tokens.length === 0) {
+    return 0;
+  }
+
+  const contentTokens = new Set(
+    content
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .map((token) => token.trim())
+      .filter((token) => token.length >= 3),
+  );
+  let matches = 0;
+  for (const token of tokens) {
+    if (contentTokens.has(token)) {
+      matches += 1;
+    }
+  }
+  return matches / tokens.length;
+}
+
+function byUpdatedDesc(left: MemoryItem, right: MemoryItem): number {
+  return right.updatedAt.getTime() - left.updatedAt.getTime();
+}
+
+export function selectMemoriesForContext(
+  memories: MemoryItem[],
+  query?: string,
+): MemoryItem[] {
+  const instructions = memories
+    .filter((memory) => memory.kind === 'instruction')
+    .sort(byUpdatedDesc)
+    .slice(0, MAX_INSTRUCTIONS);
+  const others = memories.filter((memory) => memory.kind !== 'instruction');
+  const tokens = queryTokens(query);
+  if (tokens.length === 0) {
+    return [...instructions, ...others.sort(byUpdatedDesc).slice(0, MIN_CONTEXT_MEMORIES)];
+  }
+
+  const ranked = others
+    .map((memory) => ({ memory, overlap: tokenOverlap(tokens, memory.content) }))
+    .sort((left, right) => {
+      if (right.overlap !== left.overlap) {
+        return right.overlap - left.overlap;
+      }
+      return byUpdatedDesc(left.memory, right.memory);
+    });
+  const matched = ranked.filter((item) => item.overlap > 0).map((item) => item.memory);
+  const unmatched = ranked.filter((item) => item.overlap === 0).map((item) => item.memory);
+
+  return [...instructions, ...matched, ...unmatched];
+}
+
+function appendMemorySection(sections: string[], kind: MemoryKind, items: MemoryItem[]): void {
+  if (items.length === 0) {
+    return;
+  }
+
+  const lines = items.map(
+    (memory) => `- ${truncateText(memory.content, MAX_MEMORY_CONTENT_CHARS)}`,
+  );
+  sections.push(`${MEMORY_KIND_LABELS[kind]}:\n${lines.join('\n')}`);
+}
+
+export function buildPersonalContext(
+  state: PersonalizationState,
+  query?: string,
+): string | undefined {
   const sections: string[] = [];
 
   const profileLines: string[] = [];
@@ -79,20 +181,27 @@ export function buildPersonalContext(state: PersonalizationState): string | unde
     sections.push(`User profile:\n${profileLines.join('\n')}`);
   }
 
-  for (const kind of MEMORY_KIND_ORDER) {
-    const items = state.memories
-      .filter((memory) => memory.kind === kind)
-      .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
-      .slice(0, MAX_MEMORIES_PER_KIND);
+  const selected = selectMemoriesForContext(state.memories, query);
+  appendMemorySection(
+    sections,
+    'instruction',
+    selected.filter((memory) => memory.kind === 'instruction'),
+  );
 
-    if (items.length === 0) {
+  const groups: Array<{ kind: MemoryKind; items: MemoryItem[] }> = [];
+  for (const memory of selected) {
+    if (memory.kind === 'instruction') {
       continue;
     }
-
-    const lines = items.map(
-      (memory) => `- ${truncateText(memory.content, MAX_MEMORY_CONTENT_CHARS)}`,
-    );
-    sections.push(`${MEMORY_KIND_LABELS[kind]}:\n${lines.join('\n')}`);
+    const group = groups.find((candidate) => candidate.kind === memory.kind);
+    if (group) {
+      group.items.push(memory);
+      continue;
+    }
+    groups.push({ kind: memory.kind, items: [memory] });
+  }
+  for (const group of groups) {
+    appendMemorySection(sections, group.kind, group.items);
   }
 
   if (sections.length === 0) {
@@ -125,8 +234,8 @@ export class PersonalizationService {
     };
   }
 
-  async getPersonalContext(userId: string): Promise<string | undefined> {
-    return buildPersonalContext(await this.getPersonalization(userId));
+  async getPersonalContext(userId: string, query?: string): Promise<string | undefined> {
+    return buildPersonalContext(await this.getPersonalization(userId), query);
   }
 
   async updateProfile(

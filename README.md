@@ -39,7 +39,7 @@ Provider apps connect once per external provider and expose separate internal ca
 
 ### System Architecture
 
-AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage, and treats the chat model as a swappable backend. The Next.js web app talks to a Fastify API over REST and WebSocket. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
+AAA keeps conversations, memory, connected apps, and tool workflows in user-owned storage. The in-app picker chooses the chat model for a thread. The Next.js web app talks to a Fastify API over REST and WebSocket. Voice and Listener Mode mint OpenAI Realtime sessions on the API, then stream audio over WebRTC. A BullMQ worker handles ingestion, embeddings, app sync, and tool execution. PostgreSQL with pgvector stores app data, attachments, memory, and embeddings; Redis backs the job queues.
 
 ```mermaid
 flowchart TB
@@ -76,7 +76,7 @@ flowchart TB
 
 Text chat streams tokens and tool events over WebSocket. When the model calls a live tool, the API records it, requests approval if needed, and enqueues execution on the worker. After a non-voice tool finishes, a chat-continuation job returns to the API so the model can continue the turn. Workspace search runs in the API during the turn. Connected apps split into knowledge (sync, index, retrieve) and tools (live reads and writes against GitHub and Google).
 
-Shared packages own the seams between apps: the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat models can be swapped without changing those layers. Voice and Listener Mode use a realtime path and do not go through the chat-provider gateway.
+Shared packages own the seams between apps: the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat completions go through that gateway, so the in-app picker can switch Luna and Sol on a thread. Embeddings stay on OpenAI because stored vectors are 1536-dimensional. Voice and Listener Mode use OpenAI Realtime and do not go through the chat-provider gateway.
 
 Production runs the web, API, worker, and data services on a single host behind a reverse proxy. See the infrastructure docs for deploy details.
 

@@ -27,6 +27,24 @@ export function extractMessageText(content: unknown[]): string {
   return textParts.filter(Boolean).join('\n').trim();
 }
 
+export function latestUserMessageText(
+  messages: Array<{ role: string; content: unknown[] }>,
+): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== 'user') {
+      continue;
+    }
+
+    const text = extractMessageText(message.content);
+    if (text.length > 0) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
 function summarizeHistory(messages: DbMessage[]): string {
   const historyLines = messages
     .map((message) => {

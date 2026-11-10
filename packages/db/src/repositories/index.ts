@@ -17,7 +17,12 @@ export { chunkRepository } from './chunks.js';
 export type { Chunk, ChunkRepository } from './chunks.js';
 
 export { embeddingRepository } from './embeddings.js';
-export type { Embedding, EmbeddingRepository, EmbeddingSearchFilters } from './embeddings.js';
+export type {
+  Embedding,
+  EmbeddingRepository,
+  EmbeddingSearchFilters,
+  EmbeddingSearchHit,
+} from './embeddings.js';
 
 export { sourceRepository } from './sources.js';
 export type { AppSourceStats, IndexedSourceSummary, Source, SourceRepository } from './sources.js';
@@ -27,12 +32,6 @@ export type { ToolExecution, ToolExecutionRepository } from './tool-executions.j
 
 export { approvalRepository } from './approvals.js';
 export type { Approval, ApprovalRepository } from './approvals.js';
-
-export { preferenceRepository } from './preferences.js';
-export type { Preference, PreferenceRepository } from './preferences.js';
-
-export { memoryRepository } from './memories.js';
-export type { Memory, MemoryRepository } from './memories.js';
 
 export { appCapabilityConfigRepository } from './app-capability-configs.js';
 export type {

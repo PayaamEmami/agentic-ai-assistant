@@ -10,36 +10,11 @@ import {
 import { isAbortError } from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { logger } from '../../lib/logger.js';
+import { scoreWorkspaceMatch } from './score.js';
 
 const DEFAULT_RESULT_LIMIT = 6;
 const MAX_RESULT_LIMIT = 20;
 const CANDIDATE_MULTIPLIER = 4;
-const QUERY_STOPWORDS = new Set([
-  'about',
-  'does',
-  'from',
-  'have',
-  'info',
-  'information',
-  'know',
-  'like',
-  'show',
-  'tell',
-  'that',
-  'them',
-  'they',
-  'this',
-  'what',
-  'when',
-  'where',
-  'which',
-  'with',
-  'would',
-  'your',
-  'you',
-  'me',
-  'my',
-]);
 const GOOGLE_APP_HINT = /\b(google drive|google docs?)\b/i;
 const GITHUB_APP_HINT = /\bgithub\b/i;
 
@@ -75,40 +50,6 @@ function normalizeLimit(limit: number | undefined): number {
   return Math.min(MAX_RESULT_LIMIT, Math.max(1, Math.floor(limit)));
 }
 
-function tokenize(text: string): string[] {
-  const normalized = text
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .map((token) => token.trim())
-    .filter((token) => token.length >= 3 && !QUERY_STOPWORDS.has(token));
-
-  return Array.from(new Set(normalized));
-}
-
-function normalizeText(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-function keywordBoost(query: string, content: string, maxBoost = 0.25): number {
-  const keywords = tokenize(query);
-  if (keywords.length === 0) {
-    return 0;
-  }
-
-  const normalizedContent = content.toLowerCase();
-  let matches = 0;
-  for (const keyword of keywords) {
-    if (normalizedContent.includes(keyword)) {
-      matches += 1;
-    }
-  }
-
-  return (matches / keywords.length) * maxBoost;
-}
-
 function inferSearchFilters(query: string): EmbeddingSearchFilters | undefined {
   const appKinds = new Set<string>();
 
@@ -125,45 +66,6 @@ function inferSearchFilters(query: string): EmbeddingSearchFilters | undefined {
   }
 
   return { appKinds: Array.from(appKinds) };
-}
-
-function titleMatchBoost(query: string, title: string): number {
-  const queryTokens = tokenize(query);
-  const titleTokens = tokenize(title);
-  if (queryTokens.length === 0 || titleTokens.length === 0) {
-    return 0;
-  }
-
-  const queryTokenSet = new Set(queryTokens);
-  const sharedTokens = titleTokens.filter((token) => queryTokenSet.has(token));
-  if (sharedTokens.length === 0) {
-    return 0;
-  }
-
-  const normalizedQuery = normalizeText(query);
-  const normalizedTitle = normalizeText(title);
-  let boost = 0;
-
-  if (
-    normalizedTitle.length > 0 &&
-    (normalizedQuery.includes(normalizedTitle) || normalizedTitle.includes(normalizedQuery))
-  ) {
-    boost += 1.25;
-  }
-
-  const titleCoverage = sharedTokens.length / titleTokens.length;
-  const queryCoverage = sharedTokens.length / queryTokens.length;
-  boost += titleCoverage * 1.25;
-  boost += queryCoverage * 0.75;
-
-  const distinctiveSharedTokens = sharedTokens.filter((token) => token.length >= 5);
-  if (distinctiveSharedTokens.length >= 2) {
-    boost += 0.75;
-  } else if (distinctiveSharedTokens.length === 1 && titleCoverage >= 0.5) {
-    boost += 0.35;
-  }
-
-  return Math.min(boost, 2.5);
 }
 
 function truncateOnWordBoundary(content: string, maxLength: number): string {
@@ -230,6 +132,7 @@ export class RetrievalBridge {
         queryVector,
         candidateLimit,
         userId,
+        embeddingResponse.model,
         searchFilters,
       );
 
@@ -256,15 +159,12 @@ export class RetrievalBridge {
       const sources = await sourceRepository.listByIds(sourceIds);
       const sourceById = new Map(sources.map((source) => [source.id, source]));
 
-      const hydratedResults = vectorMatches.map((match, index) =>
-        this.buildResultFromMatch(
-          match.chunkId,
-          index,
-          vectorMatches.length,
-          trimmedQuery,
-          userId,
-          { chunkById, documentById, sourceById },
-        ),
+      const hydratedResults = vectorMatches.map((match) =>
+        this.buildResultFromMatch(match.chunkId, match.distance, trimmedQuery, userId, {
+          chunkById,
+          documentById,
+          sourceById,
+        }),
       );
 
       const results = hydratedResults
@@ -298,8 +198,7 @@ export class RetrievalBridge {
 
   private buildResultFromMatch(
     chunkId: string,
-    index: number,
-    totalCandidates: number,
+    distance: number,
     query: string,
     userId: string,
     hydrationMaps: {
@@ -328,17 +227,18 @@ export class RetrievalBridge {
     }
 
     const sourceId = source?.id ?? document.sourceId ?? document.id;
-    const baseScore = totalCandidates <= 1 ? 1 : 1 - index / (totalCandidates - 1);
-    const contentScore = keywordBoost(query, chunk.content);
-    const titleScore = keywordBoost(query, document.title, 0.75);
-    const titleMatchScore = titleMatchBoost(query, document.title);
 
     return {
       chunkId: chunk.id,
       documentId: chunk.documentId,
       sourceId,
       content: chunk.content,
-      score: baseScore + contentScore + titleScore + titleMatchScore,
+      score: scoreWorkspaceMatch({
+        distance,
+        query,
+        content: chunk.content,
+        title: document.title,
+      }),
       metadata: {
         ...chunk.metadata,
         ...(source?.appKind ? { appKind: source.appKind } : {}),

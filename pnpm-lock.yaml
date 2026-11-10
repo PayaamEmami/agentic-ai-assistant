@@ -368,9 +368,15 @@ importers:
 
   packages/queues:
     dependencies:
+      '@aaa/config':
+        specifier: workspace:*
+        version: link:../config
       '@aaa/observability':
         specifier: workspace:*
         version: link:../observability
+      '@aaa/shared':
+        specifier: workspace:*
+        version: link:../shared
       bullmq:
         specifier: ^5.0.0
         version: 5.70.4

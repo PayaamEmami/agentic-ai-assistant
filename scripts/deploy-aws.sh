@@ -240,6 +240,7 @@ s3_prefix="deployments/${deployment_id}"
 aws_cli s3 cp "${env_bundle_path}" "s3://${DEPLOY_BUCKET}/${s3_prefix}/.env.production"
 aws_cli s3 cp docker/docker-compose.prod.yml "s3://${DEPLOY_BUCKET}/${s3_prefix}/docker-compose.prod.yml"
 aws_cli s3 cp docker/Caddyfile.prod "s3://${DEPLOY_BUCKET}/${s3_prefix}/Caddyfile.prod"
+aws_cli s3 cp scripts/backup-postgres.sh "s3://${DEPLOY_BUCKET}/${s3_prefix}/backup-postgres.sh"
 
 python - "$ssm_params" "$DEPLOY_BUCKET" "$s3_prefix" "$AWS_REGION" "$ECR_REGISTRY" "$deployment_id" "$IMAGE_TAG" <<'PY'
 import base64
@@ -340,6 +341,15 @@ if ! curl -fsS --max-time 10 "http://127.0.0.1/health" >/dev/null; then
   exit 1
 fi
 ln -sfn {release_dir} {app_dir}/current
+install -d -m 755 /opt/aaa/bin
+aws s3 cp s3://{bucket}/{s3_prefix}/backup-postgres.sh /opt/aaa/bin/backup-postgres.sh
+chmod 755 /opt/aaa/bin/backup-postgres.sh
+cat > /etc/cron.d/aaa-postgres-backup <<'CRON'
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+15 8 * * * root /opt/aaa/bin/backup-postgres.sh >> /var/log/aaa-postgres-backup.log 2>&1
+CRON
+chmod 644 /etc/cron.d/aaa-postgres-backup
 # Remove now-unused aaa-* images (old SHAs) — `prune` only catches dangling.
 for repo in aaa-api aaa-web aaa-worker; do
   docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' \
@@ -348,6 +358,7 @@ for repo in aaa-api aaa-web aaa-worker; do
 done
 docker image prune -af --filter "until=24h" >/dev/null 2>&1 || true
 aws s3 rm s3://{bucket}/{s3_prefix}/.env.production
+aws s3 rm s3://{bucket}/{s3_prefix}/backup-postgres.sh
 ls -1dt {app_dir}/releases/*/ 2>/dev/null | tail -n +4 | xargs -r rm -rf
 echo "=== post-deploy diagnostics ==="
 df -h /

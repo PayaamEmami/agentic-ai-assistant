@@ -132,7 +132,26 @@ cd /opt/aaa/app/current
 sudo docker compose --env-file /opt/aaa/app/.env.production -f docker/docker-compose.prod.yml up -d
 ```
 
-If a migration changed the database, recover it with your chosen operational process instead of only rolling back the container release.
+If a migration changed the database, restore a dump from the backup section below instead of only rolling back the container release.
+
+## Postgres backups
+
+Each successful deploy installs `/opt/aaa/bin/backup-postgres.sh` and a daily cron at 08:15 UTC. The script dumps `aaa-postgres` and uploads `s3://<bucket>/backups/postgres/<timestamp>.dump`. It then deletes objects under that prefix older than 7 days. The bucket lifecycle rule expires `backups/` after 7 days as a backstop, so retention stays at about seven compressed copies of the database. Re-run `provision.sh` once after this change so the lifecycle rule is installed; the script enforces the same cap on its own.
+
+Restore on the instance:
+
+```bash
+aws s3 cp s3://<bucket>/backups/postgres/<timestamp>.dump /tmp/aaa.dump
+sudo docker stop aaa-api aaa-worker
+set -a
+source /opt/aaa/app/current/.env.production
+set +a
+sudo docker exec -e PGPASSWORD="$POSTGRES_PASSWORD" -i aaa-postgres \
+  pg_restore --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" --clean --if-exists --no-owner --no-acl \
+  < /tmp/aaa.dump
+sudo docker start aaa-api aaa-worker
+rm -f /tmp/aaa.dump
+```
 
 ## Logging
 

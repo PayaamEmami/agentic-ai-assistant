@@ -26,6 +26,7 @@ import {
   buildRealtimeInstructions,
   buildRealtimeSessionConfig,
   extractMessageText,
+  latestUserMessageText,
   toRealtimeToolName,
 } from './realtime-instructions.js';
 import { createToolCall } from '../tools/call-service.js';
@@ -232,7 +233,9 @@ export class VoiceService {
       HISTORY_LIMIT,
     );
     const [personalContext, availableTools] = await Promise.all([
-      this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
+      this.personalizationService
+        .getPersonalContext(userId, latestUserMessageText(recentMessages))
+        .then((value) => value ?? null),
       loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
     const model = this.config.openaiRealtimeModel;
@@ -375,7 +378,9 @@ export class VoiceService {
     })();
 
     const [personalContext, availableTools] = await Promise.all([
-      this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
+      this.personalizationService
+        .getPersonalContext(userId, requestContent)
+        .then((value) => value ?? null),
       loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
 

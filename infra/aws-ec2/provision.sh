@@ -125,8 +125,9 @@ aws --profile "${AWS_PROFILE}" s3api put-bucket-encryption \
   --bucket "${bucket_name}" \
   --server-side-encryption-configuration '{"Rules":[{"ApplyServerSideEncryptionByDefault":{"SSEAlgorithm":"AES256"}}]}'
 
-# Expire short-lived deploy bundles under deployments/ and abort abandoned multipart
-# uploads. Application object prefixes are left untouched.
+# Expire short-lived deploy bundles and Postgres dumps. The daily backup script
+# also deletes dumps older than 7 days; this rule is the backstop. Other
+# application prefixes are left untouched.
 aws --profile "${AWS_PROFILE}" s3api put-bucket-lifecycle-configuration \
   --bucket "${bucket_name}" \
   --lifecycle-configuration '{
@@ -136,6 +137,12 @@ aws --profile "${AWS_PROFILE}" s3api put-bucket-lifecycle-configuration \
         "Status": "Enabled",
         "Filter": { "Prefix": "deployments/" },
         "Expiration": { "Days": 14 }
+      },
+      {
+        "ID": "expire-postgres-backups",
+        "Status": "Enabled",
+        "Filter": { "Prefix": "backups/" },
+        "Expiration": { "Days": 7 }
       },
       {
         "ID": "abort-incomplete-multipart-uploads",

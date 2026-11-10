@@ -72,6 +72,39 @@ export interface SendMessageResult {
   assistantText: string;
 }
 
+function latestUserMessageText(
+  messages: Array<{ role: string; content: unknown[] }>,
+): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || message.role !== 'user') {
+      continue;
+    }
+
+    const parts: string[] = [];
+    for (const block of message.content) {
+      if (typeof block !== 'object' || block === null) {
+        continue;
+      }
+      const candidate = block as { type?: unknown; text?: unknown };
+      if (
+        (candidate.type === 'text' || candidate.type === 'transcript') &&
+        typeof candidate.text === 'string' &&
+        candidate.text.trim().length > 0
+      ) {
+        parts.push(candidate.text.trim());
+      }
+    }
+
+    const text = parts.join('\n').trim();
+    if (text.length > 0) {
+      return text;
+    }
+  }
+
+  return '';
+}
+
 function toAgentToolContexts(tools: AvailableTool[]) {
   return tools.map((tool) => ({
     name: tool.name,
@@ -196,7 +229,7 @@ export async function generateAssistantTurn(
 
     const [messageHistory, personalContext, appConfigs, availableTools] = await Promise.all([
       toAgentHistoryMessages(priorMessages, userId),
-      deps.personalizationService.getPersonalContext(userId),
+      deps.personalizationService.getPersonalContext(userId, latestUserMessageText(priorMessages)),
       appCapabilityConfigRepository.listByUser(userId),
       loadAvailableTools(userId),
     ]);

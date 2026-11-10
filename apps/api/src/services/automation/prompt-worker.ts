@@ -7,10 +7,26 @@ import type { AppConfig } from '../../config.js';
 import type { ChatService } from '../chat/service.js';
 
 const LOCK_MS = 5 * 60 * 1000;
+const SHUTDOWN_FAILURE = 'The API stopped while this run was in progress.';
 
 let worker: Worker<AutomationJobData> | null = null;
+let activeRunId: string | null = null;
 
 async function runScheduledPrompt(
+  chatService: ChatService,
+  job: Job<AutomationJobData>,
+): Promise<void> {
+  activeRunId = job.data.runId;
+  try {
+    await executeScheduledPrompt(chatService, job);
+  } finally {
+    if (activeRunId === job.data.runId) {
+      activeRunId = null;
+    }
+  }
+}
+
+async function executeScheduledPrompt(
   chatService: ChatService,
   job: Job<AutomationJobData>,
 ): Promise<void> {
@@ -101,10 +117,22 @@ export function startAutomationPromptWorker(
 }
 
 export async function stopAutomationPromptWorker(): Promise<void> {
-  if (!worker) {
-    return;
+  const runId = activeRunId;
+  activeRunId = null;
+  try {
+    if (runId) {
+      const run = await automationRunRepository.findById(runId);
+      if (run?.conversationId) {
+        await new AutomationRunLog(run.id, run.conversationId).failIfActive(SHUTDOWN_FAILURE);
+      } else {
+        await automationRunRepository.failIfActive(runId, SHUTDOWN_FAILURE);
+      }
+    }
+  } finally {
+    const current = worker;
+    worker = null;
+    if (current) {
+      await current.close();
+    }
   }
-  const current = worker;
-  worker = null;
-  await current.close();
 }

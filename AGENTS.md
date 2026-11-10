@@ -27,7 +27,7 @@ Ops notes to keep in sync with that README:
 - Prod Compose has no Prometheus/Grafana/Loki stack; observability is local-dev oriented.
 - CD skips CloudFront invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is unset; set `CADDY_SITE_ADDRESS` for origin TLS when not behind CloudFront.
 - CI and Docker images pin the same pnpm version (`9.15.4`).
-- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days; there is still **no automated Postgres backup** — that remains an operational gap.
+- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days and `backups/` after 7 days. Deploy installs a daily `pg_dump` (`scripts/backup-postgres.sh`) that uploads to `backups/postgres/` and deletes dumps older than 7 days. Re-run `provision.sh` once so the lifecycle rule exists; the script enforces the same cap before that.
 - Deploy waits for Docker `healthy` (API/worker `/health/ready`), not merely `running`.
 
 ## Repository Structure
@@ -41,7 +41,7 @@ Ops notes to keep in sync with that README:
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
 │   ├── ai/                   # Model gateway, prompts, chat turn
 │   ├── tool-providers/       # Native tool providers used by tool execution
-│   ├── retrieval/            # Chunking, embeddings, indexing, search
+│   ├── retrieval/            # Chunking and indexing. Workspace search ranking lives in the API retrieval bridge
 │   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
 │   ├── memory/               # Preferences, personalization, memory
 │   ├── db/                   # Database schema, migrations, repositories
@@ -70,7 +70,7 @@ The tree above is the default owner for a change. These paths are easier to miss
 
 ## Model Providers
 
-Model access is abstracted so the chat provider can be swapped without touching the chat turn, retrieval, or app code.
+Chat completions, embeddings, and realtime speech are three separate seams. The in-app picker switches Luna and Sol inside the chat seam. `conversations.chat_model` stores those OpenAI model ids.
 
 - `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription). `OpenAIProvider` is the only implementation today.
 - Two narrow seams are derived from it and are what consumers depend on:
@@ -78,8 +78,8 @@ Model access is abstracted so the chat provider can be swapped without touching 
   - `EmbeddingProvider` = `embed` (used by `RetrievalBridge`, `UploadService`, and the worker embedding job)
 - Construct providers through the factory in `packages/ai/src/provider-factory.ts`:
   - `createChatProvider(apiKey, modelConfig, provider)` selects the chat provider from `LLM_CHAT_PROVIDER` (only `openai` implemented; unknown values throw).
-  - `createEmbeddingProvider(apiKey, modelConfig)` is always OpenAI.
-- To add a provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. The chat turn and services need no changes because they depend on the interfaces, not `OpenAIProvider`.
+  - `createEmbeddingProvider(apiKey, modelConfig)` is always OpenAI. The `embeddings.vector` column is `vector(1536)`.
+- To add a chat provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. The chat turn and services need no changes because they depend on the interfaces, not `OpenAIProvider`. That registration does not move embeddings or realtime.
 
 Intentional coupling (out of scope for provider swaps):
 
@@ -98,7 +98,7 @@ A schedule is a prompt plus a cadence. When it fires, the API runs that prompt t
 - MCP credentials live in `app_capability_configs` with `app_kind = 'mcp'` (server URL and tool prefixes in `settings`, API key in `encrypted_credentials`). One row per server. The capability slug comes from the server name (`tools`, `crs`, …). Chat and scheduled prompts load tools from every connected server. A server that exposes several tool prefixes is routed by the prefixes saved at connect time; an exact capability match still wins, so an older `task-board` row keeps receiving `tasks_*` calls.
 - Every MCP request resolves the saved URL, rejects it when any address is non-public, and pins the connection to the address it checked. Redirects are refused. Do not replace that with a hostname-only string check.
 - Schedules and run history live in `automation_schedules` (`prompt`, cron, timezone), `automation_runs`, and append-only `automation_run_events`.
-- The worker ticks due schedules in `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`) and enqueues `automation` jobs. The API consumes those jobs and calls `ChatService.runScheduledPrompt`. Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat. Each prompt turn and tool execution refreshes the heartbeat. At most one in-flight run is allowed per schedule.
+- The worker ticks due schedules in `apps/worker/src/lib/automation-scheduler.ts` (1-minute interval + Redis lock, cron-parser for `next_run_at`) and enqueues `automation` jobs. The API consumes those jobs and calls `ChatService.runScheduledPrompt`. Stuck queued runs are failed after 15 minutes from enqueue; stuck running runs are failed after 90 minutes without a heartbeat. API shutdown marks the in-flight run failed immediately. A hard kill still waits for that 90-minute heartbeat bound. Each prompt turn and tool execution refreshes the heartbeat. At most one in-flight run is allowed per schedule.
 - `maxRunsPerDay` counts completed and skipped runs with `trigger = 'schedule'` only, so Run now does not consume the slot. When the cap blocks a fire, the scheduler sets `next_run_at` to the next cron instant and does not insert a run. A schedule that already has a run in progress stays due and retries on a later tick. If `claimDue` succeeds but inserting the run hits the active-run unique constraint, restore the previous `next_run_at` so that slot is not dropped.
 - Scheduled turns execute tools without the interactive approval click, because the saved prompt is the authorization. Interactive chat still asks for approval.
 - Interactive MCP tools skip approval only when the first action token is a known read-only verb (`list`, `get`, `read`, `search`, …) and no later token is mutating (`create`, `delete`, `replace`, …). Rejected approvals enqueue chat continuation, same as completed or failed tool jobs.
