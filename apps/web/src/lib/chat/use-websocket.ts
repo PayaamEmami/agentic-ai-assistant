@@ -9,14 +9,10 @@ import type { ToolEventPayload } from '../tool-events';
 type ToolResultPatch = Partial<Pick<ToolResultContentBlock, 'status' | 'detail' | 'output'>>;
 
 const ASSISTANT_STAGES: ReadonlySet<string> = new Set([
-  'routing',
   'retrieving',
-  'research',
   'searching',
   'tool',
-  'coding',
   'answering',
-  'verifying',
   'done',
 ]);
 

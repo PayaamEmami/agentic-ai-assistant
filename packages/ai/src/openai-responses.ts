@@ -6,7 +6,13 @@ import type {
   ToolCall,
   ToolDefinition,
 } from './types.js';
-import { extractTextFromParts, prepareTools, reasoningEffortForFunctionTools, type PreparedTools } from './openai-mappers.js';
+import {
+  extractTextFromParts,
+  invertAliasMap,
+  prepareTools,
+  reasoningEffortForFunctionTools,
+  type PreparedTools,
+} from './openai-mappers.js';
 
 export interface WebCitation {
   url: string;
@@ -56,10 +62,9 @@ export function createResponsesTurnState(): ResponsesTurnState {
 
 /**
  * Hosted web search runs inside one Responses API call. Function tools stay
- * on the same request so the orchestrator can still call them. Reasoning is
- * lowered only when those function tools are present. GPT-6.1 Sol's lowest
- * supported effort is `low`; other chat models keep `none`. Research calls
- * that only search keep the model's default.
+ * on the same request. Reasoning is lowered only when those function tools
+ * are present. GPT-6.1 Sol's lowest supported effort is `low`; other chat
+ * models keep `none`. A call that only searches keeps the model's default.
  */
 export function buildResponsesRequest(input: {
   model: string;
@@ -74,7 +79,7 @@ export function buildResponsesRequest(input: {
   const tools = buildResponsesTools(prepared, hostedWebSearch);
   const body: ResponsesRequestBody = {
     model: input.model,
-    input: toResponsesInput(input.messages),
+    input: toResponsesInput(input.messages, invertAliasMap(prepared.aliasToOriginal)),
     store: false,
   };
   if (tools.length > 0) {
@@ -196,19 +201,49 @@ function buildResponsesTools(
   return tools;
 }
 
-function toResponsesInput(messages: ChatMessage[]): Array<Record<string, unknown>> {
-  return messages.map((message) => {
-    if (message.role === 'tool') {
-      const text = messageText(message.content);
-      const label = message.toolCallId ? `Tool result (${message.toolCallId})` : 'Tool result';
-      return { type: 'message', role: 'user', content: `${label}: ${text}` };
+function toResponsesInput(
+  messages: ChatMessage[],
+  originalToAlias: Map<string, string>,
+): Array<Record<string, unknown>> {
+  return messages.flatMap((message) => {
+    if (message.role === 'tool' && message.toolCallId) {
+      return [
+        {
+          type: 'function_call_output',
+          call_id: message.toolCallId,
+          output: messageText(message.content),
+        },
+      ];
     }
 
-    return {
-      type: 'message',
-      role: message.role,
-      content: toResponsesContent(message.content),
-    };
+    if (message.role === 'assistant' && message.toolCalls && message.toolCalls.length > 0) {
+      const items: Array<Record<string, unknown>> = [];
+      const text = messageText(message.content);
+      if (text.length > 0) {
+        items.push({
+          type: 'message',
+          role: 'assistant',
+          content: toResponsesContent(message.content),
+        });
+      }
+      for (const toolCall of message.toolCalls) {
+        items.push({
+          type: 'function_call',
+          call_id: toolCall.id,
+          name: originalToAlias.get(toolCall.name) ?? toolCall.name,
+          arguments: toolCall.arguments,
+        });
+      }
+      return items;
+    }
+
+    return [
+      {
+        type: 'message',
+        role: message.role,
+        content: toResponsesContent(message.content),
+      },
+    ];
   });
 }
 

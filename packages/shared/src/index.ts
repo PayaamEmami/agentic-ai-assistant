@@ -7,7 +7,6 @@ export {
   AppKind,
   AppCapability,
   MemoryKind,
-  AgentRole,
 } from './enums.js';
 export type {
   MessageRole as MessageRoleType,
@@ -18,7 +17,6 @@ export type {
   AppKind as AppKindType,
   AppCapability as AppCapabilityType,
   MemoryKind as MemoryKindType,
-  AgentRole as AgentRoleType,
 } from './enums.js';
 
 export type {
@@ -46,7 +44,6 @@ export type {
   Memory,
   Preference,
   AppCapabilityConfig,
-  AgentTask,
 } from './domain.js';
 
 export {
@@ -185,7 +182,7 @@ export {
 } from './guards.js';
 
 export type { NativeToolDefinition } from './tools.js';
-export { NATIVE_TOOL_DEFINITIONS } from './tools.js';
+export { NATIVE_TOOL_DEFINITIONS, WORKSPACE_SEARCH_TOOL_NAME } from './tools.js';
 export type {
   AppSyncJobData,
   IngestionJobData,

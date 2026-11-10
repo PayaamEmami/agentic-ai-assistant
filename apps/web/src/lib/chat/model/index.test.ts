@@ -220,7 +220,7 @@ describe('chat model', () => {
         role: 'assistant',
         createdAt: '2026-01-01T00:00:00.000Z',
         content: [],
-        presentation: { streaming: true, activeStage: 'routing' },
+        presentation: { streaming: true, activeStage: 'answering' },
       },
     ];
 

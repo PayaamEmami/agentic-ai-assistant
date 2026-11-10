@@ -1,6 +1,3 @@
-import type { ChatMessage } from './types.js';
-import type { AgentRole } from './agents/types.js';
-
 export interface PromptToolContext {
   name: string;
   description?: string;
@@ -72,93 +69,16 @@ export function buildSystemPrompt(context: SystemPromptContext): string {
   return sections.join('\n\n');
 }
 
-export function buildAgentSystemPrompt(role: AgentRole, context: SystemPromptContext): string {
-  const basePrompt = buildSystemPrompt(context);
+export function buildChatTurnPrompt(context: SystemPromptContext): string {
+  return `${buildSystemPrompt(context)}
 
-  switch (role) {
-    case 'orchestrator':
-      return `${basePrompt}
-
-Role instructions (orchestrator):
-- Decide whether to answer directly, delegate to the research agent, or delegate to the tool agent.
-- Prefer direct answers for simple conversational questions.
-- Hosted web search is available when you answer directly. Use it for a current public fact. Skip it for workspace, GitHub, coding, and casual chat, and do not search when you are about to delegate.
-- Do not claim a web search happened unless the hosted web search tool ran.
-- Delegate to research when the user needs evidence from retrieved workspace context or a longer look at public sources.
-- Delegate to the tool agent when tool use or external operations are required.`;
-    case 'research':
-      return `${basePrompt}
-
-Role instructions (research):
-- Focus on reading and synthesizing provided retrieved context, and on current public facts when they matter.
-- Hosted web search is available. Use it for current public facts. Retrieved context remains the source for the user's own workspace.
-- Cite public pages by URL. Do not claim a web search happened unless the hosted web search tool ran.
-- Ground workspace claims in the retrieved context and include clear source citations.
-- Be explicit about uncertainty or missing evidence.
-- Do not call workspace tools or external operations.`;
-    case 'tool':
-      return `${basePrompt}
-
-Role instructions (tool):
-- Focus on planning and executing tool calls needed to satisfy the request.
-- Return precise tool inputs and report outcomes clearly.
-- If the user explicitly asked for an available tool by name or capability, call the matching tool instead of giving a model-only answer.
-- When a selected tool requires approval, prepare the tool call and rely on the system approval flow instead of asking for separate verbal confirmation.
-- If a GitHub task refers to "my repo" or gives only a repo name, try resolving it through the authenticated GitHub tools before asking the user for owner/repo.
-- Only ask the user for a full GitHub owner/repo identifier when repo resolution is ambiguous or no accessible repo matches.
-- Avoid unsupported claims; rely on tool outputs.`;
-    case 'coding':
-      return `${basePrompt}
-
-Role instructions (coding):
-- Focus on GitHub code-change tasks and prefer the github.coding_task tool for multi-step coding work.
-- Use live GitHub read tools first when you need the latest remote state before proposing coding operations.
-- If the user refers to their own GitHub repo by name, do not ask for owner/repo before trying the available GitHub tools. Resolve the repo from the authenticated connection first.
-- Only ask for owner/repo when the repo name is ambiguous across accessible repos or cannot be found.
-- Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.
-- When a selected coding or GitHub write tool requires approval, prepare the tool call and rely on the system approval flow instead of asking for separate verbal confirmation.`;
-    case 'verifier':
-      return `${basePrompt}
-
-Role instructions (verifier):
-- Validate whether the prior output is safe, policy-aligned, and matches user intent.
-- Use any retrieved context already included in the prompt as valid evidence when checking grounding and authorization.
-- Do not require an extra permission or app-authorization step for read-only answers that are grounded in retrieved context already present in the prompt.
-- Treat the built-in tool approval UI as the approval mechanism for tools marked as requiring approval. Do not require separate verbal confirmation when the assistant is only preparing a protected tool call for that flow.
-- Flag mistakes, unsafe operations, unsupported claims, and claims of access that go beyond the retrieved context or imply live browsing/search/tool use that did not happen.
-- When the prior result has webSearchUsed set, public URL citations in that answer are evidence of a live web search. Do not flag those citations as unsupported browsing.
-- Return JSON only with this shape:
-  {"status":"approved"|"revise","response":"string","issues":["string"]}
-- Return a single JSON object only, with no prose, markdown, or code fences before or after it.
-- Set "status" to "revise" when the prior output needs correction.
-- Put the final user-facing assistant message in "response".
-- Keep "issues" concise and only include concrete problems you found.
-- Do not execute tools or delegate further.`;
-    default: {
-      const neverRole: never = role;
-      return `${basePrompt}\n\nRole instructions: ${String(neverRole)}`;
-    }
-  }
-}
-
-export function buildRetrievalAugmentedMessages(
-  messages: ChatMessage[],
-  retrievedContext: string[],
-): ChatMessage[] {
-  if (retrievedContext.length === 0) return messages;
-
-  const contextBlock = retrievedContext.map((c, i) => `[Source ${i + 1}]: ${c}`).join('\n\n');
-
-  const augmented: ChatMessage = {
-    role: 'system',
-    content: `Relevant context:\n\n${contextBlock}`,
-  };
-
-  const [system, ...rest] = messages;
-  if (system && system.role === 'system') {
-    return [system, augmented, ...rest];
-  }
-  return [augmented, ...messages];
+Turn instructions:
+- Hosted web search is available. Use it for a current public fact. Skip it for the user's own files, casual chat, and live tool work. Do not claim a web search happened unless that tool ran.
+- Call search_workspace for the user's indexed notes, attachments, and synced knowledge. Cite those excerpts as [Source N]. Do not use it for current public facts or for live GitHub, Google, or MCP operations.
+- When indexed sources and another tool are both needed, call search_workspace on its own first, then call the other tool after you have the excerpts.
+- Use github.coding_task for a multi-step GitHub code change. Use live GitHub read tools when you need the latest remote state first.
+- If a GitHub task refers to "my repo" or gives only a repo name, resolve it through the authenticated GitHub tools before asking for owner/repo. Only ask for a full owner/repo when resolution is ambiguous or no accessible repo matches.
+- Keep code changes scoped to the requested task and avoid inventing repository details you have not verified.`;
 }
 
 function formatToolEntry(tool: string | PromptToolContext): string {

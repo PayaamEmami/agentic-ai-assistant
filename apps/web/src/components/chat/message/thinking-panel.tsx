@@ -4,14 +4,10 @@ import { useState } from 'react';
 import type { AssistantStage, ThinkingContentBlock } from '@/lib/chat';
 
 const STAGE_LABELS: Record<AssistantStage, string> = {
-  routing: 'Routing the request',
   retrieving: 'Searching your knowledge',
-  research: 'Researching',
   searching: 'Searching the web',
-  tool: 'Planning tools',
-  coding: 'Working through code',
+  tool: 'Using tools',
   answering: 'Writing the answer',
-  verifying: 'Verifying the answer',
   done: 'Done',
 };
 

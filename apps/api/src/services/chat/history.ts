@@ -1,6 +1,6 @@
 import { attachmentRepository } from '@aaa/db';
 import type { messageRepository } from '@aaa/db';
-import type { AgentHistoryMessage, ChatContentPart } from '@aaa/ai';
+import type { ChatContentPart, ChatMessage } from '@aaa/ai';
 import { isRecord } from '@aaa/shared';
 
 type DbMessage = Awaited<ReturnType<typeof messageRepository.listByConversation>>[number];
@@ -118,7 +118,7 @@ function isPdfAttachment(attachment: NonNullable<DbAttachment>): boolean {
 export async function toAgentHistoryMessages(
   messages: DbMessage[],
   userId: string,
-): Promise<AgentHistoryMessage[]> {
+): Promise<ChatMessage[]> {
   const attachmentIds = Array.from(
     new Set(messages.flatMap((message) => getAttachmentIdsFromContent(message.content))),
   );
@@ -131,7 +131,7 @@ export async function toAgentHistoryMessages(
   );
 
   return messages
-    .map<AgentHistoryMessage | null>((message) => {
+    .map<ChatMessage | null>((message) => {
       if (message.role !== 'user') {
         const text =
           message.role === 'tool'
@@ -143,7 +143,7 @@ export async function toAgentHistoryMessages(
         }
 
         return {
-          role: message.role === 'tool' ? 'assistant' : message.role,
+          role: message.role === 'system' ? 'system' : 'assistant',
           content: text,
         };
       }
@@ -218,7 +218,7 @@ export async function toAgentHistoryMessages(
         content: contentParts,
       };
     })
-    .filter((message): message is AgentHistoryMessage => message !== null);
+    .filter((message): message is ChatMessage => message !== null);
 }
 
 export function getLatestUserRequestText(messages: DbMessage[]): string {

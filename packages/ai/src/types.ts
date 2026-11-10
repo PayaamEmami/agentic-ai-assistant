@@ -21,17 +21,22 @@ export interface ChatFilePart {
 
 export type ChatContentPart = ChatTextPart | ChatImagePart | ChatFilePart;
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | ChatContentPart[];
   name?: string;
   toolCallId?: string;
-}
-
-export interface ToolCall {
-  id: string;
-  name: string;
-  arguments: string;
+  /**
+   * Function calls from an assistant turn. A follow-up request replays these
+   * with the matching tool results so the provider can continue the same turn.
+   */
+  toolCalls?: ToolCall[];
 }
 
 export interface CompletionRequest {

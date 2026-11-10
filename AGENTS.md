@@ -39,7 +39,7 @@ Ops notes to keep in sync with that README:
 │   └── worker/               # Background job processor (BullMQ)
 ├── packages/
 │   ├── shared/               # Domain types, DTOs, event schemas, enums
-│   ├── ai/                   # Model gateway, prompts, agent orchestration
+│   ├── ai/                   # Model gateway, prompts, chat turn
 │   ├── tool-providers/       # Native tool providers used by tool execution
 │   ├── retrieval/            # Chunking, embeddings, indexing, search
 │   ├── knowledge-sources/    # Retrieval-oriented knowledge sources and credential helpers
@@ -64,32 +64,32 @@ Ops notes to keep in sync with that README:
 The tree above is the default owner for a change. These paths are easier to miss:
 
 - Remote MCP servers: check `packages/mcp` and `apps/api/src/services/tools/mcp.ts`. Hydration (URL, API key, tool prefixes, CRS timeout, legacy `tools` vs `task-board` filtering) lives in `packages/mcp/src/connections.ts` and is shared with the worker. The API keeps the Redis tool cache. Multiple servers are stored as separate `app_kind='mcp'` rows keyed by capability slug.
-- Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`; conversation CRUD is `conversations.ts`. Resend (`POST /api/conversations/:id/messages/:messageId/resend`) rewrites that user message, deletes later rows, and starts a new turn. It does not keep a branch.
+- Chat turns: `ChatService` is the HTTP and automation facade. Turn execution is `apps/api/src/services/chat/turn-runner.ts`, which calls `runModelTurn` in `packages/ai`. The model answers, uses hosted web search, and calls tools. `search_workspace` runs in the API against the retrieval bridge; other tools still go through approval and the worker. Conversation CRUD is `conversations.ts`. Resend (`POST /api/conversations/:id/messages/:messageId/resend`) rewrites that user message, deletes later rows, and starts a new turn. It does not keep a branch.
 - Scheduled board automation: check `apps/api/src/services/automation/`, `apps/worker/src/lib/automation-scheduler.ts`, and `apps/web/src/app/chat/automation`
 - Worker→browser live events (tool execution, automation runs): Postgres `NOTIFY` on `TOOL_EVENT_CHANNEL` / `AUTOMATION_EVENT_CHANNEL` (`packages/shared`), relayed by the API over conversation WebSockets. New LISTEN channels must use `apps/api/src/lib/pg-notify-relay.ts` so disconnect reconnect/backoff stays consistent.
 
 ## Model Providers
 
-Model access is abstracted so the chat provider can be swapped without touching agent, retrieval, or app code.
+Model access is abstracted so the chat provider can be swapped without touching the chat turn, retrieval, or app code.
 
 - `ModelProvider` (`packages/ai/src/model-provider.ts`) is the full interface (chat, streaming, embeddings, transcription). `OpenAIProvider` is the only implementation today.
 - Two narrow seams are derived from it and are what consumers depend on:
-  - `ChatProvider` = `complete` + `streamComplete` (used by all agents, the orchestrator, `ChatService`, and the coding task runner)
+  - `ChatProvider` = `complete` + `streamComplete` (used by the chat turn, `ChatService`, and the coding task runner)
   - `EmbeddingProvider` = `embed` (used by `RetrievalBridge`, `UploadService`, and the worker embedding job)
 - Construct providers through the factory in `packages/ai/src/provider-factory.ts`:
   - `createChatProvider(apiKey, modelConfig, provider)` selects the chat provider from `LLM_CHAT_PROVIDER` (only `openai` implemented; unknown values throw).
   - `createEmbeddingProvider(apiKey, modelConfig)` is always OpenAI.
-- To add a provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. Agents and services need no changes because they depend on the interfaces, not `OpenAIProvider`.
+- To add a provider: implement `ChatProvider` (or full `ModelProvider`), register it in `createChatProvider`, and widen the `LLM_CHAT_PROVIDER` enum in `packages/config/src/env.ts`. The chat turn and services need no changes because they depend on the interfaces, not `OpenAIProvider`.
 
 Intentional coupling (out of scope for provider swaps):
 
 - Embeddings are pinned to OpenAI regardless of `LLM_CHAT_PROVIDER`, because the `embeddings.vector` column is `vector(1536)` (matches `text-embedding-3-small`). Changing embedding dimensions requires a DB migration and re-embedding.
 - Voice/realtime (`apps/api/src/services/voice/*`, `apps/web/src/lib/voice/*`) talks directly to OpenAI Realtime over WebRTC and does not go through `ModelProvider`. Voice and Listener share the SDP proxy in `apps/api/src/services/realtime/sdp-exchange.ts`, which sends `OpenAI-Safety-Identifier` as a sha256 of the user id.
-- Hosted web search is an OpenAI Responses API tool (`web_search`), not a worker-executed function. The orchestrator's direct answer and the research agent set `hostedWebSearch` on the completion request; the model chooses whether to search (`tool_choice: auto`). The tool agent, coding agent, verifier, voice, and listener do not get it. A search that actually runs sets `webSearchUsed` on the agent result so the verifier can treat the public URL citations as evidence. The chat UI stage for that call is `searching`.
+- Hosted web search is an OpenAI Responses API tool (`web_search`), not a worker-executed function. Every text chat turn sets `hostedWebSearch` on the completion request; the model chooses whether to search (`tool_choice: auto`). Voice and Listener do not get it. The chat UI stage for a search that runs is `searching`. Workspace search is the `search_workspace` function: the API runs it against pgvector during the turn and feeds the excerpts back. Other function tools still return to the app for approval and worker execution.
 - Chat PDF attachments are sent as Responses API `input_file` parts built from the stored bytes, including on calls that would otherwise use Chat Completions, and they are not indexed for retrieval.
 - Listener Mode (`apps/api/src/services/listener/*`, `apps/web/src/lib/listener/*`, `/chat/listen`) uses a transcription-only OpenAI Realtime WebRTC session. `OPENAI_TRANSCRIPTION_STREAMING_MODEL` selects its model and defaults to `gpt-live-transcribe`; `OPENAI_TRANSCRIPTION_STANDARD_MODEL` configures file and conversational-voice transcription. Insight explanations reuse the configured chat provider.
 - Cost estimation is provider-neutral: use `estimateModelCost` (`packages/observability`); `estimateOpenAiCost` remains as a deprecated alias. Pricing overrides read `LLM_PRICING_OVERRIDES_JSON`.
-- Interactive chat stores the model on `conversations.chat_model` and the composer can switch it before any later message in that thread. The picker offers `gpt-6.1-sol` and `gpt-6-luna`. New threads start on `gpt-6-luna`. Existing threads, including hidden automation conversations, were backfilled to `gpt-5.6-luna` and stay there until changed. Voice, Listener, embeddings, and scheduled automation do not use the picker. A chat turn passes that stored model to every agent. `gpt-6.1-sol` function-tool calls go through the Responses API with `reasoning.effort` `low`, because Sol rejects `none` and cannot call functions on Chat Completions. `gpt-6-luna` and `gpt-5.6-luna` keep the existing `none` tool path.
+- Interactive chat stores the model on `conversations.chat_model` and the composer can switch it before any later message in that thread. The picker offers `gpt-6.1-sol` and `gpt-6-luna`. New threads start on `gpt-6-luna`. Existing threads, including hidden automation conversations, were backfilled to `gpt-5.6-luna` and stay there until changed. Voice, Listener, embeddings, and scheduled automation do not use the picker. A chat turn passes that stored model to the model call. Text chat always sets hosted web search, so the turn uses the Responses API. `gpt-6.1-sol` function tools use `reasoning.effort` `low`, because Sol rejects `none` and cannot call functions on Chat Completions. `gpt-6-luna` and `gpt-5.6-luna` use `none` on that Responses request. Callers that do not set hosted web search, such as the coding task runner, still use Chat Completions for those two models.
 
 ## Scheduled prompts
 

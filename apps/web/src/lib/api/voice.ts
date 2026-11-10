@@ -69,10 +69,16 @@ export const voiceApi = {
       toolName: string;
       argumentsJson: string;
     }) {
-      return request<{
-        toolExecutionId: string;
-        status: 'requires_approval' | 'enqueued';
-      }>('/api/voice/tool-calls', {
+      return request<
+        | {
+            status: 'completed';
+            output?: string;
+          }
+        | {
+            toolExecutionId: string;
+            status: 'requires_approval' | 'enqueued';
+          }
+      >('/api/voice/tool-calls', {
         method: 'POST',
         body: JSON.stringify(input),
       });

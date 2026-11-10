@@ -83,15 +83,13 @@ export function buildRealtimeInstructions(
   personalContext: string | null,
   recentMessages: DbMessage[],
   availableTools: AvailableTool[],
-  retrievalContextSections: string[] = [],
 ): string {
   const hasTools = availableTools.length > 0;
-  const hasRetrieval = retrievalContextSections.length > 0;
   const basePrompt = buildSystemPrompt({
     personalContext: personalContext ?? undefined,
     availableTools: hasTools ? toRealtimePromptToolContexts(availableTools) : undefined,
     includeToolGuidance: hasTools,
-    includeRetrievalGuidance: hasRetrieval,
+    includeRetrievalGuidance: false,
   });
 
   const sections = [
@@ -103,16 +101,8 @@ export function buildRealtimeInstructions(
     hasTools
       ? '- You may invoke the available tools when the user asks for something that requires them. Tools marked as requiring approval will pause the conversation until the user responds in the UI; acknowledge briefly and wait for their decision.'
       : '- No tools are available this session; if a request requires tools, say so and offer to continue in text chat.',
+    '- When the user asks about their own notes, files, attachments, or synced sources, call search_workspace and cite matches as [Source N].',
   ];
-
-  if (hasRetrieval) {
-    const numbered = retrievalContextSections
-      .map((section, index) => `[${index + 1}] ${section}`)
-      .join('\n\n');
-    sections.push(
-      `Retrieved context for this turn (cite as [Source N] only when you use the content):\n${numbered}`,
-    );
-  }
 
   const historySummary = summarizeHistory(recentMessages);
   if (historySummary) {

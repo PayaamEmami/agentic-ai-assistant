@@ -44,7 +44,18 @@ export function mapUserContent(
   });
 }
 
-export function mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessageParam[] {
+export function invertAliasMap(aliasToOriginal: Map<string, string>): Map<string, string> {
+  const inverted = new Map<string, string>();
+  for (const [alias, original] of aliasToOriginal) {
+    inverted.set(original, alias);
+  }
+  return inverted;
+}
+
+export function mapMessages(
+  messages: ChatMessage[],
+  originalToAlias?: Map<string, string>,
+): OpenAI.ChatCompletionMessageParam[] {
   return messages.map((message) => {
     switch (message.role) {
       case 'system':
@@ -63,14 +74,7 @@ export function mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessa
           name: message.name,
         };
       case 'assistant':
-        return {
-          role: 'assistant',
-          content:
-            typeof message.content === 'string'
-              ? message.content
-              : extractTextFromParts(message.content),
-          name: message.name,
-        };
+        return mapAssistantMessage(message, originalToAlias);
       case 'tool':
         if (!message.toolCallId) {
           throw new Error('Tool message must include toolCallId');
@@ -92,6 +96,37 @@ export function mapMessages(messages: ChatMessage[]): OpenAI.ChatCompletionMessa
 }
 
 const OPENAI_TOOL_NAME_MAX_LENGTH = 64;
+
+function messageText(content: ChatMessage['content']): string {
+  return typeof content === 'string' ? content : extractTextFromParts(content);
+}
+
+function mapAssistantMessage(
+  message: ChatMessage,
+  originalToAlias?: Map<string, string>,
+): OpenAI.ChatCompletionMessageParam {
+  const content = messageText(message.content);
+  if (!message.toolCalls || message.toolCalls.length === 0) {
+    return {
+      role: 'assistant',
+      content,
+      name: message.name,
+    };
+  }
+
+  return {
+    role: 'assistant',
+    content: content.length > 0 ? content : null,
+    tool_calls: message.toolCalls.map((toolCall) => ({
+      id: toolCall.id,
+      type: 'function' as const,
+      function: {
+        name: originalToAlias?.get(toolCall.name) ?? toolCall.name,
+        arguments: toolCall.arguments,
+      },
+    })),
+  };
+}
 
 function toToolAlias(name: string, existingAliases: Map<string, string>): string {
   const sanitizedBase = name.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -234,7 +269,7 @@ export function requiresResponsesForFunctionTools(model: string, toolCount: numb
  * Chat Completions is pinned to GPT-5.6+: use max_completion_tokens, and
  * disable reasoning whenever function tools are present. GPT-6.1 Sol cannot
  * use this path for tools; the provider sends those calls to Responses.
- * Agents still send native tools on every text-chat turn.
+ * Text chat sends native tools on every turn.
  */
 export function buildChatCompletionCreateParams(
   request: ChatCompletionRequestFields & { stream: true },

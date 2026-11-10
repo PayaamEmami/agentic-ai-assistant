@@ -1,7 +1,11 @@
 import crypto from 'node:crypto';
 import { type Conversation, conversationRepository, getPool, messageRepository } from '@aaa/db';
 import { addLogContext, getLogger } from '@aaa/observability';
-import type { AssistantInterruptedEvent, AssistantTextDoneEvent } from '@aaa/shared';
+import {
+  type AssistantInterruptedEvent,
+  type AssistantTextDoneEvent,
+  WORKSPACE_SEARCH_TOOL_NAME,
+} from '@aaa/shared';
 import type { AppConfig } from '../../config.js';
 import { AppError } from '../../lib/errors.js';
 import { broadcast } from '../../ws/connections.js';
@@ -13,7 +17,8 @@ import {
 } from '../retrieval/bridge.js';
 import {
   MAX_RETRIEVAL_CONTEXT,
-  buildRetrievalContextSections,
+  formatWorkspaceSearchOutput,
+  mergeRetrievalResponses,
   selectDisplayedCitations,
   toCitationContentBlocks,
 } from '../retrieval/helpers.js';
@@ -23,7 +28,6 @@ import {
   extractMessageText,
   toRealtimeToolName,
 } from './realtime-instructions.js';
-import { decideRetrieval } from '../retrieval/policy.js';
 import { createToolCall } from '../tools/call-service.js';
 import {
   type EnqueueToolExecutionJob,
@@ -39,7 +43,6 @@ const HISTORY_LIMIT = 12;
 const PREPARED_TURN_TTL_MS = 5 * 60 * 1000;
 
 interface PreparedTurnCache {
-  requestContent: string;
   retrieval: RetrievalResponse;
   preparedAt: number;
 }
@@ -100,6 +103,45 @@ export class VoiceService {
       if (now - cache.preparedAt > PREPARED_TURN_TTL_MS) {
         this.preparedTurns.delete(turnId);
       }
+    }
+  }
+
+  private rememberRetrieval(voiceTurnId: string, retrieval: RetrievalResponse): void {
+    const existing = this.preparedTurns.get(voiceTurnId);
+    this.cachePreparedTurn(voiceTurnId, {
+      retrieval: existing
+        ? mergeRetrievalResponses([existing.retrieval, retrieval])
+        : retrieval,
+      preparedAt: Date.now(),
+    });
+  }
+
+  private async searchWorkspace(
+    userId: string,
+    voiceTurnId: string,
+    toolInput: Record<string, unknown>,
+  ): Promise<{ status: 'completed'; output: string }> {
+    const query = typeof toolInput.query === 'string' ? toolInput.query : '';
+    const startIndex = this.preparedTurns.get(voiceTurnId)?.retrieval.results.length ?? 0;
+    try {
+      const retrieval = await this.retrievalBridge.search(query, userId, MAX_RETRIEVAL_CONTEXT);
+      this.rememberRetrieval(voiceTurnId, retrieval);
+      return {
+        status: 'completed',
+        output: formatWorkspaceSearchOutput(retrieval, startIndex),
+      };
+    } catch (error) {
+      getLogger({ component: 'voice-service', userId }).error(
+        {
+          event: 'voice.workspace_search_failed',
+          outcome: 'failure',
+          voiceTurnId,
+          queryLength: query.length,
+          error,
+        },
+        'Voice workspace search failed',
+      );
+      return { status: 'completed', output: 'Workspace search failed.' };
     }
   }
 
@@ -332,46 +374,12 @@ export class VoiceService {
       return '';
     })();
 
-    const retrievalDecision = decideRetrieval(requestContent, recentMessages);
-    getLogger({
-      component: 'voice-service',
-      userId,
-      conversationId: conversation.id,
-    }).debug(
-      {
-        event: 'voice.retrieval_decided',
-        outcome: retrievalDecision.shouldRetrieve ? 'search' : 'skip',
-        voiceTurnId,
-        reason: retrievalDecision.reason,
-        hasRecentCitationContext: retrievalDecision.hasRecentCitationContext,
-      },
-      'Voice retrieval decision evaluated',
-    );
-
-    const retrieval: RetrievalResponse = retrievalDecision.shouldRetrieve
-      ? await this.retrievalBridge
-          .search(requestContent, userId, MAX_RETRIEVAL_CONTEXT)
-          .catch(() => ({ results: [], citations: [] }) as RetrievalResponse)
-      : { results: [], citations: [] };
-
-    this.cachePreparedTurn(voiceTurnId, {
-      requestContent,
-      retrieval,
-      preparedAt: Date.now(),
-    });
-
     const [personalContext, availableTools] = await Promise.all([
       this.personalizationService.getPersonalContext(userId).then((value) => value ?? null),
       loadAvailableTools(userId).catch(() => [] as AvailableTool[]),
     ]);
 
-    const retrievalSections = buildRetrievalContextSections(retrieval);
-    const instructions = buildRealtimeInstructions(
-      personalContext,
-      recentMessages,
-      availableTools,
-      retrievalSections,
-    );
+    const instructions = buildRealtimeInstructions(personalContext, recentMessages, availableTools);
 
     getLogger({
       component: 'voice-service',
@@ -382,7 +390,6 @@ export class VoiceService {
         event: 'voice.turn.prepared',
         outcome: 'success',
         voiceTurnId,
-        retrievalResultCount: retrieval.results.length,
         requestContentLength: requestContent.length,
       },
       'Prepared voice turn context',
@@ -391,8 +398,7 @@ export class VoiceService {
     return {
       voiceTurnId,
       instructions,
-      retrievedContext: retrievalSections.length > 0 ? retrievalSections.join('\n\n') : undefined,
-      hasRetrieval: retrieval.results.length > 0,
+      hasRetrieval: false,
     };
   }
 
@@ -458,6 +464,10 @@ export class VoiceService {
     );
     if (!tool) {
       throw new AppError(400, `Unknown tool: ${params.toolName}`, 'VOICE_TOOL_UNKNOWN');
+    }
+
+    if (tool.name === WORKSPACE_SEARCH_TOOL_NAME) {
+      return this.searchWorkspace(userId, params.voiceTurnId, toolInput);
     }
 
     const creation = await createToolCall({

@@ -17,6 +17,26 @@ export function appLabel(kind: string): string {
   }
 }
 
+export function formatWorkspaceSearchOutput(
+  retrieval: RetrievalResponse,
+  startIndex = 0,
+): string {
+  if (retrieval.results.length === 0) {
+    return 'No indexed sources matched this query.';
+  }
+
+  return buildRetrievalContextSections(retrieval)
+    .map((section, index) => `[Source ${startIndex + index + 1}]: ${section}`)
+    .join('\n\n');
+}
+
+export function mergeRetrievalResponses(responses: RetrievalResponse[]): RetrievalResponse {
+  return {
+    results: responses.flatMap((response) => response.results),
+    citations: responses.flatMap((response) => response.citations),
+  };
+}
+
 export function buildRetrievalContextSections(retrieval: RetrievalResponse): string[] {
   return retrieval.results.map((result) => {
     const appKind =

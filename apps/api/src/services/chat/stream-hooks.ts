@@ -1,4 +1,3 @@
-import type { AgentStreamHooks } from '@aaa/ai';
 import type { AssistantStage } from '@aaa/shared';
 import type { ChatEventPublisher } from './event-publisher.js';
 
@@ -7,48 +6,32 @@ export interface ThinkingSegment {
   text: string;
 }
 
+export interface AssistantStreamHooks {
+  onStage?: (stage: AssistantStage) => void;
+  onAnswerDelta?: (delta: string) => void;
+}
+
 export interface AssistantStreamHooksBundle {
-  hooks: AgentStreamHooks;
+  hooks: AssistantStreamHooks;
   collectThinkingSegments(): ThinkingSegment[];
 }
 
 /**
- * Wires the agent orchestrator's streaming callbacks to WebSocket events and
- * accumulates per-stage reasoning so the "thinking" trace can be persisted on
- * the message once streaming completes.
+ * Wires a chat turn's streaming callbacks to WebSocket events. Stage changes
+ * and answer tokens are published as they happen.
  */
 export function createAssistantStreamHooks(
   eventPublisher: ChatEventPublisher,
   conversationId: string,
   assistantMessageId: string,
 ): AssistantStreamHooksBundle {
-  const thinkingByStage = new Map<AssistantStage, string>();
-  const thinkingStageOrder: AssistantStage[] = [];
-
-  const hooks: AgentStreamHooks = {
+  const hooks: AssistantStreamHooks = {
     onStage: (stage) => {
       eventPublisher.assistantStatus({
         type: 'assistant.status',
         conversationId,
         messageId: assistantMessageId,
         stage,
-      });
-    },
-    onReasoningDelta: (stage, delta) => {
-      if (!delta) {
-        return;
-      }
-      if (!thinkingByStage.has(stage)) {
-        thinkingByStage.set(stage, '');
-        thinkingStageOrder.push(stage);
-      }
-      thinkingByStage.set(stage, (thinkingByStage.get(stage) ?? '') + delta);
-      eventPublisher.assistantThinkingDelta({
-        type: 'assistant.thinking.delta',
-        conversationId,
-        messageId: assistantMessageId,
-        stage,
-        delta,
       });
     },
     onAnswerDelta: (delta) => {
@@ -64,10 +47,5 @@ export function createAssistantStreamHooks(
     },
   };
 
-  const collectThinkingSegments = (): ThinkingSegment[] =>
-    thinkingStageOrder
-      .map((stage) => ({ stage, text: (thinkingByStage.get(stage) ?? '').trim() }))
-      .filter((segment) => segment.text.length > 0);
-
-  return { hooks, collectThinkingSegments };
+  return { hooks, collectThinkingSegments: () => [] };
 }

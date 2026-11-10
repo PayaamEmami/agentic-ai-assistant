@@ -1,27 +1,24 @@
 # Agentic AI Assistant
 
-Agentic AI Assistant (AAA) is a self-hosted personal AI workspace with chat, voice, retrieval over connected data sources, persistent memory, and native tool execution.
+Agentic AI Assistant (AAA) is a personal assistant you run yourself. You can chat with it or talk to it. It remembers you, looks through your notes and connected accounts, and can take actions you approve.
 
-The main idea behind the project is to make the assistant’s intelligence portable. Personalization, memory, connected data, and tool workflows live in the application rather than inside a single model provider’s ecosystem. That means the assistant can adopt newer or better models over time without forcing the user to rebuild their context, preferences, or workflow history. By keeping that context in user-owned storage, the assistant can provide a more durable personal layer without depending on any one vendor to preserve it.
+With most AI chats, your conversations, memories, and files live on the company's site. Here, they stay with you. The model only sees what it needs to answer, and when a better model comes along you can switch to it without losing your history.
 
 ## Features
 
 - Chat interface with persistent conversation history
-- Multi-agent orchestration for routing, research, tool use, coding tasks, and verification
 - Voice mode with live transcription and spoken responses
-- Retrieval-augmented answers over connected data sources
+- Answers drawn from your notes, files, and connected accounts
 - Persistent personalization, preferences, and long-term memory
-- Native tool execution with approval flow for sensitive actions
+- Asks for approval before it changes something, such as a document or a repository
 
-### Multi-Agent System
+### How it answers
 
-The assistant uses a small multi-agent architecture around each assistant turn:
+When you send a message, the assistant answers. If it needs something the conversation does not already have, it can look it up:
 
-- **Orchestrator** — Routes requests and decides whether to answer directly or delegate
-- **Research Agent** — Synthesizes answers from retrieved context
-- **Tool Agent** — Prepares tool calls for live reads, writes, and external operations
-- **Coding Agent** — Handles GitHub coding tasks through an isolated worker checkout
-- **Verifier Agent** — Checks the final output for safety, grounding, and approval requirements
+- **The web** — A current public fact
+- **Your files** — Notes, attachments, and files from connected accounts
+- **Connected apps** — GitHub, Google, and other tools. Changes wait for your approval
 
 ### Live Voice
 
@@ -29,7 +26,7 @@ Live voice makes the assistant feel more natural to work with by letting users t
 
 ### Personalization
 
-Personalization settings control both assistant behavior and long-term memory. Communication preferences, such as tone and writing style, and durable memories, such as facts, relationships, and important people, are stored in personal, portable context that carries across conversations.
+Personalization settings control both assistant behavior and long-term memory. Communication preferences, such as tone and writing style, and durable memories, such as facts, relationships, and important people, are saved with the assistant and carry from one conversation to the next.
 
 ### Connected Apps
 
@@ -77,27 +74,26 @@ flowchart TB
   worker --> providers
 ```
 
-Text chat streams tokens and tool events over WebSocket. When an agent stages a tool call, the API records it, requests approval if needed, and enqueues execution on the worker. After a non-voice tool finishes, a chat-continuation job returns to the API so the orchestrator can continue the turn. Connected apps split into knowledge (sync, index, retrieve) and tools (live reads and writes against GitHub and Google).
+Text chat streams tokens and tool events over WebSocket. When the model calls a live tool, the API records it, requests approval if needed, and enqueues execution on the worker. After a non-voice tool finishes, a chat-continuation job returns to the API so the model can continue the turn. Workspace search runs in the API during the turn. Connected apps split into knowledge (sync, index, retrieve) and tools (live reads and writes against GitHub and Google).
 
-Shared packages own the seams between apps: agent orchestration, the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat models can be swapped without changing those layers. Voice and Listener Mode use a realtime path and do not go through the chat-provider gateway.
+Shared packages own the seams between apps: the model gateway, retrieval, tools, knowledge-source sync, memory, database access, and queues. Chat models can be swapped without changing those layers. Voice and Listener Mode use a realtime path and do not go through the chat-provider gateway.
 
 Production runs the web, API, worker, and data services on a single host behind a reverse proxy. See the infrastructure docs for deploy details.
 
-### Multi-Agent Architecture
+### Chat turn
 
-Each text chat turn starts with the orchestrator. It answers directly, or hands the turn to one specialist. A verifier then checks the draft. Hosted web search is available on the direct answer and on research; the model decides whether the question needs a live lookup. Tool calls and coding tasks do not search the web. Writes still wait for approval, then run on the worker.
+A text message can search the public web, search the user's own files, or call a live tool. The model decides which. A search of the user's files runs in the API, and the model continues in the same turn. Writes still wait for approval, then run on the worker, and a later turn continues from the tool result.
 
 ```mermaid
 flowchart TD
-  msg[User message] --> orch[Orchestrator agent]
-  orch -->|direct answer| verifier[Verifier agent]
-  orch -->|workspace evidence or a longer public look| research[Research agent]
-  orch -->|live tool| tool[Tool agent]
-  orch -->|GitHub code change| coding[Coding agent]
-  research --> verifier
-  tool --> verifier
-  coding --> verifier
-  verifier --> reply[Reply]
+  msg[User message] --> model[Model]
+  model -->|public fact| web[Hosted web search]
+  web --> model
+  model -->|workspace search| index[Indexed sources]
+  index --> model
+  model -->|live tool| worker[Approval and worker]
+  worker --> model
+  model --> reply[Reply]
 ```
 
 ## Local Development Setup

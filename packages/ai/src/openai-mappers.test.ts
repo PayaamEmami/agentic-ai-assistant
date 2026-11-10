@@ -21,6 +21,31 @@ describe('mapMessages', () => {
     expect(mapped[2]).toMatchObject({ role: 'tool', content: 'result', tool_call_id: 'call-1' });
   });
 
+  it('replays assistant function calls with the provider alias', () => {
+    const mapped = mapMessages(
+      [
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'time.now', arguments: '{}' }],
+        },
+      ],
+      new Map([['time.now', 'time_now']]),
+    );
+
+    expect(mapped[0]).toMatchObject({
+      role: 'assistant',
+      content: null,
+      tool_calls: [
+        {
+          id: 'call-1',
+          type: 'function',
+          function: { name: 'time_now', arguments: '{}' },
+        },
+      ],
+    });
+  });
+
   it('throws when a tool message lacks a toolCallId', () => {
     expect(() => mapMessages([{ role: 'tool', content: 'x' }])).toThrow(/toolCallId/);
   });

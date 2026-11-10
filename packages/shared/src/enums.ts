@@ -61,12 +61,3 @@ export const MemoryKind = {
   Instruction: 'instruction',
 } as const;
 export type MemoryKind = (typeof MemoryKind)[keyof typeof MemoryKind];
-
-export const AgentRole = {
-  Orchestrator: 'orchestrator',
-  Research: 'research',
-  Tool: 'tool',
-  Coding: 'coding',
-  Verifier: 'verifier',
-} as const;
-export type AgentRole = (typeof AgentRole)[keyof typeof AgentRole];

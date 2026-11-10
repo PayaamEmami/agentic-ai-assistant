@@ -1,4 +1,4 @@
-import type { AgentOrchestrator } from '@aaa/ai';
+import { buildChatTurnPrompt, type ChatProvider, runModelTurn } from '@aaa/ai';
 import {
   appCapabilityConfigRepository,
   automationRunRepository,
@@ -6,17 +6,22 @@ import {
   messageRepository,
   toolExecutionRepository,
 } from '@aaa/db';
-import { type AssistantInterruptedEvent, type AssistantTextDoneEvent, isAbortError } from '@aaa/shared';
+import {
+  type AssistantInterruptedEvent,
+  type AssistantTextDoneEvent,
+  isAbortError,
+  WORKSPACE_SEARCH_TOOL_NAME,
+} from '@aaa/shared';
 import { noteAutomationTurn } from '../automation/settle-run.js';
 import { logger } from '../../lib/logger.js';
 import type { RetrievalBridge, RetrievalResponse } from '../retrieval/bridge.js';
 import type { PersonalizationService } from '../personalization/service.js';
-import { decideRetrieval } from '../retrieval/policy.js';
 import {
   MAX_RETRIEVAL_CONTEXT,
   appLabel,
-  buildRetrievalContextSections,
   extractExplicitCitationIndexes,
+  formatWorkspaceSearchOutput,
+  mergeRetrievalResponses,
   selectDisplayedCitations,
 } from '../retrieval/helpers.js';
 import type { EnqueueToolExecutionJob } from '../tools/execution-queue.js';
@@ -42,7 +47,7 @@ type AgentToolCall = { name: string; arguments: Record<string, unknown> };
 
 export interface ChatTurnDependencies {
   retrievalBridge: RetrievalBridge;
-  agentOrchestrator: AgentOrchestrator;
+  modelProvider: ChatProvider;
   personalizationService: PersonalizationService;
   eventPublisher: ChatEventPublisher;
   enqueueToolExecutionJob: EnqueueToolExecutionJob;
@@ -160,7 +165,6 @@ export async function generateAssistantTurn(
   {
     conversation,
     userId,
-    requestContent,
     signal,
     initialConversationTitle,
     assistantMessageId: providedAssistantMessageId,
@@ -191,39 +195,6 @@ export async function generateAssistantTurn(
       await conversationRepository.updateTitle(conversation.id, initialConversationTitle);
     }
 
-    const retrievalDecision = decideRetrieval(requestContent, priorMessages);
-    logger.debug(
-      {
-        event: 'chat.retrieval_decided',
-        outcome: retrievalDecision.shouldRetrieve ? 'search' : 'skip',
-        conversationId: conversation.id,
-        reason: retrievalDecision.reason,
-        hasRecentCitationContext: retrievalDecision.hasRecentCitationContext,
-      },
-      'Retrieval decision evaluated',
-    );
-
-    // Kick off retrieval concurrently with orchestrator routing. The
-    // orchestrator does not consume retrieved context; only research/verifier
-    // do, and they await the provider below.
-    const emptyRetrieval: RetrievalResponse = { results: [], citations: [] };
-    const retrievalPromise: Promise<RetrievalResponse> = retrievalDecision.shouldRetrieve
-      ? deps.retrievalBridge.search(requestContent, userId, MAX_RETRIEVAL_CONTEXT, signal)
-      : Promise.resolve(emptyRetrieval);
-    // Prevent unhandled rejection warnings if retrieval rejects before it is awaited.
-    retrievalPromise.catch(() => undefined);
-
-    let cachedRetrieval: RetrievalResponse | undefined;
-    const getRetrieval = async (): Promise<RetrievalResponse> => {
-      if (!cachedRetrieval) {
-        cachedRetrieval = await retrievalPromise;
-      }
-      return cachedRetrieval;
-    };
-    const retrievedContextProvider = async (): Promise<string[]> =>
-      buildRetrievalContextSections(await getRetrieval());
-
-    // Pre-work that doesn't depend on each other runs in parallel.
     const [messageHistory, personalContext, appConfigs, availableTools] = await Promise.all([
       toAgentHistoryMessages(priorMessages, userId),
       deps.personalizationService.getPersonalContext(userId),
@@ -248,33 +219,90 @@ export async function generateAssistantTurn(
       assistantMessageId,
     );
 
-    if (retrievalDecision.shouldRetrieve) {
-      streamHooks.onStage?.('retrieving');
-    }
-
     let assistantResponse = DEFAULT_FALLBACK_RESPONSE;
     let toolCalls: AgentToolCall[] = [];
     let requiresApproval = false;
-    let verificationIssues: string[] = [];
-    let verificationStatus: 'approved' | 'revise' | null = null;
+    const retrievals: RetrievalResponse[] = [];
+    let inlineResultBlocks: Array<Record<string, unknown>> = [];
+    let announcedAnswer = false;
     try {
-      const result = await deps.agentOrchestrator.run({
-        conversationId: conversation.id,
-        userId,
-        messageHistory,
-        availableTools: toAgentToolContexts(availableTools),
-        retrievedContext: [],
-        retrievedContextProvider,
-        personalContext,
-        activeApps,
-        signal,
-        stream: streamHooks,
+      const result = await runModelTurn({
+        provider: deps.modelProvider,
+        messages: [
+          {
+            role: 'system',
+            content: buildChatTurnPrompt({
+              personalContext,
+              availableTools: toAgentToolContexts(availableTools),
+              activeApps,
+            }),
+          },
+          ...messageHistory,
+        ],
+        tools: toAgentToolContexts(availableTools).map((tool) => ({
+          name: tool.name,
+          description: tool.description ?? `Tool: ${tool.name}`,
+          parameters: tool.parameters ?? {},
+        })),
+        inlineToolName: WORKSPACE_SEARCH_TOOL_NAME,
         model: conversation.chatModel,
+        signal,
+        onTextDelta: (delta) => {
+          if (!announcedAnswer) {
+            announcedAnswer = true;
+            streamHooks.onStage?.('answering');
+          }
+          streamHooks.onAnswerDelta?.(delta);
+        },
+        onWebSearch: () => {
+          streamHooks.onStage?.('searching');
+        },
+        runInlineTool: async (call) => {
+          streamHooks.onStage?.('retrieving');
+          const query = typeof call.arguments.query === 'string' ? call.arguments.query : '';
+          try {
+            const retrieval = await deps.retrievalBridge.search(
+              query,
+              userId,
+              MAX_RETRIEVAL_CONTEXT,
+              signal,
+            );
+            const startIndex = retrievals.reduce((count, item) => count + item.results.length, 0);
+            retrievals.push(retrieval);
+            return formatWorkspaceSearchOutput(retrieval, startIndex);
+          } catch (error) {
+            if (signal?.aborted || isAbortError(error)) {
+              throw error;
+            }
+            logger.error(
+              {
+                event: 'chat.workspace_search_failed',
+                outcome: 'failure',
+                conversationId: conversation.id,
+                queryLength: query.length,
+                error,
+              },
+              'Workspace search failed',
+            );
+            return 'Workspace search failed.';
+          }
+        },
       });
-      toolCalls = result.toolCalls;
-      requiresApproval = result.requiresApproval;
-      verificationIssues = result.verification?.issues ?? [];
-      verificationStatus = result.verification?.status ?? null;
+      toolCalls = result.toolCalls.map((call) => ({
+        name: call.name,
+        arguments: call.arguments,
+      }));
+      requiresApproval = toolCalls.some((call) =>
+        availableTools.find((tool) => tool.name === call.name)?.requiresApproval,
+      );
+      if (result.stagedExternalTools) {
+        inlineResultBlocks = result.inlineResults.map((item) => ({
+          type: 'tool_result',
+          toolName: item.name,
+          status: 'completed',
+          output: item.output,
+        }));
+      }
       assistantResponse = normalizeAssistantResponse(result.response, toolCalls, requiresApproval);
     } catch (error) {
       if (signal?.aborted || isAbortError(error)) {
@@ -291,6 +319,10 @@ export async function generateAssistantTurn(
         'Assistant generation failed',
       );
       throw error;
+    }
+
+    if (toolCalls.length > 0) {
+      streamHooks.onStage?.('tool');
     }
 
     const { toolResultBlocks, toolExecutionIds, queuedToolJobs, approvalEvents, hasApprovalRequest } =
@@ -314,24 +346,12 @@ export async function generateAssistantTurn(
       assistantResponse = TOOL_APPROVAL_RESPONSE;
     }
 
-    // Retrieval ran concurrently with the orchestrator; resolve it now for
-    // citation display. It already swallows non-abort failures internally.
-    let retrieval: RetrievalResponse = emptyRetrieval;
-    try {
-      retrieval = await getRetrieval();
-    } catch (error) {
-      if (signal?.aborted || isAbortError(error)) {
-        throw error;
-      }
-    }
-
+    const retrieval = mergeRetrievalResponses(retrievals);
     const displayedCitations = selectDisplayedCitations(assistantResponse, retrieval);
     const assistantContent = buildAssistantMessageContent({
       assistantResponse,
-      verificationStatus,
-      verificationIssues,
       thinkingSegments: collectThinkingSegments(),
-      toolResultBlocks,
+      toolResultBlocks: [...inlineResultBlocks, ...toolResultBlocks],
       displayedCitations,
     });
 
@@ -359,19 +379,6 @@ export async function generateAssistantTurn(
       deps.eventPublisher.approvalRequested(approvalEvent);
     }
 
-    if (verificationIssues.length > 0) {
-      logger.warn(
-        {
-          event: 'chat.verification_flagged',
-          outcome: 'failure',
-          conversationId: conversation.id,
-          verificationStatus,
-          verificationIssues,
-        },
-        'Verifier revised or flagged the assistant response',
-      );
-    }
-
     logger.info(
       {
         event: 'chat.message_completed',
@@ -393,8 +400,7 @@ export async function generateAssistantTurn(
         explicitCitationIndexes: extractExplicitCitationIndexes(assistantResponse),
         toolCallCount: toolCalls.length,
         approvalRequestCount: approvalEvents.length,
-        verificationStatus,
-        verifierIssueCount: verificationIssues.length,
+        workspaceSearchCount: retrievals.length,
       },
       'Chat message processed',
     );

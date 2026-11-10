@@ -4,16 +4,7 @@ export const TOOL_EVENT_CHANNEL = 'tool_execution_events';
 /** Postgres NOTIFY channel for live automation-run events. */
 export const AUTOMATION_EVENT_CHANNEL = 'automation_run_events';
 
-export type AssistantStage =
-  | 'routing'
-  | 'retrieving'
-  | 'research'
-  | 'searching'
-  | 'tool'
-  | 'coding'
-  | 'answering'
-  | 'verifying'
-  | 'done';
+export type AssistantStage = 'retrieving' | 'searching' | 'tool' | 'answering' | 'done';
 
 export interface AssistantTextEvent {
   type: 'assistant.text.delta';

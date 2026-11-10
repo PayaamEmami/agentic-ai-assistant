@@ -376,6 +376,11 @@ export function useLiveVoiceSession({
         argumentsJson,
       });
 
+      if (result.status === 'completed') {
+        forwardToolResultToRealtime(callId, result.output ?? '');
+        return;
+      }
+
       const status: VoicePendingToolCall['status'] =
         result.status === 'requires_approval' ? 'requires_approval' : 'running';
       registerToolCall({

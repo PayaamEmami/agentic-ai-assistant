@@ -6,6 +6,7 @@ import {
   buildChatCompletionCreateParams,
   extractTextContent,
   mapFinishReason,
+  invertAliasMap,
   mapMessages,
   mapToolCalls,
   prepareTools,
@@ -64,7 +65,7 @@ export class OpenAIProvider implements ModelProvider {
           this.client.chat.completions.create(
             buildChatCompletionCreateParams({
               model,
-              messages: mapMessages(request.messages),
+              messages: mapMessages(request.messages, invertAliasMap(preparedTools.aliasToOriginal)),
               maxTokens: request.maxTokens,
               tools: preparedTools.tools,
             }),
@@ -129,7 +130,7 @@ export class OpenAIProvider implements ModelProvider {
           this.client.chat.completions.create(
             buildChatCompletionCreateParams({
               model,
-              messages: mapMessages(request.messages),
+              messages: mapMessages(request.messages, invertAliasMap(preparedTools.aliasToOriginal)),
               maxTokens: request.maxTokens,
               tools: preparedTools.tools,
               stream: true,

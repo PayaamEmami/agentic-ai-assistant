@@ -1,3 +1,6 @@
+/** Inline workspace search. The API runs this during the turn; it is not a worker job. */
+export const WORKSPACE_SEARCH_TOOL_NAME = 'search_workspace';
+
 export interface NativeToolDefinition {
   name: string;
   description: string;
@@ -12,6 +15,23 @@ const GITHUB_REPO_PARAMETER = {
 };
 
 export const NATIVE_TOOL_DEFINITIONS: NativeToolDefinition[] = [
+  {
+    name: WORKSPACE_SEARCH_TOOL_NAME,
+    description:
+      "Search the user's indexed notes, attachments, and synced knowledge sources. Use this for their files, notes, and previously synced documents. Do not use it for current public facts or for live GitHub, Google, or MCP operations.",
+    parameters: {
+      type: 'object',
+      properties: {
+        query: {
+          type: 'string',
+          description: "What to look for in the user's indexed sources.",
+        },
+      },
+      required: ['query'],
+      additionalProperties: false,
+    },
+    requiresApproval: false,
+  },
   {
     name: 'time.now',
     description: 'Get the current server time in ISO-8601 format.',

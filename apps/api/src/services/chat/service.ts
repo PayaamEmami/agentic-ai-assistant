@@ -1,14 +1,5 @@
 import { setTimeout as delay } from 'node:timers/promises';
-import {
-  AgentOrchestrator,
-  type ChatProvider,
-  CodingAgent,
-  createChatProvider,
-  OrchestratorAgent,
-  ResearchAgent,
-  ToolAgent,
-  VerifierAgent,
-} from '@aaa/ai';
+import { type ChatProvider, createChatProvider } from '@aaa/ai';
 import { openAIProviderModelConfigFromApiConfig } from '@aaa/config';
 import {
   approvalRepository,
@@ -72,7 +63,6 @@ interface PreparedTurn {
 export class ChatService {
   private readonly retrievalBridge: RetrievalBridge;
   private readonly modelProvider: ChatProvider;
-  private readonly agentOrchestrator: AgentOrchestrator;
   private readonly personalizationService: PersonalizationService;
   private readonly runRegistry: ChatRunRegistry;
   private readonly eventPublisher: ChatEventPublisher;
@@ -83,7 +73,6 @@ export class ChatService {
     config: AppConfig;
     retrievalBridge?: RetrievalBridge;
     modelProvider?: ChatProvider;
-    agentOrchestrator?: AgentOrchestrator;
     personalizationService?: PersonalizationService;
     runRegistry?: ChatRunRegistry;
     eventPublisher?: ChatEventPublisher;
@@ -103,16 +92,6 @@ export class ChatService {
         openAIProviderModelConfigFromApiConfig(config),
         config.llmChatProvider,
       );
-    const model = config.openaiModel;
-    this.agentOrchestrator =
-      options.agentOrchestrator ??
-      new AgentOrchestrator([
-        new OrchestratorAgent(this.modelProvider, model),
-        new ResearchAgent(this.modelProvider, model),
-        new ToolAgent(this.modelProvider, model),
-        new CodingAgent(this.modelProvider, model),
-        new VerifierAgent(this.modelProvider, model),
-      ]);
     this.personalizationService = options.personalizationService ?? new PersonalizationService();
     this.runRegistry = options.runRegistry ?? new ChatRunRegistry();
     this.eventPublisher = options.eventPublisher ?? new ChatEventPublisher();
@@ -124,7 +103,7 @@ export class ChatService {
   private turnRunnerDeps() {
     return {
       retrievalBridge: this.retrievalBridge,
-      agentOrchestrator: this.agentOrchestrator,
+      modelProvider: this.modelProvider,
       personalizationService: this.personalizationService,
       eventPublisher: this.eventPublisher,
       enqueueToolExecutionJob: this.enqueueToolExecutionJob,
@@ -437,7 +416,7 @@ export class ChatService {
   ) {
     // Generate the assistant turn asynchronously and stream the result over the
     // WebSocket. The HTTP request returns immediately so the client can render
-    // streamed tokens instead of blocking on the full multi-agent pipeline.
+    // streamed tokens instead of blocking on the model turn.
     void generateAssistantTurn(this.turnRunnerDeps(), {
       conversation: prepared.conversation,
       userId,

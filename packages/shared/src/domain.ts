@@ -7,7 +7,6 @@ import type {
   AppKind,
   AppCapability,
   MemoryKind,
-  AgentRole,
 } from './enums.js';
 
 export interface User {
@@ -219,16 +218,4 @@ export interface AppCapabilityConfig {
   lastError: string | null;
   createdAt: Date;
   updatedAt: Date;
-}
-
-export interface AgentTask {
-  id: string;
-  conversationId: string;
-  agentRole: AgentRole;
-  input: unknown;
-  output: unknown | null;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  parentTaskId: string | null;
-  createdAt: Date;
-  completedAt: Date | null;
 }

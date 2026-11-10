@@ -23,29 +23,13 @@ export { OpenAIProvider } from './openai-provider.js';
 export type { ChatProviderName } from './provider-factory.js';
 export { createChatProvider, createEmbeddingProvider } from './provider-factory.js';
 
-export {
-  buildAgentSystemPrompt,
-  buildSystemPrompt,
-  buildRetrievalAugmentedMessages,
-} from './prompts.js';
+export { buildChatTurnPrompt, buildSystemPrompt } from './prompts.js';
 export type { PromptToolContext, SystemPromptContext } from './prompts.js';
 
+export { MAX_MODEL_CALLS, runModelTurn } from './model-turn.js';
 export type {
-  Agent,
-  AgentContext,
-  AgentHistoryMessage,
-  AgentResult,
-  AgentRole,
-  AgentStage,
-  AgentStreamHooks,
-  AgentToolContext,
-} from './agents/index.js';
-export {
-  OrchestratorAgent,
-  ResearchAgent,
-  ToolAgent,
-  CodingAgent,
-  VerifierAgent,
-} from './agents/index.js';
-
-export { AgentOrchestrator } from './orchestrator.js';
+  InlineToolResult,
+  ModelTurnResult,
+  ParsedToolCall,
+  RunModelTurnInput,
+} from './model-turn.js';

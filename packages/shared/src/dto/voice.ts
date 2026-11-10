@@ -75,8 +75,9 @@ export const VoiceToolCallRequest = z.object({
 export type VoiceToolCallRequest = z.infer<typeof VoiceToolCallRequest>;
 
 export const VoiceToolCallResponse = z.object({
-  toolExecutionId: z.string().uuid(),
-  status: z.enum(['requires_approval', 'enqueued']),
+  toolExecutionId: z.string().uuid().optional(),
+  status: z.enum(['requires_approval', 'enqueued', 'completed']),
+  output: z.string().optional(),
 });
 export type VoiceToolCallResponse = z.infer<typeof VoiceToolCallResponse>;
 

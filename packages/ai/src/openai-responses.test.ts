@@ -27,6 +27,11 @@ describe('buildResponsesRequest', () => {
       model: 'gpt-5.6-luna',
       messages: [
         { role: 'system', content: [{ type: 'text', text: 'Be brief' }] },
+        {
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'call-1', name: 'time.now', arguments: '{}' }],
+        },
         { role: 'tool', content: '4', toolCallId: 'call-1' },
       ],
       tools: [{ name: 'time.now', description: 'Get the time', parameters: { type: 'object' } }],
@@ -46,9 +51,16 @@ describe('buildResponsesRequest', () => {
       role: 'system',
       content: [{ type: 'input_text', text: 'Be brief' }],
     });
-    expect(body.input[1]).toMatchObject({
-      role: 'user',
-      content: 'Tool result (call-1): 4',
+    expect(body.input[1]).toEqual({
+      type: 'function_call',
+      call_id: 'call-1',
+      name: 'time_now',
+      arguments: '{}',
+    });
+    expect(body.input[2]).toEqual({
+      type: 'function_call_output',
+      call_id: 'call-1',
+      output: '4',
     });
   });
 

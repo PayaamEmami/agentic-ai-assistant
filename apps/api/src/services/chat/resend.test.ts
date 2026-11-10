@@ -1,6 +1,6 @@
 import { setTimeout as delay } from 'node:timers/promises';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AgentOrchestrator, ChatProvider } from '@aaa/ai';
+import type { ChatProvider } from '@aaa/ai';
 import type { AppConfig } from '../../config.js';
 import type { ChatEventPublisher } from './event-publisher.js';
 import type { RetrievalBridge } from '../retrieval/bridge.js';
@@ -86,7 +86,6 @@ function createService(registry: ChatRunRegistry, runSettleTimeoutMs = 5_000) {
     config: {} as AppConfig,
     retrievalBridge: {} as RetrievalBridge,
     modelProvider: {} as ChatProvider,
-    agentOrchestrator: {} as AgentOrchestrator,
     personalizationService: {} as PersonalizationService,
     runRegistry: registry,
     eventPublisher: { error: vi.fn() } as unknown as ChatEventPublisher,
