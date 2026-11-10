@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dump the production Postgres database to the existing S3 bucket and keep
-# seven days of copies. Runs on the EC2 host from /etc/cron.d/aaa-postgres-backup.
+# seven days of copies. Runs on the EC2 host from aaa-postgres-backup.timer.
 set -euo pipefail
 
 ENV_FILE="${AAA_ENV_FILE:-/opt/aaa/app/current/.env.production}"

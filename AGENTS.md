@@ -27,7 +27,7 @@ Ops notes to keep in sync with that README:
 - Prod Compose has no Prometheus/Grafana/Loki stack; observability is local-dev oriented.
 - CD skips CloudFront invalidation when `CLOUDFRONT_DISTRIBUTION_ID` is unset; set `CADDY_SITE_ADDRESS` for origin TLS when not behind CloudFront.
 - CI and Docker images pin the same pnpm version (`9.15.4`).
-- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days and `backups/` after 7 days. Deploy installs a daily `pg_dump` (`scripts/backup-postgres.sh`) that uploads to `backups/postgres/` and deletes dumps older than 7 days. Re-run `provision.sh` once so the lifecycle rule exists; the script enforces the same cap before that.
+- S3 lifecycle (via `provision.sh`) expires `deployments/` after 14 days and `backups/` after 7 days. Deploy installs a daily `pg_dump` (`scripts/backup-postgres.sh`, systemd timer `aaa-postgres-backup.timer` at 08:15 UTC) that uploads to `backups/postgres/` and deletes dumps older than 7 days. Re-run `provision.sh` once so the lifecycle rule exists; the script enforces the same cap before that.
 - Deploy waits for Docker `healthy` (API/worker `/health/ready`), not merely `running`.
 
 ## Repository Structure

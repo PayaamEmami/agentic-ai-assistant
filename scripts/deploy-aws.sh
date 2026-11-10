@@ -344,12 +344,29 @@ ln -sfn {release_dir} {app_dir}/current
 install -d -m 755 /opt/aaa/bin
 aws s3 cp s3://{bucket}/{s3_prefix}/backup-postgres.sh /opt/aaa/bin/backup-postgres.sh
 chmod 755 /opt/aaa/bin/backup-postgres.sh
-cat > /etc/cron.d/aaa-postgres-backup <<'CRON'
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-15 8 * * * root /opt/aaa/bin/backup-postgres.sh >> /var/log/aaa-postgres-backup.log 2>&1
-CRON
-chmod 644 /etc/cron.d/aaa-postgres-backup
+# Amazon Linux 2023 does not install cron. A systemd timer is already on the host.
+cat > /etc/systemd/system/aaa-postgres-backup.service <<'UNIT'
+[Unit]
+Description=Daily Postgres dump to S3
+
+[Service]
+Type=oneshot
+TimeoutStartSec=infinity
+ExecStart=/opt/aaa/bin/backup-postgres.sh
+UNIT
+cat > /etc/systemd/system/aaa-postgres-backup.timer <<'UNIT'
+[Unit]
+Description=Daily Postgres dump to S3
+
+[Timer]
+OnCalendar=*-*-* 08:15:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now aaa-postgres-backup.timer
 # Remove now-unused aaa-* images (old SHAs) — `prune` only catches dangling.
 for repo in aaa-api aaa-web aaa-worker; do
   docker images --format '{{{{.Repository}}}}:{{{{.Tag}}}}' \

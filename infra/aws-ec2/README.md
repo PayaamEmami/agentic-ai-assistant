@@ -136,7 +136,7 @@ If a migration changed the database, restore a dump from the backup section belo
 
 ## Postgres backups
 
-Each successful deploy installs `/opt/aaa/bin/backup-postgres.sh` and a daily cron at 08:15 UTC. The script dumps `aaa-postgres` and uploads `s3://<bucket>/backups/postgres/<timestamp>.dump`. It then deletes objects under that prefix older than 7 days. The bucket lifecycle rule expires `backups/` after 7 days as a backstop, so retention stays at about seven compressed copies of the database. Re-run `provision.sh` once after this change so the lifecycle rule is installed; the script enforces the same cap on its own.
+Each successful deploy installs `/opt/aaa/bin/backup-postgres.sh` and a systemd timer that runs it daily at 08:15 UTC. Amazon Linux 2023 does not include cron, so the schedule is `aaa-postgres-backup.timer`. The script dumps `aaa-postgres` and uploads `s3://<bucket>/backups/postgres/<timestamp>.dump`. It then deletes objects under that prefix older than 7 days. The bucket lifecycle rule expires `backups/` after 7 days as a backstop, so retention stays at about seven compressed copies of the database. Re-run `provision.sh` once after this change so the lifecycle rule is installed; the script enforces the same cap on its own. Timer output is in `journalctl -u aaa-postgres-backup.service`.
 
 Restore on the instance:
 
