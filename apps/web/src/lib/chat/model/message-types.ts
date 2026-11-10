@@ -30,6 +30,8 @@ export interface ChatMessagePresentation {
   streaming?: boolean;
   // The current pipeline stage for live status display.
   activeStage?: AssistantStage;
+  // Fade the answer in once. Set on the live turn; history snapshots omit it.
+  revealAnswer?: boolean;
 }
 
 export interface ChatMessage {

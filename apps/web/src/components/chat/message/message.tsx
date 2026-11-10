@@ -62,6 +62,7 @@ export function Message({
   } = useChatContext();
   const [draft, setDraft] = useState('');
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
+  const fadeAnswer = useRef(false);
   const isUser = role === 'user';
   const isSystem = role === 'system';
   const isStreaming = role === 'assistant' && Boolean(presentation?.streaming);
@@ -80,6 +81,13 @@ export function Message({
   const hasRenderableText = (block: MessageContentBlock) =>
     block.type === 'text' && block.text.trim().length > 0;
   const hasRenderedText = primaryContent.some(hasRenderableText);
+  if (
+    role === 'assistant' &&
+    hasRenderedText &&
+    (presentation?.revealAnswer || isStreaming)
+  ) {
+    fadeAnswer.current = true;
+  }
   const renderablePrimaryContent = primaryContent.filter(
     (block) => block.type !== 'text' || block.text.trim().length > 0,
   );
@@ -229,19 +237,21 @@ export function Message({
           />
         ) : null}
         {renderablePrimaryContent.length > 0 ? (
-          renderablePrimaryContent.map((block, index) => {
-            const renderedBlock = renderContentBlock(block, index);
+          <div className={cn('space-y-2', fadeAnswer.current && 'assistant-answer-fade')}>
+            {renderablePrimaryContent.map((block, index) => {
+              const renderedBlock = renderContentBlock(block, index);
 
-            if (!shouldAnimateAssistantOutput || block.type === 'text') {
-              return renderedBlock;
-            }
+              if (!shouldAnimateAssistantOutput || block.type === 'text') {
+                return renderedBlock;
+              }
 
-            return (
-              <DelayedAssistantReveal key={`followup-${index}`} delayMs={assistantFollowupDelayMs}>
-                {renderedBlock}
-              </DelayedAssistantReveal>
-            );
-          })
+              return (
+                <DelayedAssistantReveal key={`followup-${index}`} delayMs={assistantFollowupDelayMs}>
+                  {renderedBlock}
+                </DelayedAssistantReveal>
+              );
+            })}
+          </div>
         ) : statusBlocks.length > 0 && role === 'assistant' ? (
           <p className="text-xs italic text-foreground-muted">No response generated before stop.</p>
         ) : null}

@@ -85,6 +85,19 @@ label:has(input:not(:disabled)),
   animation: assistant-followup-reveal 240ms ease-out both;
 }
 
+@keyframes assistant-answer-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.assistant-answer-fade {
+  animation: assistant-answer-fade 2s ease-out both;
+}
+
 @keyframes toast-enter {
   from {
     opacity: 0;
@@ -229,6 +242,7 @@ label:has(input:not(:disabled)),
 @media (prefers-reduced-motion: reduce) {
   .voice-word-fade,
   .assistant-followup-reveal,
+  .assistant-answer-fade,
   .toast-enter {
     animation: none;
   }

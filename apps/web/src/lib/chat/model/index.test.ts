@@ -231,7 +231,7 @@ describe('chat model', () => {
     expect(finalized[0]).toMatchObject({
       id: 'message-1',
       content: [{ type: 'text', text: 'The diagram shows superposition.' }],
-      presentation: { streaming: false, activeStage: 'done' },
+      presentation: { streaming: false, activeStage: 'done', revealAnswer: true },
     });
     expect(
       appendAssistantTextDelta(finalized, 'message-1', ' late token'),
@@ -244,6 +244,26 @@ describe('chat model', () => {
       streaming: true,
       activeStage: 'done',
     });
+  });
+
+  it('marks a live answer for a one-time fade when the first token arrives', () => {
+    const streaming: ChatMessage[] = [
+      {
+        id: 'message-1',
+        role: 'assistant',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        content: [],
+        presentation: { streaming: true },
+      },
+    ];
+
+    const withText = appendAssistantTextDelta(streaming, 'message-1', 'Hello');
+
+    expect(withText[0]?.presentation).toMatchObject({
+      streaming: true,
+      revealAnswer: true,
+    });
+    expect(withText[0]?.content).toEqual([{ type: 'text', text: 'Hello' }]);
   });
 
   it('inserts a finalized assistant message when the live placeholder was never mounted', () => {

@@ -71,7 +71,7 @@ export function appendAssistantTextDelta(
     return {
       ...message,
       content: nextContent,
-      presentation: { ...message.presentation, streaming: true },
+      presentation: { ...message.presentation, streaming: true, revealAnswer: true },
     };
   });
 }
@@ -254,7 +254,11 @@ export function finalizeAssistantMessage(
         role: 'assistant',
         content,
         createdAt: new Date().toISOString(),
-        presentation: { streaming: false, activeStage: 'done' },
+        presentation: {
+          streaming: false,
+          activeStage: 'done',
+          revealAnswer: Boolean(options.fullText?.trim()),
+        },
       },
     ];
   }
@@ -270,6 +274,10 @@ export function finalizeAssistantMessage(
       content = [...content, { type: 'status', status: 'interrupted', label: 'Agent stopped' }];
     }
 
+    const hasAnswerText = content.some(
+      (block) => block.type === 'text' && block.text.trim().length > 0,
+    );
+
     return {
       ...message,
       content,
@@ -277,6 +285,7 @@ export function finalizeAssistantMessage(
         ...message.presentation,
         streaming: false,
         activeStage: 'done',
+        revealAnswer: message.presentation?.revealAnswer === true || hasAnswerText,
       },
     };
   });
